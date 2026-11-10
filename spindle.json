@@ -1,0 +1,11 @@
+{
+  "version": "0.1.0",
+  "name": "Tallow",
+  "identifier": "tallow",
+  "author": "japolino",
+  "description": "A tabletop adventure played in one candlelit room, across a table from a shadowy narrator, built around your character card.",
+  "permissions": ["characters", "generation", "app_manipulation"],
+  "entry_backend": "dist/backend.js",
+  "entry_frontend": "dist/frontend.js",
+  "minimum_lumiverse_version": "1.2.4"
+}

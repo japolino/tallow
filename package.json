@@ -1,0 +1,30 @@
+{
+  "name": "tallow",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Tallow (working title): a tabletop roleplaying game played in one 3D room, for Lumiverse (Spindle).",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "verify": "bun run test && bun run typecheck",
+    "preview": "bun run scripts/preview.ts",
+    "moment": "bun run scripts/moment.ts",
+    "adventure": "bun run scripts/adventure.ts",
+    "shots": "bun run scripts/shots.ts",
+    "pointer": "bun run scripts/pointer.ts",
+    "table": "bun run scripts/table.ts",
+    "build": "bun run scripts/build.ts",
+    "live": "bun run scripts/live.ts",
+    "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (narrator_cloak, narrator_hand, narrator_arm, narrator_hood, pieces)"
+  },
+  "dependencies": {
+    "three": "0.171.0"
+  },
+  "devDependencies": {
+    "@types/three": "0.171.0",
+    "bun-types": "^1.4.0",
+    "lumiverse-spindle-types": "0.6.79",
+    "typescript": "5.9.3"
+  }
+}
