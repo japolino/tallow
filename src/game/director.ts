@@ -17,13 +17,13 @@ import { coming, contestKind, foeNamed, renamed, yieldRead, yieldSure, type Cont
 import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, dangerSaveSaid, luckAsk, luckNote, luckSaid, saveAsk, saveSaid, yieldSaid } from "../engine/tell-adventure.js";
 import { canLuck, luckRead, throwLuck, type LuckAsk } from "../engine/luck.js";
 import { giveIn, narratorTurn, refuse, tempting, type Move } from "../engine/dread.js";
-import { leverLeft, nameCheck, shut, WAYS, wayStates, type Against, type Check, type Lever, type Moment, type Sheet, type Way } from "../engine/moment.js";
-import { arriveSaid, backSaid, campAsk, campRead, endPage, endSaid, firstPage, forkSaid, levelSaid, levelTaken, PRESS_ON, restSaid, startSaid, stopPage, turnSaid, usedSaid, moveNote, moveRule, spendSaid, temptSaid, temptRead, temptYes, TEMPT_NO } from "../engine/tell-adventure.js";
+import { leverLeft, nameCheck, shut, statOf, TRY_HOURS, WAYS, wayStates, type Against, type Check, type Lever, type Moment, type Sheet, type Way } from "../engine/moment.js";
+import { arriveSaid, backSaid, campAsk, campRead, endPage, endSaid, firstPage, forkRead, forkSaid, levelSaid, levelTaken, PRESS_ON, restSaid, startSaid, stopPage, turnSaid, usedSaid, moveNote, moveRule, spendSaid, temptSaid, temptRead, temptYes, TEMPT_NO } from "../engine/tell-adventure.js";
 import { hourSaid, notches as scheduleNotches } from "../engine/schedule.js";
 import { ASK_AGAIN, ASK_NEXT, ASK_SAID, ASK_TIME_SAID, cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS, shutSaid, UNCLEAR_SAID } from "../engine/tell.js";
 import { couldInstead, tradeOf } from "../engine/effect.js";
 import { faultDue, foeNotices, marginFor, marginLine } from "../engine/margin.js";
-import { fellowSaid, handSaid, handStat, payoffsNow, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
+import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, sentDown, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
 import { gearFrom } from "../engine/kit.js";
 import { projectSaid, type Payoff, type Project } from "../engine/project.js";
 import { contentRules, playable } from "../engine/content.js";
@@ -79,7 +79,7 @@ export interface Table {
   /** A stop is behind you: its card is taken off the map. */
   clear(stop: RoadStop): Promise<void>;
   /** Fan two face-down cards for a fork. Resolves with the id of the one the player picks. */
-  fork(stops: RoadStop[]): Promise<string>;
+  fork(stops: RoadStop[], read?: (line: string) => string | null): Promise<string>;
   /** Deal two cards face up to choose between (a level-up). Resolves with the index of the one kept, which stays on your side. */
   offer(cards: SideCard[]): Promise<number>;
   /** A card is dealt to your side, or taken from it. */
@@ -239,7 +239,9 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
    * story, at every place you come to, and after every try, so nothing they write runs on the last story's rules.
    */
   const knowNow = (): void => {
-    minds.know?.(trip.adv.who, withParty(trip).map((id) => companionOf(trip.adv, id)).filter((c) => !!c).map((c) => (c!.who.toLowerCase().startsWith(c!.name.toLowerCase()) ? c!.who : `${c!.name}, ${c!.who}`)), rules());
+    // Who is with you: a player sent off somewhere is not, until they are back.
+    const away = new Set((trip.fellows ?? []).filter((f) => f.at).map((f) => f.id));
+    minds.know?.(trip.adv.who, withParty(trip).filter((id) => !away.has(id)).map((id) => companionOf(trip.adv, id)).filter((c) => !!c).map((c) => (c!.who.toLowerCase().startsWith(c!.name.toLowerCase()) ? c!.who : `${c!.name}, ${c!.who}`)), rules());
   };
 
   const play = async (): Promise<Trip> => {
@@ -371,8 +373,23 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
         const comp = withParty(trip).map((id) => companionOf(trip.adv, id)!).find((c) => c && prefers(c, choices));
         const liked = comp ? prefers(comp, choices) : null;
         await table.say(forkSaid(trip, choices, choices.map((s) => hoursTo(trip, s.id)), comp && liked ? { name: comp.name, side: choices.indexOf(liked) } : null));
-        const id = await table.fork(choices);
+        // A player sent down one way while you take the other: they go there on their own, and you go where you said.
+        let split: ReturnType<typeof forkSplit> = null;
+        const id = await table.fork(choices, (line) => {
+          const s = forkSplit(trip, line, choices);
+          split = s;
+          if (!s) return null;
+          const rest = choices.filter((c) => c.id !== s.to.id);
+          return forkRead(s.rest, rest) ?? rest[0]?.id ?? null;
+        });
         pick = choices.find((s) => s.id === id) ?? pick;
+        const sent = split as ReturnType<typeof forkSplit>;
+        if (sent && sent.to.id !== pick.id) {
+          const d = sentDown(trip, sent.who, sent.to);
+          trip = d.trip;
+          knowNow();
+          await table.say(d.lines);
+        }
       }
       stage = "road";
       const setOut = trip.sheet.hour;
@@ -395,10 +412,12 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       const standing = trip.facing ? table.ways?.(wayStates(trip.facing.moment)) : undefined;
       await table.say(arriveSaid(a));
       await standing;
+      // At the end of the road with no time for even one try: it is over now, and nothing here is offered as if it were not.
+      if (pick.climax && !trip.over && trip.adv.deadline.hour - trip.sheet.hour < TRY_HOURS - 1e-9) trip = { ...trip, over: "deadline" };
       await worldSaid({ trip, lines: ran.lines });
       if ((trip.dread ?? 0) !== before) await table.dread?.(trip.dread ?? 0);
       for (const place of here.inked ?? []) await table.ink?.(place);
-      if (here.lines.length) await table.say(here.lines);
+      if (here.lines.length && !trip.over) await table.say(here.lines);
       if (trip.over) break;
       await table.page(stopPage(a));
       await writeMargin(pick);
@@ -567,6 +586,14 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       }
       const heard = await table.wait("read", reading);
       let said = heard;
+      // "Vypra, you take this one": a try handed over with no way named is thrown the way they are best at, of the
+      // ways open here.
+      if (said === "none" && !worldFirst(trip, w.line)) {
+        const to = handedTo(w.line, (trip.fellows ?? []).filter((f) => !f.at));
+        const open = WAYS.filter((x) => m.stop.ways[x] && !m.closed.includes(x) && !shut(m, x));
+        const best = to && open.length ? open.reduce((a, b) => (statOf(to, handStat(to, b, m.attack)) > statOf(to, handStat(to, a, m.attack)) ? b : a)) : null;
+        if (best) said = { way: best, attempt: `${to!.name} takes this one` };
+      }
       if (isUse(heard)) {
         // An ability used without a die: a trick, a thing learned, a mark, a mend. The narrator shows it; the rules say what it comes to.
         const u = useAbility(trip, { ...heard, grade: checkedGrade(heard.grade, w.line, m, alsoReal()) });
@@ -606,6 +633,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
           void table.aside();
           const answering = w2.note ? minds.answer(w.line, w2.trip.facing?.moment ?? m, w2.note) : null;
           trip = w2.trip;
+          knowNow();
           // Talk at the table takes no time; anything done in the story takes a quarter of an hour, and you are told so.
           const costs = !w2.hours && !w2.free;
           if (costs) trip = ponder(trip) ?? trip;

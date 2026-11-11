@@ -123,11 +123,11 @@ const table: Table = {
   async clear(stop) {
     out(`[The card at ${stop.name} is taken off the map.]`);
   },
-  async fork(stops) {
+  async fork(stops, read) {
     for (;;) {
       const line = await write("fork");
       out(`YOU WRITE: "${line}"`);
-      const id = forkRead(line, stops);
+      const id = read?.(line) ?? forkRead(line, stops);
       if (id) return id;
       out(`NARRATOR: ${FORK_AGAIN}`);
     }

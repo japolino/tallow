@@ -121,6 +121,11 @@ export interface Adventure {
   start: string;
   /** The roads, one way only, toward the goal: from, to, and how many hours the going takes. */
   roads: [string, string, number][];
+  /**
+   * A hub map: the start is a place you go out from and come back to. Its places are visited in any order (the going
+   * from one to another is back through the hub), and the end opens once `needs` of them are done.
+   */
+  hub?: { needs: number };
   stops: RoadStop[];
   /** The hour of the day it starts at. */
   startHour: number;
@@ -229,7 +234,8 @@ export interface Trip {
 
 export function mapOf(adv: Adventure): MapSheet {
   const climax = new Set(adv.stops.filter((s) => s.climax).map((s) => s.id));
-  const paths: [string, string][] = adv.roads.map(([a, b]) => [a, b]);
+  // A hub is drawn as it is walked: a path out to each of its places, and one to the end.
+  const paths: [string, string][] = adv.hub ? adv.roads.filter(([a]) => a === adv.start).map(([a, b]) => [a, b]) : adv.roads.map(([a, b]) => [a, b]);
   return { title: adv.title, seed: adv.seed, stops: adv.places.map((p) => ({ ...p, ...(climax.has(p.id) ? { climax: true } : {}) })), paths };
 }
 
@@ -285,7 +291,16 @@ export function takeAbility(t: Trip, a: Ability): Trip {
 /** The stops you can go on to from where you are: one, or two at a fork. */
 export function ahead(t: Trip): RoadStop[] {
   if (t.over || t.facing) return [];
-  return t.adv.roads.filter(([a, b]) => a === t.at && !t.visited.includes(b)).map(([, b]) => stopOf(t.adv, b)!).filter(Boolean);
+  return t.adv.roads.filter(([a, b]) => a === t.at && !t.visited.includes(b) && opened(t, b)).map(([, b]) => stopOf(t.adv, b)!).filter(Boolean);
+}
+
+/** How many of a hub's places are done: the ones gone to, not counting its end. */
+export const hubDone = (t: Pick<Trip, "adv" | "visited">): number => t.visited.filter((id) => !stopOf(t.adv, id)?.climax && id !== t.adv.start).length;
+
+/** Whether a place can be gone to yet: a hub's end only once enough of its places are done; anything else, always. */
+export function opened(t: Pick<Trip, "adv" | "visited">, id: string): boolean {
+  if (!t.adv.hub || !stopOf(t.adv, id)?.climax) return true;
+  return hubDone(t) >= t.adv.hub.needs;
 }
 
 /** The stops not reached yet: the cards still face down on the map. */
@@ -298,6 +313,9 @@ export function hoursTo(t: Trip, stopId: string): number {
 
 /** The companions at your side: those in the party who have not gone off on their own (docs/MOONSHOT.md, 4.3). */
 export const withParty = (t: Pick<Trip, "party" | "fellows">): string[] => t.party.filter((id) => !(t.fellows ?? []).some((f) => f.id === id && f.at));
+
+/** An ability's name after "your": "A Good Eye" is "your good eye". */
+const bare = (name: string): string => name.toLowerCase().replace(/^(a|an|the)\s+/, "");
 
 /** The sheet a moment is played with: your own, with each companion at your side's help added. */
 function helped(t: Trip, sheet: Sheet): Sheet {
@@ -678,12 +696,12 @@ export function useAbility(t: Trip, u: Use): Used | null {
   if (a.does === "flourish") {
     // A trick earns a mark only when it was used well, towards a way past, and only once at each stop.
     if (!u.way || !(u.grade === "grounded" || u.grade === "inspired") || (m.used ?? []).includes(a.id) || !m.stop.ways[u.way] || m.closed.includes(u.way)) return { trip, ability: a, effect: "nothing" };
-    const mark = lay(u.way, 1, `what your ${a.name.toLowerCase()} did`);
+    const mark = lay(u.way, 1, `what your ${bare(a.name)} did`);
     return { trip: markHere(spend(trip), mark), ability: a, effect: "mark", mark };
   }
   if (a.does === "learn" || a.does === "mark") {
     const way = u.way && m.stop.ways[u.way] && !m.closed.includes(u.way) ? u.way : a.ways.find((w) => m.stop.ways[w] && !m.closed.includes(w)) ?? easiestWay(m);
-    const mark = lay(way, a.does === "mark" ? a.much : 1, a.does === "learn" ? `what your ${a.name.toLowerCase()} showed you` : `what your ${a.name.toLowerCase()} set up`);
+    const mark = lay(way, a.does === "mark" ? a.much : 1, a.does === "learn" ? `what your ${bare(a.name)} showed you` : `what your ${bare(a.name)} set up`);
     return { trip: markHere(spend(trip), mark), ability: a, effect: "mark", mark };
   }
   if (a.does === "mend") {

@@ -227,7 +227,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       const people = Object.values(t.people ?? {});
       const friends = people.filter((p) => p.attitude === "close" || p.attitude === "friendly").map((p) => p.name);
       const enemies = people.filter((p) => p.attitude === "hostile").map((p) => p.name);
-      const e = endChapter(campaign, { setBack: won, failedNear: !won && (t.over === "taken" || t.over === "deadline"), found: won && key !== null ? [key] : [], friends, enemies, trouble: `${t.adv.title}, ${t.adv.goal}`, how: t.over ?? "unfinished" });
+      const e = endChapter(campaign, { setBack: won, failedNear: !won && t.over === "taken" && !!t.adv.stops.find((s) => s.id === t.at)?.climax, found: won && key !== null ? [key] : [], friends, enemies, trouble: `${t.adv.title}, ${t.adv.goal}`, how: t.over ?? "unfinished" });
       campaign = e.campaign;
       table.blackCandle?.({ burned: campaign.burned, lit: e.steps.length > 0 });
       await table.say(chapterSaid(campaign, e.steps, e.over, e.stopped));
@@ -347,6 +347,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     const campaign = kept?.campaign;
     if (campaign) table.blackCandle?.({ burned: campaign.burned, lit: false });
     if (campaign && campaign.chapter === 0 && campaign.burned === 0) await table.say([`A campaign, then: ${campaignBrief(campaign)} A black candle stands at my right hand, six rings scored on it. It is lit only when ${campaign.front.name} takes a step.`]);
+    else if (campaign && !finaleDue(campaign)) await table.say([`Chapter ${campaign.chapter + 1} against ${campaign.front.name}. The black candle stands at my right hand, ${RINGS - campaign.burned} ring${RINGS - campaign.burned === 1 ? "" : "s"} left on it.`]);
     // The last story of a campaign: the big bad itself waits at the end of the road (campaign.ts, 6.1).
     const finale = campaign && finaleDue(campaign) ? campaign : null;
     if (finale) await table.say([`This is the last story. At the end of the road, ${finale.front.name} itself is waiting.`]);

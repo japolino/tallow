@@ -64,7 +64,7 @@ export function startCampaign(front: Front): Campaign {
 export interface ChapterEnd {
   /** You set it back: stopped one of its steps, beat its hand, or found a key. */
   setBack: boolean;
-  /** You failed badly near it. */
+  /** You failed badly near it: taken out by its own hand, at the end of the road. Running out of time is not that. */
   failedNear: boolean;
   /** Keys found this chapter (0, 1 or 2). */
   found: (0 | 1 | 2)[];
@@ -196,7 +196,7 @@ export function chapterSaid(c: Campaign, steps: readonly string[], over: boolean
   const lines = steps.length ? [`The black candle at my right hand is lit. ${cap(c.front.name)} takes ${steps.length > 1 ? "two steps" : "a step"}: ${steps.join("; then ")}. ${RINGS - c.burned} ring${RINGS - c.burned === 1 ? "" : "s"} left on it.`] : [`The black candle stays dark. You set ${c.front.name} back this time${stopped ? `: ${stopped} will not happen now` : ""}.`];
   const held = c.front.keys.filter((_, i) => c.keys[i]);
   if (held.length) lines.push(`You know ${held.join(", and ")}.`);
-  if (over) lines.push(`The candle is out. It is ${c.front.steps[RINGS - 1]}: the last story is against ${c.front.name} itself.`);
+  if (over) lines.push(`The candle is out, and the last step is taken: ${c.front.steps[RINGS - 1]}. The last story is against ${c.front.name} itself.`);
   return lines;
 }
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);

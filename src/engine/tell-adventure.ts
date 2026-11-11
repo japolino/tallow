@@ -3,7 +3,7 @@
  * the end. The table (preview/table.ts) and the text playthrough (scripts/adventure.ts) both speak through these,
  * so what is read in the script is what is said in the room.
  */
-import { FALL_HOURS, HEALTH_MAX, placeName, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
+import { FALL_HOURS, HEALTH_MAX, hubDone, placeName, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
 import { cardKind, FAMILY_SAYS } from "./cards.js";
 import { coming, contestKind, type Contest, type ContestKind, type Dial, type Round } from "./contest.js";
 import { shapeOf, storeAt, type Ability } from "./abilities.js";
@@ -38,7 +38,7 @@ export function startSaid(adv: Adventure): string[] {
   const end = climaxOf(adv);
   const lines = [adv.goal, deadlineSaid(adv)];
   if (adv.courted) lines.push(`This is ${adv.courted.name}, ${adv.courted.who}. ${adv.courted.name}'s card lies by you.`);
-  if (adv.rival) lines.push(`And this is ${adv.rival.name}, ${adv.rival.who}. Every try of yours that fails, ${adv.rival.name} gains ground, and I put a dark seal on that card. At ${adv.rival.max} seals, ${adv.rival.name} has won.`);
+  if (adv.rival) lines.push(`And this is ${adv.rival.name}, ${adv.rival.who}. Every try of yours that fails, ${adv.rival.name} ${gains(adv.rival.name)} ground, and I put a dark seal on that card. At ${adv.rival.max} seals, ${adv.rival.name} ${has(adv.rival.name)} won.`);
   for (const id of adv.party ?? []) {
     const c = adv.companions.find((x) => x.id === id);
     if (c) lines.push(companionSaid(c));
@@ -65,7 +65,7 @@ export function firstPage(t: Trip): { heading: string; his: string[] } {
       ...t.abilities.map((a) => abilityLine(a, t.storeName ?? "store")),
       storeLine(t.storeName ?? "store", t.sheet.store ?? 0),
       deadlineSaid(adv),
-      ...(adv.rival ? [`${adv.rival.name} gains ground on every try of yours that fails. At ${adv.rival.max}, ${adv.rival.name} has won.`] : []),
+      ...(adv.rival ? [`${adv.rival.name} ${gains(adv.rival.name)} ground on every try of yours that fails. At ${adv.rival.max}, ${adv.rival.name} ${has(adv.rival.name)} won.`] : []),
       ...(adv.kit ? kitLines(adv.kit) : []),
     ],
   };
@@ -91,6 +91,7 @@ export function forkHint(s: RoadStop): string {
 
 /** At a fork: the two face-down cards, what can be told of each, and which one a companion would take. */
 export function forkSaid(t: Trip, stops: RoadStop[], hours: number[], leaning: { name: string; side: number } | null): string[] {
+  if (t.adv.hub) return hubSaid(t, stops, hours);
   const side = ["On your left", "On your right"];
   const lines = ["The road splits here, and I lay out two cards. The colour of a card's back tells you what kind of thing waits there."];
   stops.forEach((s, i) => lines.push([`${side[i] ?? "And"}, ${FAMILY_SAYS[cardKind(s.card).family]}: ${s.teaser}. ${cap(span(hours[i] ?? 0))} away.`, forkHint(s)].filter(Boolean).join(" ")));
@@ -98,7 +99,30 @@ export function forkSaid(t: Trip, stops: RoadStop[], hours: number[], leaning: {
   lines.push("Pick one: touch it, or write which.");
   return lines;
 }
+/**
+ * Where you can go from a hub (docs/MOONSHOT.md, the maps): each place still to do, by number, how far it is (back
+ * through the hub when you are out at another), and whether the end is open yet.
+ */
+export function hubSaid(t: Trip, stops: RoadStop[], hours: number[]): string[] {
+  const hub = placeName(t.adv, t.adv.start);
+  const out = t.at !== t.adv.start;
+  const lines = [out ? `From here, back through ${hub}, you can go on to any of these.` : `From ${hub} you can go out to any of these, in any order, and every road leads back here.`];
+  stops.forEach((s, i) => lines.push([`${i + 1}. ${s.climax ? "The end of it all" : cap(FAMILY_SAYS[cardKind(s.card).family])}: ${s.name}, ${s.teaser}. ${cap(span(hours[i] ?? 0))} away.`, s.climax ? "" : forkHint(s)].filter(Boolean).join(" ")));
+  const end = t.adv.stops.find((s) => s.climax);
+  const left = (t.adv.hub?.needs ?? 0) - hubDone(t);
+  if (end && left > 0) lines.push(`${end.name} is closed to you until you have done ${left === 1 ? "one more of them" : `${left} more of them`}.`);
+  else if (end && stops.some((s) => s.climax) && stops.length > 1) lines.push(`${end.name} is open now. Go there when you are ready, or do more first: every place done is something more to go on, and every hour spent is the other side's.`);
+  lines.push("Pick one: touch its card, or write which, by name or by number.");
+  return lines;
+}
+export const HUB_AGAIN = "I cannot tell which you mean. Write its name, or its number.";
+
 export const FORK_AGAIN = "I cannot tell which you mean. The one on your left, or the one on your right?";
+
+/** Whether a name is of many ("the hunters", "the Brightwater twins"), by its last word: then "gain" and "have". */
+const many = (name: string): boolean => /^the\b/i.test(name) && /[^su]s$/i.test(name.trim().split(/\s+/).pop() ?? "");
+const gains = (name: string): string => (many(name) ? "gain" : "gains");
+const has = (name: string): string => (many(name) ? "have" : "has");
 
 /** On arriving at a stop: the road behind you, the card turned, and what stands there. */
 export function arriveSaid(a: Arrival): string[] {
@@ -249,7 +273,7 @@ export function turnSaid(turn: Turn): string[] {
     }
   }
   if (turn.longWay) lines.push(`You will not get past ${placeName(adv, t.at)}. You go the long way round it: ${span(turn.longWay.hours)}${turn.longWay.supplies ? " and a supply" : ""}. It is ${clock(t.sheet.hour)}.`);
-  if (turn.rivalGained && adv.rival && t.over !== "rival") lines.push(`${adv.rival.name} gains ground: ${t.rival} of ${adv.rival.max}.`);
+  if (turn.rivalGained && adv.rival && t.over !== "rival") lines.push(`${adv.rival.name} ${gains(adv.rival.name)} ground: ${t.rival} of ${adv.rival.max}.`);
   if (turn.dread && !t.over) lines.push(dreadSaid(turn.dread, t.dread ?? 0));
   return lines;
 }
@@ -416,6 +440,14 @@ export function campRead(line: string): "rest" | "on" {
 /** Which card a line written at a fork picks: by side, by name, or by a word of what was said about it. Null when it cannot tell. */
 export function forkRead(line: string, stops: RoadStop[]): string | null {
   const l = ` ${line.toLowerCase()} `;
+  // By number, when there are more than two to pick from: "3", "the third", "number two".
+  if (stops.length > 2) {
+    const n = /\b([1-9])\b/.exec(l)?.[1] ?? null;
+    const ord = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh"].findIndex((w) => new RegExp(`\\b${w}\\b`).test(l));
+    const word = ["one", "two", "three", "four", "five", "six", "seven"].findIndex((w) => new RegExp(`\\b(?:number|no\\.?) ${w}\\b`).test(l));
+    const i = n ? Number(n) - 1 : ord >= 0 ? ord : word;
+    if (i >= 0 && i < stops.length) return stops[i]!.id;
+  }
   const left = /\b(left|first|former)\b/.test(l), right = /\b(right|second|latter|other)\b/.test(l);
   if (left !== right) return stops[left ? 0 : 1]?.id ?? null;
   const words = (s: string) => s.toLowerCase().replace(/[^a-z' ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["the", "where", "someone", "which", "their", "there", "with", "that", "this"].includes(w));

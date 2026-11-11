@@ -10,7 +10,7 @@
  */
 import type { RoadStop } from "../engine/adventure.js";
 import type { Sheet } from "../engine/moment.js";
-import { forkRead, FORK_AGAIN, LEVEL_AGAIN, pickRead } from "../engine/tell-adventure.js";
+import { forkRead, FORK_AGAIN, HUB_AGAIN, LEVEL_AGAIN, pickRead } from "../engine/tell-adventure.js";
 import { weigh } from "../engine/weigh.js";
 import { CARRIED } from "../room/counters.js";
 import { music } from "../room/music.js";
@@ -179,14 +179,29 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       return desk.cards.clear(stop.id);
     },
 
-    async fork(stops) {
+    async fork(stops, read) {
+      // A line the director reads itself first (a player sent down the other way), then the meaning, then the rules.
+      const own = (line: string): number => {
+        const id = read?.(line);
+        return id ? stops.findIndex((s) => s.id === id) : -1;
+      };
+      // The narrator's hands hold two cards: more places than that (a hub) are picked on the map, by name or number.
+      if (stops.length > 2) {
+        const options = Object.fromEntries(stops.map((s, i) => [String(i), `${i + 1}. ${s.name}, ${s.teaser}`]));
+        const rules = (line: string): number => {
+          const id = forkRead(line, stops);
+          return id ? stops.findIndex((s) => s.id === id) : -1;
+        };
+        const picked = await choose((line) => (own(line) >= 0 ? own(line) : byMeaning("Which place do you go to?", line, options, () => rules(line))), HUB_AGAIN);
+        return stops[picked]!.id;
+      }
       await desk.cards.lay(stops.map((s) => s.id));
       const rules = (line: string): number => {
         const id = forkRead(line, stops);
         return id ? stops.findIndex((s) => s.id === id) : -1;
       };
       const options = Object.fromEntries(stops.map((s, i) => [String(i), `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
-      const picked = await choose((line) => byMeaning("Which way do you go, left or right?", line, options, () => rules(line)), FORK_AGAIN);
+      const picked = await choose((line) => (own(line) >= 0 ? own(line) : byMeaning("Which way do you go, left or right?", line, options, () => rules(line))), FORK_AGAIN);
       await desk.cards.unlay(picked);
       return stops[picked]!.id;
     },

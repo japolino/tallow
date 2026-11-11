@@ -15,7 +15,7 @@ import { ATTITUDE_STEP, attitudeIndex, favourDone, hearLine, hunch, PATIENCE, li
 import { goalNamed, PAYOFF_DOES, payoffOf, projectSaid, startProject, workOn, type Payoff, type Project } from "./project.js";
 import { doubt } from "./clues.js";
 import { kitFight } from "./kit.js";
-import { goingOn, hourSaid, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken } from "./schedule.js";
+import { goingOn, hourSaid, hoursNamed, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken } from "./schedule.js";
 import { asksTable, feel, spoke, spotlight, talkItOver, vote, whatTheySay, type Fellow, type Said, type Style } from "./seats.js";
 import { hasPower, shut, statOf, TARGETS, WAY_STATS, WAYS, type Moment, type Stat, type Way } from "./moment.js";
 import type { Tier } from "./moment.js";
@@ -121,7 +121,9 @@ function gotLines(t: Trip, c: Clue, how: "heard" | "seen", hunchHad = false): To
   if (g.tells && trip.schedule) {
     const a = trip.schedule.appointments.find((x) => x.id === g.tells);
     trip = { ...trip, schedule: learn(trip.schedule, g.tells) };
-    if (a) lines.push(`I cut a notch in the candle: ${hourSaid(a.at)}, at ${placeName(t.adv, a.where)}.`);
+    // A notch only for what is still to come; what has already gone by is only told.
+    if (a && (a.daily || a.at >= t.sheet.hour)) lines.push(`I cut a notch in the candle: ${hourSaid(nextAt(a, t.sheet.hour))}, at ${placeName(t.adv, a.where)}.`);
+    else if (a) lines.push(`That was at ${hourSaid(a.at)}, at ${placeName(t.adv, a.where)}: it has gone by.`);
   }
   return { trip, lines, ...(g.inked ? { inked: [g.inked] } : {}) };
 }
@@ -320,10 +322,38 @@ const fellowNamed = (t: Trip, line: string): Fellow | null => {
   return (t.fellows ?? []).find((f) => new RegExp(`\\b${f.name.toLowerCase().split(/\s+/)[0]}\\b`).test(l)) ?? null;
 };
 /** A player named with a word for going somewhere: the table is splitting up. */
+const SEND = /\b(go|goes|head|scout|stake out|keep watch|watch|(slip|sneak|nip|run|ride|hurry|creep|pop) (off|ahead|over|on ahead|down|up) to|go (and )?(see|look|check)|you take|you check)\b/i;
 const sendsOff = (t: Trip, line: string): Fellow | null => {
   const who = fellowNamed(t, line);
-  return who && SPLIT.test(line) && /\b(go|goes|head|scout|stake out|keep watch|watch)\b/i.test(line) ? who : null;
+  return who && SPLIT.test(line) && SEND.test(line) ? who : null;
 };
+
+/**
+ * At a fork, a player sent down one of the ways while you take another ("Vypra, go on ahead to the Noodle Bar; I'll
+ * take the crowd"): who goes, where, and the rest of the line, which says where you go. Null when nobody is sent.
+ */
+export function forkSplit(t: Trip, line: string, stops: readonly RoadStop[]): { who: Fellow; to: RoadStop; rest: string } | null {
+  const fellows = (t.fellows ?? []).filter((f) => !f.at && f.attitude !== "hostile" && f.attitude !== "cold");
+  const parts = line.split(/[.;!?…]|,\s*(?=(?:and |while |but )?i\b)|\b(?:while|but|and) (?=i\b|i'll|i will|we\b)/i).filter((x) => x && x.trim());
+  for (const part of parts) {
+    const l = part.toLowerCase();
+    const who = fellows.find((f) => new RegExp(`\\b${f.name.toLowerCase().split(/\s+/)[0]}\\b`).test(l));
+    if (!who || !(SPLIT.test(part) || SEND.test(part) || /\byou\b/i.test(part))) continue;
+    const words = (s: RoadStop): string[] => s.name.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const to = stops.find((s) => l.includes(s.name.toLowerCase())) ?? stops.find((s) => words(s).some((w) => l.includes(w)));
+    if (!to) continue;
+    return { who, to, rest: parts.filter((x) => x !== part).join(". ") };
+  }
+  return null;
+}
+
+/** A player sent down the other way at a fork: they are there on their own, and you are told so. */
+export function sentDown(t: Trip, who: Fellow, to: RoadStop): Told {
+  return {
+    trip: { ...t, fellows: (t.fellows ?? []).map((f) => (f.id === who.id ? { ...f, at: to.id } : f)) },
+    lines: [`${who.name} goes off to ${to.name} on their own. When something happens there, I will cut to them, and they will bring back what they find.`],
+  };
+}
 
 /** Words that say a line is said to someone: words in quotes, a word for speaking, a greeting, or "you". */
 const SPEAKS = /["“”]|\b(say|says|said|tell|ask|asks|talk|speak|greet|offer|promise|threaten|flirt|plead|beg|explain|thank|compliment|insist|reply|answer|whisper|introduce|apologi[sz]e|hello|hi|hey|good (morning|evening|day)|please|sorry|you|your|you're|yours)\b/i;
@@ -391,7 +421,7 @@ const ROWS: readonly Row[] = [
     run: (t, line, m, seed) => {
       const p = personAt(t, m.stop as RoadStop);
       if (p) return personActs(t, line, m, p, seed);
-      if (PRESS.test(line)) return { trip: t, lines: ["There is nobody here to press."], free: true };
+      // Nobody here with a mind of their own: pressing is a try like any other, on whoever the place has.
       return null;
     },
   },
@@ -456,7 +486,7 @@ function timeSpent(t: Trip, line: string, m: Moment, seed: string): Heard {
   const from = t.sheet.hour;
   let trip: Trip = clockTo(t, from + hours);
   const lines: string[] = [];
-  if (tr.act === "wait") lines.push(tr.until !== undefined ? `You wait until ${hourSaid(tr.until)}.` : "You wait an hour.");
+  if (tr.act === "wait") lines.push(tr.until !== undefined ? `You wait until ${hourSaid(tr.until)}.` : `You wait ${spanSaid(hours)}.`);
   else if (tr.act === "watch") lines.push("You watch, and keep still.");
   else if (tr.act === "follow") lines.push("You follow, at a distance.");
   else if (tr.act === "prepare") lines.push("You get ready. The next try here has it in its favour.");
@@ -578,7 +608,7 @@ function twoSlips(line: string, t: Trip): [string, string] | null {
 /** Words of a want or a goal that say a line is about it: its longer words, without the small ones. */
 const SMALL_WORDS = new Set(["their", "there", "with", "from", "that", "this", "them", "they", "have", "want", "wants", "back", "before", "after", "into", "over", "your", "what", "when", "will", "would", "some", "just", "more"]);
 const aboutWords = (s: string): string[] => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !SMALL_WORDS.has(w));
-const WORK = /\b(work on|working on|work at|spend (the |an |a |some )?(time|hour|hours|afternoon|morning|evening|night|day|stretch|while)|put (in )?(time|work|an hour|the hours) (in|into|on)|get on with|do (her|his|their|the) (favou?r|job)|do what (she|he|they) (asked|wanted|needs?)|(her|his|their) favou?r|the favou?r)\b/i;
+const WORK = /\b(work on|working on|work at|(spend|spent|put in|give|devote) (the |an |a |some |another |more |one |two |three |four |a few |a couple of |half an |an extra |\d+ )?(more |full |long )?(time|hour|hours|afternoon|morning|evening|night|day|stretch|while)|put (in )?(time|work|an hour|the hours) (in|into|on)|get on with|do (her|his|their|the) (favou?r|job)|do what (she|he|they) (asked|wanted|needs?)|(her|his|their) favou?r|the favou?r)\b/i;
 
 /**
  * A line that works on a project of yours: what someone asked of you (said in its words, or as doing them a favour), or
@@ -588,9 +618,11 @@ export function workedOn(t: Trip, line: string, here?: string): Project | null {
   const open = (t.projects ?? []).filter((p) => p.filled < p.segments);
   if (!open.length) return null;
   const l = line.toLowerCase();
+  const work = WORK.test(line);
+  // Asking whether someone lies, pressing them or a plain question is not an hour's work, whatever it is about.
+  if (!work && (READ.test(line) || PRESS.test(line) || /\?\s*$/.test(line))) return null;
   // A word counts by its stem, so "breakfast" works a goal about "breakfasts".
   const hits = (p: Project): number => aboutWords(p.goal).filter((w) => l.includes(w.length > 5 ? w.slice(0, w.length - 2) : w)).length;
-  const work = WORK.test(line);
   const score = (p: Project): number => {
     const n = hits(p);
     if (!p.id.startsWith("favour:")) return n >= 2 || (n >= 1 && work) ? n + (work ? 1 : 0) : 0;
@@ -610,12 +642,16 @@ export function workedOn(t: Trip, line: string, here?: string): Project | null {
   return null;
 }
 
+/** A length of time as the narrator says it: "a quarter of an hour", "half an hour", "an hour", "an hour and a half", "3 hours". */
+const spanSaid = (h: number): string =>
+  h <= 0.25 ? "a quarter of an hour" : h <= 0.5 ? "half an hour" : h <= 0.75 ? "three quarters of an hour" : h === 1 ? "an hour" : h === 1.5 ? "an hour and a half" : `${Math.round(h * 2) / 2} hours`;
+
 /** How long a stretch of work on a project takes, by the line or the step it is on. */
 function workHours(line: string, p: Project, now: number): number {
   const tr = timeRead(line, now);
   if (tr?.act === "stretch") return Math.min(tr.hours ?? 2, 12);
   if (tr?.act === "wait" && tr.until !== undefined) return Math.max(0.5, tr.until - now);
-  const named = /\b(an|one) hour\b/i.test(line) ? 1 : /\b(two|2) hours\b/i.test(line) ? 2 : /\b(three|3) hours\b/i.test(line) ? 3 : /\b(afternoon|morning|evening)\b/i.test(line) ? 4 : /\b(day|night)\b/i.test(line) ? 8 : 0;
+  const named = hoursNamed(line) ?? (/\b(afternoon|morning|evening)\b/i.test(line) ? 4 : /\b(day|night)\b/i.test(line) ? 8 : 0);
   if (named) return named;
   if (p.id.startsWith("favour:")) return 1;
   const need = p.needs.find((n) => !n.done);
@@ -637,7 +673,7 @@ function workIt(t: Trip, line: string, m: Moment, open: Project, seed: string): 
   const w = workOn(open, th.tier, Math.max(0, need), seed);
   trip = { ...trip, projects: (trip.projects ?? []).map((p) => (p.id === open.id ? w.project : p)) };
   const what = open.id.startsWith("favour:") ? `what was asked of you (${open.goal})` : open.goal;
-  const lines = [`You spend ${hours === 1 ? "an hour" : hours < 1 ? "half an hour" : `${hours} hours`} on ${what} (a ${th.natural}, and your ${statName(best)}). ${TIER_SAID[th.tier]} ${w.project.filled} of ${w.project.segments}.${w.complication ? ` And now ${complicationSaid(w.complication)}.` : ""}${w.done ? " It is done." : ""} It is now ${hourSaid(from + hours)}.`];
+  const lines = [`You spend ${spanSaid(hours)} on ${what} (a ${th.natural}, and your ${statName(best)}). ${TIER_SAID[th.tier]} ${w.project.filled} of ${w.project.segments}.${w.complication ? ` And now ${complicationSaid(w.complication)}.` : ""}${w.done ? " It is done." : ""} It is now ${hourSaid(from + hours)}.`];
   let inked: string[] = [];
   if (w.done) {
     const d = projectDone(trip, w.project, m);
@@ -862,7 +898,8 @@ export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: n
     const won = vote(yours, theirs);
     const hands = [`you for ${WAY_SHORT[yours]}`, ...theirs.map((x) => `${here.find((f) => f.id === x.id)!.name} for ${WAY_SHORT[x.way]}`)];
     // A plan the whole table agreed on is an edge, once, for the way it chose.
-    const lever = { id: `agreed:${m.stop.id}`, name: "the plan you all agreed on", way: won, edge: true };
+    const all = yours === won && theirs.every((x) => x.way === won);
+    const lever = { id: `agreed:${m.stop.id}`, name: all ? "the plan you all agreed on" : "the plan the table chose", way: won, edge: true };
     let trip: Trip = { ...t, proposals: { stop: m.stop.id, list: theirs, decided: won } };
     if (trip.facing && !trip.facing.moment.stop.levers.some((x) => x.id === lever.id)) {
       const f = trip.facing;
@@ -875,7 +912,11 @@ export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: n
   if (who && !who.at && SPLIT.test(line)) {
     // A place on the road is on the map before you; any other has to be inked first.
     const known = (p: { id: string; name: string }): boolean => !t.book || t.book.mapped.includes(p.name) || t.book.mapped.includes(p.id) || t.visited.includes(p.id) || t.adv.stops.some((s) => s.id === p.id);
-    const place = t.adv.places.find((p) => p.id !== m.stop.id && p.id !== t.adv.start && (l.includes(p.name.toLowerCase()) || new RegExp(`\\b${p.id.toLowerCase()}\\b`).test(l)) && known(p));
+    // By the name said, the longest that fits ("Pyre Gate" is not "Salt Gate"); by an id only when no name fits.
+    const open = t.adv.places.filter((p) => p.id !== m.stop.id && p.id !== t.adv.start && known(p));
+    const place =
+      open.filter((p) => l.includes(p.name.toLowerCase())).sort((a, b) => b.name.length - a.name.length)[0] ??
+      open.find((p) => p.id.length >= 4 && !open.some((q) => q !== p && q.name.toLowerCase().includes(p.id.toLowerCase())) && new RegExp(`\\b${p.id.toLowerCase()}\\b`).test(l));
     if (place) {
       if (who.attitude === "hostile" || who.attitude === "cold") return { trip: t, lines: [`${who.name} folds their arms: not for you, not tonight.`], free: true };
       const trip = { ...t, fellows: fellows.map((f) => (f.id === who.id ? { ...f, at: place.id } : f)) };
@@ -885,7 +926,7 @@ export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: n
   return null;
 }
 
-const PRESS = /\b(press (him|her|them|harder|again|on (it|that))|i press|keep pressing|lean on|lean hard|push (him|her|them|harder)|make (him|her|them) talk|intimidate|i insist|tell me everything|you're hiding|you are hiding|what (aren't|are not|else aren't) you telling|what else (do you know|are you hiding))\b/i;
+const PRESS = /\b(press (him|her|them|harder|again|on (it|that))|press (the|that) [a-z]+ for (answers|more|details|the truth|it)|i press(?!\s+(?:the|a|an|my|our|your|its|this|that|on|onward|onwards|ahead|forward|through|into|against|down|up|in|button|buzzer|bell|key|switch)\b)|keep pressing|lean on|lean hard|push (him|her|them|harder)|make (him|her|them) talk|intimidate|i insist|tell me everything|you're hiding|you are hiding|what (aren't|are not|else aren't) you telling|what else (do you know|are you hiding))\b/i;
 const READ = /\b(read (him|her|them)|read (his|her|their) face|(is|was|are|were) (he|she|they|[a-z]+) lying|are you lying|lying (to me )?about|lied (to me|about)|telling (me )?the truth|is (that|it|this) true|do i believe (him|her|them)|can i trust (him|her|them|that)|(study|search|watch) (his|her|their) face)\b/i;
 const FAVOUR = /\b(what can i do for you|what do you need|what do you want from me|can i help you|i('ll| will) help you|do you a favou?r|owe you one|a favou?r)\b/i;
 

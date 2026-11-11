@@ -165,16 +165,63 @@ export function hourNamed(line: string, now: number): number | null {
   const l = line.toLowerCase();
   // An hour word before a noun names a thing, not the hour: "wait for the morning guard to leave" waits for the guard.
   const OK_AFTER = "comes|came|breaks|falls|and|then|or|when|before|to|at|if|so|while|i|we|here|there|for|in|by|on|tomorrow|tonight";
-  for (const [w, h] of Object.entries(HOUR_WORDS)) if (new RegExp(`\\b${w}\\b(?!\\s+(?!(?:${OK_AFTER})\\b)[a-z]+)`).test(l)) return later(h, now);
-  const m = /\b(?:until|till|til|to|near|around|about|by|at|rings?|strikes?|chimes?|tolls?)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?::(\d{2}))?\s*(am|pm|o'clock)?/.exec(l);
+  const clock = clockHour(l, now);
+  if (clock !== null) return clock;
+  for (const [w, h] of Object.entries(HOUR_WORDS)) {
+    const at = new RegExp(`\\b(?:(a quarter past|quarter past|half past|a quarter to|quarter to)\\s+)?${w}\\b(?!\\s+(?!(?:${OK_AFTER})\\b)[a-z]+)`).exec(l);
+    if (!at) continue;
+    const part = (at[1] ?? "").replace(/^a /, "");
+    return later(h + (part === "quarter past" ? 0.25 : part === "half past" ? 0.5 : part === "quarter to" ? -0.25 : 0), now);
+  }
+  return null;
+}
+
+/** An hour named on the clock face ("until a quarter past two", "at 5 o'clock", "till 8:25 pm"), on or after `now`. */
+function clockHour(l: string, now: number): number | null {
+  const N = "(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)";
+  const PART = "(?:(a quarter past|quarter past|half past|a quarter to|quarter to)\\s+)";
+  const SAID = "(am|pm|a\\.m\\.|p\\.m\\.|o'clock|o’clock|in the (?:morning|afternoon|evening)|at night|tonight)?";
+  // "until a quarter past two", "at 5 o'clock", or "a quarter past two" said on its own.
+  const m =
+    new RegExp(`\\b(?:until|till|til|to|near|around|about|by|at|rings?|strikes?|chimes?|tolls?)\\s+${PART}?${N}(?::(\\d{2}))?\\s*${SAID}`).exec(l) ??
+    new RegExp(`\\b${PART}${N}()\\s*${SAID}`).exec(l);
   if (!m) return null;
-  let h = Number.isNaN(Number(m[1])) ? NUMBERS[m[1]!]! : Number(m[1]);
-  if (m[3] === "pm" && h < 12) h += 12;
-  const min = m[2] ? Number(m[2]) / 60 : 0;
-  // A bare hour is the next time it comes round, by the clock face.
+  const part = (m[1] ?? "").replace(/^a /, "");
+  let h = Number.isNaN(Number(m[2])) ? NUMBERS[m[2]!]! : Number(m[2]);
+  let min = m[3] ? Number(m[3]) / 60 : 0;
+  if (part === "quarter past") min = 0.25;
+  else if (part === "half past") min = 0.5;
+  else if (part === "quarter to") (h = (h + 11) % 12 || 12), (min = 0.75);
+  const said = m[4] ?? "";
+  // "o'clock" says the hour is on the clock face, not which half of the day it is in.
+  const pm = /^p|afternoon|evening|night|tonight/.test(said) && h < 12;
+  const am = /^a|morning/.test(said);
+  if (pm) h += 12;
+  if (am && h === 12) h = 0;
   const a = later(h + min, now);
-  if (m[3] || h > 12) return a;
+  if (pm || am || h > 12) return a;
+  // A bare hour is the next time it comes round, by the clock face.
   return Math.min(a, later(h + min + 12, now));
+}
+
+/**
+ * How long a line says, in hours: "half an hour", "an hour and a half", "two hours", "a couple of hours", "45 minutes".
+ * Null when it names no length of time.
+ */
+export function hoursNamed(line: string): number | null {
+  const l = line.toLowerCase();
+  if (/\b(a |one )?quarter of an hour\b|\b15 min(ute)?s?\b|\bfifteen minutes\b/.test(l)) return 0.25;
+  if (/\bhalf an hour\b|\bhalf-hour\b|\b30 min(ute)?s?\b|\bthirty minutes\b/.test(l)) return 0.5;
+  if (/\b(45|forty-five) min(ute)?s?\b|\bthree quarters of an hour\b/.test(l)) return 0.75;
+  if (/\ban hour and a half\b|\bone and a half hours\b|\b1\.5 hours\b/.test(l)) return 1.5;
+  const many = /\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|a couple of|couple of|a few|few)\s+(?:more\s+|full\s+|long\s+)?hours\b/.exec(l);
+  if (many) {
+    const w = many[1]!;
+    const n = Number.isNaN(Number(w)) ? (NUMBERS[w] ?? (/couple/.test(w) ? 2 : 3)) : Number(w);
+    return n + (/^ and a half\b/.test(l.slice(many.index + many[0].length)) ? 0.5 : 0);
+  }
+  if (/\b(an|one|another|a full|a whole)\s+(more\s+)?hour\b/.test(l)) return 1;
+  return null;
 }
 const later = (h: number, now: number): number => {
   const day = Math.floor(now / 24) * 24;
@@ -188,7 +235,9 @@ export function timeRead(line: string, now: number): TimeRead | null {
   const l = line.toLowerCase();
   if (/\b(wait|waits|nurse|bide|sit tight|hang back|linger|stay put|keep watch until)\b/.test(l)) {
     const until = hourNamed(line, now);
-    return { act: "wait", ...(until !== null ? { until } : {}) };
+    if (until !== null) return { act: "wait", until };
+    const hours = hoursNamed(line);
+    return { act: "wait", ...(hours !== null ? { hours } : {}) };
   }
   if (/\b(watch|stake out|keep an eye on|keep watch|observe)\b/.test(l)) return { act: "watch" };
   if (/\b(follow|tail|shadow|trail)\b/.test(l)) return { act: "follow" };
@@ -202,7 +251,7 @@ export function timeRead(line: string, now: number): TimeRead | null {
 
 /** How long a time act takes, in hours, from now: until the hour named, or its usual length. */
 export function timeTaken(r: TimeRead, now: number): number {
-  if (r.act === "wait") return r.until !== undefined ? Math.max(0.25, r.until - now) : 1;
+  if (r.act === "wait") return r.until !== undefined ? Math.max(0.25, r.until - now) : (r.hours ?? 1);
   if (r.act === "prepare") return 0.5;
   if (r.act === "watch") return 1;
   if (r.act === "follow") return 1.5;
