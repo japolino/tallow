@@ -154,6 +154,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
     ink: async (place) => room.inkPlace?.(place),
     notch: (hours) => room.notch?.(hours),
     blackCandle: (c) => room.blackCandle?.(c),
+    theatre: (on) => room.theatre?.(on),
 
     clock: (hour) => {
       const h = ((hour % 24) + 24) % 24;

@@ -111,6 +111,8 @@ export interface Table {
   notch?(hours: number[]): void;
   /** The black candle of a campaign (campaign.ts): rings burned of six, lit while the big bad takes a step; null puts it away. */
   blackCandle?(c: { burned: number; lit: boolean } | null): void;
+  /** Theatre of the mind (free form): the map and the pieces put away (true), or set out again for a story (false). */
+  theatre?(on: boolean): void;
 }
 
 export type Stage = "start" | "fork" | "road" | "write" | "given" | "check" | "throw" | "told" | "camp" | "over";

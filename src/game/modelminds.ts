@@ -9,10 +9,11 @@
  */
 import type { Ability } from "../engine/abilities.js";
 import { rulesHero, type Hero } from "../engine/hero.js";
+import { RISK_OPTIONS, RISK_QUESTION } from "../engine/free.js";
 import type { Minds } from "./minds.js";
 import { standIns } from "./minds.js";
 import { pickFromAnswers, pickQuestions, readFromAnswers, readQuestions, type Decide } from "./decisions.js";
-import { answerMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseTell, rated, readMessages, tellMessages, type Ask, type TellContext } from "./prompts.js";
+import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, readMessages, riskMessages, tellMessages, type Ask, type TellContext } from "./prompts.js";
 
 export interface ModelMindsOptions {
   /** Give up on a model after this long and use the stand-in (ms). */
@@ -94,6 +95,30 @@ export function modelMinds(ask0: Ask, o: ModelMindsOptions = {}): Minds & { hero
         fell("answer", e);
       }
       return plain.answer(line, m, note);
+    },
+    async roam(line, m, note) {
+      try {
+        const s = parseTell(await within(ask(roamMessages(line, m, { ...known, ...o.context?.() }, note), "teller"), ms));
+        if (s) return s;
+        fell("roam", "empty answer");
+      } catch (e) {
+        fell("roam", e);
+      }
+      return "";
+    },
+    async risky(line, m) {
+      if (o.decide) {
+        const got = pickFromAnswers(await decided("pick", pickQuestions(RISK_QUESTION, line, { ...RISK_OPTIONS })), { ...RISK_OPTIONS });
+        if (got) return got === "yes";
+      }
+      try {
+        const r = parseRisk(await within(ask(riskMessages(line, m), "reader"), ms));
+        if (r !== null) return r;
+        fell("risky", "answer did not check");
+      } catch (e) {
+        fell("risky", e);
+      }
+      return null;
     },
     async move(m, note) {
       try {

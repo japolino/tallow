@@ -6,6 +6,7 @@
  * Code decides every number here, from seeded dice. Nothing a model says changes any of it. A trip is never changed
  * in place: every step returns the next one.
  */
+import type { FreeWorld } from "./free.js";
 import { DANGER_SAVE, isContest, playRound, startContest, type Contest, type Moves, type Round } from "./contest.js";
 import { throwSave } from "./save.js";
 import { DREAD_MAX, dreadFrom } from "./dread.js";
@@ -157,6 +158,8 @@ export interface Adventure {
   fellows?: Fellow[];
   /** The last story of a campaign (campaign.ts, 6.1): the big bad itself waits at the end, and the keys you carried are your edges against it. */
   finale?: { name: string; edges: number };
+  /** Free form (free.ts): no story, only the world, the places you know and the threads in the air. */
+  free?: FreeWorld;
 }
 
 /** Whether the card's own character walks with you or is courted, for a made-up adventure too. */

@@ -57,6 +57,17 @@ export interface Minds {
    * says what kind of text it is, when it is not a line written in answer.
    */
   pick?(question: string, text: string, options: Record<string, string>, task?: string): Promise<string | null>;
+  /**
+   * Free form (engine/free.ts): what happens when the player does something ordinary in the world, or what a place is
+   * like when they come to it (`note` says which, and what must be shown). It may bring in small things and people
+   * that belong there; it never decides how something risky turns out. Empty when it cannot be written.
+   */
+  roam?(line: string, m: Moment, note?: string): Promise<string>;
+  /**
+   * Free form: whether a line calls for the die, because it is risky or opposed (asked of the Decision model when
+   * there is one, else the reader model). Null when it cannot be told, and the rules (riskyWords) answer.
+   */
+  risky?(line: string, m: Moment): Promise<boolean | null>;
 }
 
 /**

@@ -177,9 +177,13 @@ The dice pick a story within the family you asked for, preferring one you have n
 
 The stories are our own short recipes for familiar plots; no list of tropes or its wording is copied. A romance is offered only to a card that can be courted.
 
-### 3.2 Free form (second priority)
+### 3.2 Free form
 
-The room, the dice and the map follow a free roleplay. There is no goal. When something risky happens, the game calls a check.
+No story and no goal: only the world, and whatever you write that you do in it. It is offered with the stories ("or no story at all"), and asked for in plain words ("free form", "no story, I just want to roam"). It is theatre of the mind: the narrator lays no map and stands up no pieces; the places are in its notebook, which you see by writing "notebook". The table holds the die, the scale, your counters, your abilities and the cards of who is with you (the card's own character, for a card that is a person).
+
+Most of what you write is simply answered: the narrator says what happens, and may bring in the people and small things a place has, but never settles anything risky. Only something that could go wrong calls for the die, and asking someone for what they could refuse counts ("I ask the bouncer to let me in"): the Decision model says, else the reader model, else the words, with the same scale, stats, prices and clock as a story; after the throw the place is as it was, so each risky thing is its own. Going somewhere takes half an hour, and a new place is told once and kept. A goal of your own, work at it, and a wait are the world's, as in a story; a level comes every three things that worked.
+
+The night begins at a place written for the card's world, with a name the notebook keeps ("the Byte Bar on Ninth Street"); without a model, at a place the narrator names in the opening, if it names one. Two threads are in the air from the start, written for the card's world when there is a model (code checks each, and its stock makes up any that do not check), each on its own clock: one moves every six hours, the other every ten. Left alone, a thread takes a step each time, said as word reaching you, and at its last step it is gone. Pull on one ("I'll look into the missing people", "thread 2") and the narrator asks whether to play it out now; if so it is a story of its kind, built and played on its own road (the map comes out for it), and then you are back where you were, some hours on. Who you are, your goals and what they pay off are kept as you go, and a sitting left in free form is taken up where you were (`engine/free.ts`, `game/free.ts`).
 
 ---
 
@@ -330,7 +334,7 @@ undone on purpose. What is still open is marked **Open**.
 5. **Fights in the room.** Decided: a fight is a stop that takes two good tries (section 4), told as a fight. A turn-based fight of its own is not in this version: it would be a second game inside the first.
 6. **Models.** Decided: no downloaded asset packs. The narrator, the pieces and the room are sculpted by script or built in code, so nothing in the room belongs to anyone else.
 7. **Which weather the story uses.** Decided and built: an adventure has a weather on the road, and a place may have its own, shown outside the window while you are there. The river road is clear, with fog at the ford, wind on the tor and a storm at the keep; the city road is rain, with wind on the roofs and a storm at the tower; the courtships are clear. Heat is not needed.
-8. **Free form.** Deferred: a mode of its own, to be designed once the trope mode has been played in Lumiverse (section 3.2).
+8. **Free form.** Built (section 3.2): theatre of the mind, a die only for what could go wrong, and threads that become stories. Threads and the start place are written for the card's world. **Open:** people with minds of their own met in free form, and a "scenes" shape (a story with a clock but no map, a romance first).
 9. **Running out.** Kept as built (section 1.5): at no health you go down and come to two hours later with 1; at no supplies paying is closed where it costs anything; at no goodwill talking is a step harder. Turned back at a stop that is not the last, you go the long way round it, for hours and a supply. For the user to judge in play.
 10. **Where the words go.** Decided for this version: in the room only, spoken by the narrator and written on the pages (section 1.6). A sitting writes nothing into the Lumiverse chat, so a game never disturbs a chat or the chat's own model. **Open:** whether the end of an adventure should be offered to the chat as a note, which would be the user's choice each time.
 11. **How exact the balance should be.** Decided: it leans by the real chances and shows no number. The count would turn every try into sums; the lean is enough to choose by.

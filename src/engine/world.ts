@@ -278,6 +278,16 @@ export function worldFirstLine(t: Trip, line: string, m: Moment): Heard {
   return heard(t, line, m, ROWS.filter((r) => r.first(t, line)));
 }
 
+/**
+ * A line in free form (free.ts), read by the rows that mean something with no road and no map: a goal of your own,
+ * work at one, and time spent. The table's rows (a vote, a player sent to a place on the map) and the person's are a
+ * story's; in free form the narrator plays everyone there.
+ */
+export function worldLineFree(t: Trip, line: string, m: Moment): Heard {
+  return heard(t, line, m, ROWS.filter((r) => FREE_ROWS.includes(r.name)));
+}
+const FREE_ROWS = ["goal", "work", "time"];
+
 /** Whether any row of the world may take a line the reader took for a try. */
 export function worldFirst(t: Trip, line: string): boolean {
   return ROWS.some((r) => r.first(t, line));

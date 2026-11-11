@@ -137,5 +137,6 @@ export function goalNamed(line: string): string | null {
 /** The clock in words, for the narrator: "the breakfast shop: 2 of 6, still to do: find eggs and bacon". */
 export function projectSaid(p: Project): string {
   const left = p.needs.filter((n) => !n.done).map((n) => n.what);
-  return `${p.goal}: ${p.filled} of ${p.segments}${left.length ? `, still to do: ${left.join("; ")}` : ""}. When it is done: ${p.payoff.map((x) => PAYOFF_DOES[x]).join("; ")}.`;
+  // Said as a sentence of its own: "Open a shop that sells pies: 0 of 6".
+  return `${p.goal.charAt(0).toUpperCase()}${p.goal.slice(1)}: ${p.filled} of ${p.segments}${left.length ? `, still to do: ${left.join("; ")}` : ""}. When it is done: ${p.payoff.map((x) => PAYOFF_DOES[x]).join("; ")}.`;
 }

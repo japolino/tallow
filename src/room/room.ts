@@ -135,6 +135,8 @@ export interface RoomHandle {
   movePiece(id: string, stopId: string): Promise<void>;
   /** Draw a new map on the sheet: an adventure built after the room was (its places keep their ids). Absent on the flat room. */
   setMap?(map: MapSheet): void;
+  /** Theatre of the mind (free form, engine/free.ts): the map sheet and the pieces put away, or set out again. Absent on the flat room. */
+  theatre?(on: boolean): void;
   /** The narrator inks a place onto the map, down its margin (engine/clues.ts). Absent on the flat room. */
   inkPlace?(name: string): void;
   /** Notches in the burning candle, one at the height each of these hours will fall (docs/MOONSHOT.md, 5.3). Absent on the flat room. */
@@ -1199,6 +1201,11 @@ class Room implements RoomHandle {
       const q = stopOnSheet(s.u, s.v);
       this.stops.set(s.id, V((q.u - 0.5) * MAP_W, MAP_Y, MAP_Z + (q.v - 0.5) * MAP_H));
     }
+  }
+
+  theatre(on: boolean): void {
+    this.mapMesh.visible = !on;
+    for (const p of this.pieces.values()) p.mesh.visible = !on;
   }
 
   notch(hours: readonly number[]): void {
