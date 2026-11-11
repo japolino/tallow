@@ -1,39 +1,21 @@
 /**
  * Builds the two Spindle bundles in dist/: backend.js and frontend.js. Each is one self-contained ES module, because
- * the host loads the frontend from a single file. The room's model files (assets/models/*.glb) and its recorded sounds
- * (assets/sounds/*.mp3, the ones listed in src/room/soundfiles.ts) go inside the frontend bundle, so the room needs
- * nothing fetched at run time but the music.
+ * the host loads the frontend from a single file. The room's model files and recorded sounds go inside the frontend
+ * bundle from src/embedded/, written fresh first (scripts/embed.ts), so the room needs nothing fetched at run time but
+ * the music. Nothing here is needed to install: Lumiverse builds src/ with a plain `bun build`, and it comes out the same.
  *
  *   bun run build
  */
-import { readdirSync, readFileSync } from "node:fs";
-import type { BunPlugin } from "bun";
-import { SOUND_FILES } from "../src/room/soundfiles.js";
+import { spawnSync } from "node:child_process";
 
-const embed = (dir: string, files: readonly string[]): string =>
-  files.map((f) => `${JSON.stringify(f)}: ${JSON.stringify(readFileSync(`${dir}/${f}`).toString("base64"))}`).join(",");
-
-/**
- * `import { MODELS } from "tallow:models"`: every .glb in assets/models, as base64, by file name.
- * `import { SOUNDS } from "tallow:sounds"`: the recordings in assets/sounds, the same way.
- */
-const models: BunPlugin = {
-  name: "tallow-models",
-  setup(b) {
-    b.onResolve({ filter: /^tallow:(models|sounds)$/ }, (a) => ({ path: a.path, namespace: "tallow" }));
-    b.onLoad({ filter: /.*/, namespace: "tallow" }, (a) => {
-      if (a.path === "tallow:sounds") return { contents: `export const SOUNDS = {${embed("assets/sounds", SOUND_FILES)}};`, loader: "js" };
-      const files = readdirSync("assets/models").filter((f) => f.endsWith(".glb"));
-      return { contents: `export const MODELS = {${embed("assets/models", files)}};`, loader: "js" };
-    });
-  },
-};
+// The models and sounds, written into src/embedded/ fresh (scripts/embed.ts), so the bundle never carries stale ones.
+if (spawnSync("bun", ["run", "scripts/embed.ts"], { stdio: "inherit" }).status !== 0) process.exit(1);
 
 for (const [entry, out] of [
   ["./src/backend.ts", "backend.js"],
   ["./src/frontend.ts", "frontend.js"],
 ] as const) {
-  const result = await Bun.build({ entrypoints: [entry], outdir: "./dist", naming: out, target: "browser", format: "esm", minify: true, splitting: false, plugins: [models] });
+  const result = await Bun.build({ entrypoints: [entry], outdir: "./dist", naming: out, target: "browser", format: "esm", minify: true, splitting: false });
   if (!result.success) {
     for (const log of result.logs) console.error(log);
     process.exit(1);

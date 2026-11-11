@@ -8,8 +8,8 @@
 import { readContent, type ContentSettings } from "./engine/content.js";
 import type { SpindleFrontendContext } from "lumiverse-spindle-types";
 import { DefaultLoadingManager } from "three";
-import { MODELS } from "tallow:models";
-import { SOUNDS } from "tallow:sounds";
+import { MODELS } from "./embedded/models.js";
+import { SOUNDS } from "./embedded/sounds.js";
 import { mapOf } from "./engine/adventure.js";
 import { randomSeed } from "./engine/dice.js";
 import type { Trip } from "./engine/adventure.js";

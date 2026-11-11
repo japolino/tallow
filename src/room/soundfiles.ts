@@ -1,7 +1,7 @@
 /**
  * The recordings in assets/sounds (from Freesound; see CREDITS.md), in the order they are decoded: the table's
  * effects first, since they are short and wanted soonest, then thunder and the long beds. "name-n.mp3" is take n of
- * "name". scripts/build.ts puts exactly these into the frontend bundle; the preview fetches them from /assets/sounds.
+ * "name". scripts/embed.ts puts exactly these into the frontend bundle; the preview fetches them from /assets/sounds.
  */
 export const SOUND_FILES: readonly string[] = [
   ...["throw-1", "throw-2", "throw-3", "throw-4", "throw-5", "rattle-1", "rattle-2"],

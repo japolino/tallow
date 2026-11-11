@@ -15,6 +15,7 @@
     "pointer": "bun run scripts/pointer.ts",
     "table": "bun run scripts/table.ts",
     "build": "bun run scripts/build.ts",
+    "embed": "bun run scripts/embed.ts",
     "live": "bun run scripts/live.ts",
     "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (narrator_cloak, narrator_hand, narrator_arm, narrator_hood, pieces)"
   },
