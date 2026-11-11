@@ -243,8 +243,6 @@ export function setup(ctx: SpindleFrontendContext): () => void {
   // Setting up lives in the drawer, outside the game: the room itself shows nothing but the room.
   const offDrawer = createDrawer(ctx, {
     sit: () => void open().catch((e) => console.error("tallow:", e)),
-    granted: () => ctx.permissions.getGranted(),
-    request: (perms) => ctx.permissions.request(perms, { reason: perms.some((p) => NEEDS.includes(p)) ? WHY : WHY_EXTRAS } as never),
     models: async (patch) => {
       const m = await call({ type: "models", ...(patch ? { patch } : {}) });
       if (m.type !== "models") throw new Error("no answer about the models");
