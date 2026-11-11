@@ -22,8 +22,8 @@ import { DreadBowl } from "./dread.js";
 import { Board } from "./board.js";
 import { LuckTray } from "./luck.js";
 import { AgainstSlips } from "./against.js";
-import { DrawnHand, GRIP_LEAN } from "./drawnhands.js";
-import { Page, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
+import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
+import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
 import { TableCards } from "./tablecards.js";
 import { ease, Held, Tracks, type Reacher, type Step } from "./track.js";
 import { Voice } from "./voice.js";
@@ -72,10 +72,20 @@ const WRITE_EYE = BOOK.clone().add(V(0.05, 0.43, 0.36));
 const WRITE_LOOK = BOOK.clone().add(V(0, 0, 0.1));
 /** Held out over the table for the narrator to take: by its top edge, its face turned up toward you. */
 const OFFERED = pose(-0.2, 0.2, 0.12, 0.9, 0.1);
-/** Lying in front of the narrator, turned for it to read. */
-const HIS = pose(-0.22, 0.006, -0.43, 0, Math.PI + 0.08);
-/** Pushed aside by the narrator: a line it could not use. */
-const ASIDE = pose(0.3, 0.004, -0.5, 0, Math.PI - 0.5);
+/** How the narrator's page is turned, for it to read. */
+const HIS_YAW = Math.PI + 0.05;
+/**
+ * Lying in front of the narrator: on the bare wood beyond the map, between the candles and its die tray, where
+ * nothing else on the table is ever put (a page lying through a tray or a block looks wrong at once).
+ */
+const HIS = pose(-0.495, 0.006, -0.5, 0, HIS_YAW);
+/**
+ * The pages the narrator has done with lie in a loose heap under that one: how high the lowest lies, how much
+ * higher each lies than the one before, and how many are kept (the oldest is taken from underneath).
+ */
+const HEAP_Y = 0.0012, HEAP_STEP = 0.0007, HEAP_MAX = 6;
+/** How far each page of the heap is turned from the one on top, in turn: enough to show, never as far as the tray or the candles. */
+const HEAP_SKEW = [0.12, -0.08, 0.1, -0.12, 0.07];
 /** Held out to you by the narrator. */
 const RETURNED = pose(-0.12, 0.2, 0.22, 0.9, 0);
 /** Held up to the candlelight by the narrator while it reads your line: upright, its face turned to it. */
@@ -91,6 +101,14 @@ const HAND_D = 0.42;
  * of a hand beside the notebook, and smaller when it reaches out across the table.
  */
 const PEN_SIZE = 0.32;
+/** Where on a page in your hands the pad of each thumb lies: this far in from its side, and this far up from its foot. */
+const THUMB_IN = 0.01;
+const THUMB_UP = 0.006;
+/**
+ * How much of its own light a page gives while it lies on the narrator's side of the table: next to none. It is too
+ * far off to be read there, and anything more makes it stand out white in a room lit by one candle.
+ */
+const AWAY = 0.02;
 const MOST = 400;
 
 export class Desk {
@@ -150,6 +168,11 @@ export class Desk {
   private his: Page | null = null;
   private held: Page | null = null;
   private pile: Page[] = [];
+  /** The pages the narrator has done with, lowest first, and how many it has ever put there. */
+  private heap: Page[] = [];
+  private shoved = 0;
+  /** Pages that have left the pad and are giving up the light they had while you wrote on them. */
+  private dimming: Page[] = [];
   private readAt = -1;
   private made = 0;
 
@@ -297,6 +320,11 @@ export class Desk {
     return new Promise((got) => (this.wanted = got));
   }
 
+  /** True while a page is up in your hands to be read: the room then draws itself as finely as it can (room.ts). */
+  get pageUp(): boolean {
+    return !!this.held;
+  }
+
   /** True while the game is waiting for a line. */
   get inviting(): boolean {
     return !!this.wanted;
@@ -362,7 +390,7 @@ export class Desk {
     await down;
   }
 
-  /** The narrator slides the page it has away to one side: a line it could not use. */
+  /** The narrator shoves the page it has out of true, onto the heap of those it is done with: a line it could not use. */
   pushAside(): Promise<void> {
     const page = this.his;
     this.his = null;
@@ -372,12 +400,21 @@ export class Desk {
   private async aside(page: Page): Promise<void> {
     const n = this.h.narrator;
     const arm = n.armFor(HIS.p);
-    const to: Pose = { p: ASIDE.p.clone().add(V((this.made % 3) * 0.012, (this.made % 5) * 0.0006, 0)), q: ASIDE.q };
+    this.heap.push(page);
+    // It stays where it lay, turned askew and dropped onto the others: the next page is laid squarely on top.
+    const top = Math.min(this.heap.length, HEAP_MAX) - 1;
+    const to = pose(HIS.p.x, HEAP_Y + top * HEAP_STEP, HIS.p.z, 0, HIS_YAW + HEAP_SKEW[this.shoved++ % HEAP_SKEW.length]!);
     await this.tracks.run([
       { dur: 0.2, tick: () => n.reach(arm, page.group.position), until: () => n.reached(arm) > 0.8, patience: 1.2 },
       this.fly(page.group, () => to, 0.5, 0, undefined, arm),
       { dur: 0.1, begin: () => n.reach(arm, null) },
     ]);
+    while (this.heap.length > HEAP_MAX) {
+      const old = this.heap.shift()!;
+      this.group.remove(old.group);
+      old.dispose();
+    }
+    this.heap.forEach((p, i) => (p.group.position.y = HEAP_Y + i * HEAP_STEP));
   }
 
   /* ----------------------------------- pages ---------------------------------- */
@@ -388,6 +425,8 @@ export class Desk {
       page.group.position.copy(at.p);
       page.group.quaternion.copy(at.q);
       this.group.add(page.group);
+      // One of the narrator's own, lying over on its side.
+      page.glow = AWAY;
     }
     return page;
   }
@@ -697,6 +736,8 @@ export class Desk {
     sheet.writing.mine = line;
     sheet.draw();
     this.sheet = null;
+    // It was lit to be written on; on the table it is lit by the room alone, like everything else there.
+    this.dimming.push(sheet);
     this.marginNotes = [];
     this.field.value = "";
     this.field.blur();
@@ -722,7 +763,7 @@ export class Desk {
       ...this.carried(sheet, arm, HIS, 0.95, 0.06).slice(2),
       { dur: 0.3, begin: () => n.watch(g.position, 2.2, this.t) },
     ];
-    // A page it still has from the line before (you wrote again instead of throwing) is pushed out of the way.
+    // A page it still has from the line before (you wrote again instead of throwing) goes onto its heap, under this one.
     if (this.his) void this.aside(this.his);
     this.his = sheet;
     const given = this.tracks.run(steps).then(() => {
@@ -837,12 +878,20 @@ export class Desk {
 
   /* ----------------------------------- frame ---------------------------------- */
 
-  /** Hang a drawn hand so that its own point lies over a place in the room. */
-  private hang(hand: DrawnHand, world: Vector3, drop: number): void {
+  /**
+   * Hang a hand that holds the page so that the pad of its thumb lies over a place on it, turned by `turn`, and no
+   * larger than lets its thumb end inside the bare foot of the page: it must never lie over the writing.
+   */
+  private hang(hand: DrawnHand, world: Vector3, drop: number, turn: number): void {
     const p = this.h.camera.worldToLocal(this.tmp.copy(world));
-    p.multiplyScalar(HAND_D / -p.z);
-    const a = hand.anchor();
-    hand.group.position.set(p.x - a.x, p.y - a.y - drop, -HAND_D);
+    const k = HAND_D / -p.z;
+    p.multiplyScalar(k);
+    const size = Math.max(0.7, Math.min(1, ((PAGE_FOOT - THUMB_UP - 0.002) * k) / THUMB_REACH));
+    const a = hand.anchor().multiplyScalar(size);
+    const c = Math.cos(turn), s = Math.sin(turn);
+    hand.group.scale.setScalar(size);
+    hand.group.rotation.z = turn;
+    hand.group.position.set(p.x - (a.x * c - a.y * s), p.y - (a.x * s + a.y * c) - drop, -HAND_D);
   }
 
   /** @param bright how lit your hands are */
@@ -868,6 +917,7 @@ export class Desk {
     this.coverK = to(this.coverK, this.focusWant && this.inkK > 0.2 ? 1 : 0, 5);
     this.cover.rotation.x = -ease(this.coverK) * (Math.PI - 0.05);
     if (this.sheet) this.sheet.glow = 0.05 + this.focus.k * 0.3;
+    this.dimming = this.dimming.filter((p) => p !== this.held && (p.glow = to(p.glow, AWAY, 2.5)) > AWAY + 0.001);
 
     // The pencil: lying on the notebook, or in your hand with its point where the next letter goes.
     const sheet = this.sheet;
@@ -929,8 +979,8 @@ export class Desk {
     this.thumbs.forEach((hand, i) => {
       hand.group.visible = show;
       if (!show || !page) return;
-      const corner = page.group.localToWorld(V((i ? 1 : -1) * (PAGE_W / 2 - 0.008), 0, PAGE_H - 0.012));
-      this.hang(hand, corner, (1 - ease(this.thumbK)) * 0.25);
+      const corner = page.group.localToWorld(V((i ? 1 : -1) * (PAGE_W / 2 - THUMB_IN), 0, PAGE_H - THUMB_UP));
+      this.hang(hand, corner, (1 - ease(this.thumbK)) * 0.25, (i ? 1 : -1) * THUMB_TURN);
       hand.update(t, bright);
     });
     if (page) page.glow = 0.12 + ease(this.thumbK) * 0.5;
@@ -950,7 +1000,7 @@ export class Desk {
     this.cards.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();
-    for (const page of [this.sheet, this.his, this.held, ...this.pile]) page?.dispose();
+    for (const page of [this.sheet, this.his, this.held, ...this.pile, ...this.heap]) page?.dispose();
     for (const m of this.mats) m.dispose();
   }
 }

@@ -48,8 +48,8 @@ const DECK = V(0.0, 0, -0.655);
 const DECK_N = 14;
 /** Where the two cards of a fork are laid, in front of the narrator, for you to pick from. */
 const FORK = [V(-0.075, 0.0012, -0.555), V(0.075, 0.0012, -0.555)];
-/** Where the rival's card lies: on the narrator's side, by its left hand as you see it. */
-const RIVAL = V(-0.45, 0.0012, -0.6);
+/** Where the rival's card lies: on the narrator's side, by its left hand as you see it, between its die tray and the map. */
+const RIVAL = V(-0.325, 0.0012, -0.543);
 /** Your side: a short row in front of the map, between the counters and the pile of pages. */
 const SIDE = V(0.005, 0.0012, 0.31);
 const SIDE_STEP = 0.028;

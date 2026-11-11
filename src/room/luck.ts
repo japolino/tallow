@@ -1,6 +1,6 @@
 /**
  * The narrator's own die (docs/SYSTEMS.md, 7): a pale bone die that lives in a small wooden tray on its side of the
- * table, between the rival's card and the deck. When you ask something only luck can settle ("is there a boat at the
+ * table, left of the deck and behind the rival's card. When you ask something only luck can settle ("is there a boat at the
  * jetty?"), the narrator's hand picks it out of the tray and throws it there, in its own pan, where you can read it.
  * The face was decided before (engine/luck.ts). It is only shown: you never click it.
  */
@@ -11,8 +11,11 @@ import { ease, type Reacher, type Step, type Tracks } from "./track.js";
 
 const V = (x: number, y: number, z: number) => new Vector3(x, y, z);
 
-/** The tray's middle: on the narrator's side, left of the deck, clear of the rival's card and your counters. */
-const AT = V(-0.27, 0, -0.63);
+/**
+ * The tray's middle: on the narrator's side, left of the deck and right at the table's far edge, so the rival's card
+ * has room in front of it and the narrator's page (desk.ts) room to its left. Nothing here lies on anything else.
+ */
+const AT = V(-0.31, 0, -0.655);
 const IN_W = 0.15, IN_D = 0.1, RIM = 0.006, RIM_H = 0.014, FLOOR = 0.005;
 /** The narrator's die is smaller than yours. */
 const SCALE = 0.72;

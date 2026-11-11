@@ -8,7 +8,7 @@
  * through the origin, and the page runs away from it along +z. The written
  * side faces +y.
  */
-import { AlwaysDepth, BackSide, CanvasTexture, FrontSide, Group, Mesh, LessEqualDepth, MeshStandardMaterial, PlaneGeometry, SRGBColorSpace } from "three";
+import { AlwaysDepth, BackSide, CanvasTexture, FrontSide, Group, Mesh, LessEqualDepth, MeshStandardMaterial, PlaneGeometry, ReplaceStencilOp, SRGBColorSpace } from "three";
 import { mk, rng } from "./textures.js";
 
 /** Size of a page in the room, in metres. */
@@ -21,6 +21,10 @@ const SIDE = 44;
 const TOP = 62;
 /** Clear of the thumbs that hold the page up. */
 const BOTTOM = 118;
+/** How much of the foot of the page is left bare for the thumbs, in metres. */
+export const PAGE_FOOT = (BOTTOM / PX_H) * PAGE_H;
+/** What the page in your hands marks the picture with wherever it is drawn, so the hands behind it can be left out there (drawnhands.ts). */
+export const HELD_MARK = 1;
 
 const MINE_FONT = '"Segoe Print", "Ink Free", "Bradley Hand", "Comic Sans MS", cursive';
 const HIS_FONT = 'Georgia, "Palatino Linotype", "Book Antiqua", serif';
@@ -109,6 +113,10 @@ export class Page {
   }
 
   /** How much of its own light the page gives: about 0.04 lying on the table, more held up to be read. */
+  get glow(): number {
+    return this.front.emissiveIntensity;
+  }
+
   set glow(k: number) {
     this.front.emissiveIntensity = k;
     this.back.emissiveIntensity = k * 0.6;
@@ -119,6 +127,12 @@ export class Page {
     for (const m of this.group.children as Mesh[]) m.renderOrder = on ? 18 : 0;
     // It still writes its own depth, so nothing in the air behind it (dust, light, the narrator's eyes) shows through.
     this.front.depthFunc = this.back.depthFunc = on ? AlwaysDepth : LessEqualDepth;
+    // And it marks where it is, so that the hands holding it are not drawn over it: only their thumbs are.
+    for (const mat of [this.front, this.back]) {
+      mat.stencilWrite = on;
+      mat.stencilRef = HELD_MARK;
+      mat.stencilZPass = ReplaceStencilOp;
+    }
   }
 
   /**

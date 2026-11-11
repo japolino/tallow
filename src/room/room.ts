@@ -356,6 +356,12 @@ class Room implements RoomHandle {
   private shiverAt = 5;
   private governor = new Governor();
   private quality = 0;
+  /** A page is up to be read, and the room is drawn finer for it: small writing cannot be read in chunky pixels. */
+  private fine = false;
+  /** False once this machine has shown it cannot draw that finely and keep its pace. */
+  private fineOk = true;
+  /** 0..1: how far the picture has been made plain for reading (post.ts). */
+  private clear = 0;
   private rnd = rng(2024);
   private tmpColor = new Color();
   private tmpColor2 = new Color();
@@ -1344,8 +1350,11 @@ class Room implements RoomHandle {
     const dpr = Math.min(2, devicePixelRatio || 1);
     this.renderer.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
     // Whole screen pixels per drawn pixel, so the chunky picture stays even.
-    const px = Math.max(1, Math.round((h * dpr) / QUALITY[this.quality]!.lines));
-    this.post.resize((w * dpr) / px, (h * dpr) / px);
+    const lines = QUALITY[this.quality]!.lines;
+    const usual = Math.max(1, Math.round((h * dpr) / lines));
+    // With a page up to be read, twice the lines (which on most screens is every pixel there is).
+    const px = this.fine ? Math.max(1, Math.round((h * dpr) / (lines * 2))) : usual;
+    this.post.resize((w * dpr) / px, (h * dpr) / px, usual / px);
     this.camera.aspect = w / h;
     // A tall, narrow view (a phone held upright) needs a wider lens to keep the table in frame.
     this.baseFov = w / h < 0.6 ? 72 : w / h < 0.8 ? 68 : w / h < 1 ? 60 : w / h < 1.3 ? 50 : SEAT.fov;
@@ -1381,7 +1390,11 @@ class Room implements RoomHandle {
     // room's own pace (a throw takes as long as it should), and a page woken from the background does not lurch.
     const dt = Math.min(0.25, this.last ? (ms - this.last) / 1000 : 0.016);
     // Frames drawn while the page is in the background say nothing about how fast the machine is.
-    if (this.last && document.visibilityState === "visible" && this.governor.note(ms - this.last)) this.degrade();
+    if (this.last && document.visibilityState === "visible" && this.governor.note(ms - this.last)) {
+      // Too slow while drawing finely for a page: give that up, and leave the room's own quality as it was.
+      if (this.fine) this.fineOk = false;
+      else this.degrade();
+    }
     this.last = ms;
     if (!this.paused) this.step(dt);
   };
@@ -1410,8 +1423,15 @@ class Room implements RoomHandle {
     if (struck) sound.play("slam", { x: -0.1 });
     if (struck && !this.reduced) this.jolt = 1;
     else if (this.jolt) this.jolt = this.jolt < 0.004 ? 0 : this.jolt * Math.exp(-dt / 0.2);
+    // A page in your hands: the picture is drawn finer and plainer for as long as it is up, so it can be read.
+    const reading = this.desk.pageUp;
+    if (this.fine !== (reading && this.fineOk)) {
+      this.fine = reading && this.fineOk;
+      this.resize();
+    }
+    this.clear = this.reduced ? +reading : Math.max(0, Math.min(1, this.clear + (reading ? dt : -dt) * 4));
     const haze = this.scene.fog!.color;
-    this.post.set({ time: t, exposure: L.exposure * 1.08, cold: L.cold, still: this.reduced, haze: [haze.r, haze.g, haze.b], hazeK: L.fog * 0.1 });
+    this.post.set({ time: t, exposure: L.exposure * 1.08, cold: L.cold, still: this.reduced, haze: [haze.r, haze.g, haze.b], hazeK: L.fog * 0.1, clear: this.clear });
     this.post.render(this.scene, this.camera);
   }
 

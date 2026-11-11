@@ -11,9 +11,10 @@ Three poses:
             whole hand with the forearm in its sleeve, and only the thumb and
             the end of the first finger, which lie over the pencil.
     thumb   the hand that holds a page up by its lower corner, seen from its
-            thumb side: the thumb lies on the page, the fingers are behind it
-            (the corner of the page is cut out of the picture). One picture,
-            512 by 1536.
+            thumb side: the thumb lies on the page, the fingers are behind it.
+            Two pictures of one sheet, 512 by 1536: the whole hand (the room
+            leaves it out wherever the page is), and only the thumb, which
+            lies over the page.
     die     the hand that holds the die: palm up, cupped round it, in six
             stages from closed to flung open (DIE_OPEN). Two pictures of one
             sheet for each, 512 by 512: the palm, and the ends of the fingers
@@ -49,9 +50,8 @@ SCALE = 2
 # The writing hand: where finger and thumb pinch, on its sheet (drawnhands.ts places the hand by this point), and the pencil's lean.
 ANCHOR = (202.4, 242.3)
 PENCIL_LEAN = -5.0
-# The hand that holds a page: where the pad of its thumb is, and the corner of the page under it.
+# The hand that holds a page: where the pad of its thumb is (drawnhands.ts places the hand by this point).
 THUMB_ANCHOR = (250.0, 278.0)
-PAGE_CORNER = (257.0, 291.0)
 # The hand with the die: the hollow of the palm, where the die lies (hand.ts), how big the die is on the sheet, and
 # how far open the hand is in each of its pictures (0 cupped round the die, 1 flung open).
 HOLLOW = (250.0, 300.0)
@@ -76,13 +76,37 @@ def pack():
     import base64
     import io
 
+    import numpy as np
     from PIL import Image
 
     def url(name, size=None):
         im = Image.open(os.path.join(RENDER, f"player_hand_{name}.png")).convert("RGBA")
-        if size:
+        # Only the piece that lies in front has a cut edge, with colour kept unseen past it (see render).
+        cut = name.endswith("front")
+        if size and cut:
+            # Colour and alpha made smaller apart, or the unseen colour would be lost with the alpha over it.
+            rgb = im.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+            im = Image.merge("RGBA", (*rgb.split(), im.getchannel("A").resize((size, size), Image.Resampling.LANCZOS)))
+        elif size:
             im = im.resize((size, size), Image.Resampling.LANCZOS)
         q = im.quantize(colors=64, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+        # Cutting down to a few colours turns everything unseen black. The colour past the cut edge is put back: each
+        # such pixel gets the nearest of the picture's colours, with no alpha.
+        src = np.array(im)
+        band = (src[..., 3] == 0) & (src[..., :3].sum(axis=2) > 24) if cut else np.zeros(src.shape[:2], bool)
+        if band.any():
+            pal = np.array(q.getpalette("RGBA"), dtype=np.int32).reshape(-1, 4)
+            solid = pal[pal[:, 3] > 200][:, :3]
+            px = src[band][:, :3].astype(np.int32)
+            near = np.argmin(((px[:, None, :] - solid[None, :, :]) ** 2).sum(axis=2), axis=1)
+            idx = np.array(q)
+            slot = {}
+            for j in sorted(set(near.tolist())):
+                slot[j] = len(pal)
+                pal = np.vstack([pal, [*solid[j], 0]])
+            idx[band] = [slot[j] for j in near.tolist()]
+            q = Image.fromarray(idx.astype(np.uint8), "P")
+            q.putpalette(pal.astype(np.uint8).tobytes(), "RGBA")
         buf = io.BytesIO()
         q.save(buf, format="PNG", optimize=True)
         print(name, im.size, len(buf.getvalue()), "bytes")
@@ -94,15 +118,16 @@ def pack():
         " * Your hands, rendered from a 3D hand by models/player_hand.py (do not edit: run that again).\n"
         " *\n"
         " * `back` and `front` are the writing hand: the whole hand and its sleeve, and the thumb and the end of the first\n"
-        " * finger, which lie over what the hand holds. `thumb` is the hand that holds a page up by its corner. All three\n"
-        " * are pictures of a sheet three times as tall as it is wide. `die` is the hand with the die in it, on a square\n"
+        " * finger, which lie over what the hand holds. `thumb` is the hand that holds a page up by its corner: the whole\n"
+        " * hand, and its thumb, which lies over the page. All four are pictures of a sheet three times as tall as it is\n"
+        " * wide. `die` is the hand with the die in it, on a square\n"
         " * sheet, once for each stage in DIE_OPEN (0 cupped round the die, 1 flung open): the palm, and the ends of the\n"
         " * fingers and thumb, which lie over the die.\n"
         " */\n"
         "export const HAND_SHEETS = {\n"
         f"  back: {url('back')},\n"
         f"  front: {url('front')},\n"
-        f"  thumb: {url('thumb')},\n"
+        f"  thumb: {{ back: {url('thumb_back')}, front: {url('thumb_front')} }},\n"
         f"  die: [\n{die},\n  ],\n"
         "} as const;\n\n"
         "/** How far open the hand is in each picture of `die`. */\n"
@@ -534,11 +559,9 @@ def build_thumb():
     st.make("thumb", chain(joints["thumb"][1:]), "hand", "skin", m)
     st.make("nail_thumb", nail(thumb_pts[3], tr[3], thumb_pts[3] - thumb_pts[2], -press), "nails", "nail", m, remesh=False)
 
-    # The page: everything behind its corner is left out of the picture. It lies just under the pad of the thumb.
-    c = st.at(*PAGE_CORNER)
-    z = (m @ thumb_pts[3]).z - tr[3] * size * 0.8
-    far = 2000
-    st.make("page", quad([V((c.x, c.y, z)), V((c.x, c.y + far, z)), V((c.x - far, c.y + far, z)), V((c.x - far, c.y, z))]), "page", "hole", Matrix.Identity(4), remesh=False)
+    # What lies over the page: the whole thumb, from the wrist end of it. The rest of the hand is behind the page, and
+    # the room leaves it out wherever the page is (drawnhands.ts), so the picture need not know where the page ends.
+    st.make("m_thumb", chain(joints["thumb"]), "mask", "white", m, remesh=False)
     st.sleeve_down(m, 37 * size)
     return st
 
@@ -647,17 +670,24 @@ def render(back_name, front_name=None):
     for o in masks:
         o.hide_render = True
 
+    def grown(a, n):
+        for _ in range(n):
+            g = a.copy()
+            g[1:, :] |= a[:-1, :]
+            g[:-1, :] |= a[1:, :]
+            g[:, 1:] |= a[:, :-1]
+            g[:, :-1] |= a[:, 1:]
+            a = g
+        return a
+
     whole = pixels(back)
-    over = pixels(mask)[..., 3] > 0.5
     # Grown by half an ink line, so the line round the finger comes with it.
-    for _ in range(int(round(LINE / 2 * SCALE))):
-        g = over.copy()
-        g[1:, :] |= over[:-1, :]
-        g[:-1, :] |= over[1:, :]
-        g[:, 1:] |= over[:, :-1]
-        g[:, :-1] |= over[:, 1:]
-        over = g
-    whole[~over] = 0
+    over = grown(pixels(mask)[..., 3] > 0.5, int(round(LINE / 2 * SCALE)))
+    # The colour is kept a little way past where the piece ends, unseen: if it went to black there, the piece would
+    # show a dark line round its cut edge whenever it is drawn smaller than it is, or between two pixels.
+    near = grown(over, 3 * SCALE)
+    whole[~near] = 0
+    whole[near & ~over, 3] = 0
     out = bpy.data.images.new("front", whole.shape[1], whole.shape[0], alpha=True)
     out.alpha_mode = "STRAIGHT"
     out.pixels = whole.ravel().tolist()
@@ -673,7 +703,7 @@ def main():
     build_pencil()
     render("back", "front")
     build_thumb()
-    render("thumb")
+    render("thumb_back", "thumb_front")
     for i, o in enumerate(DIE_OPEN):
         build_die(o)
         render(f"die{i}_back", f"die{i}_front")

@@ -16,8 +16,9 @@
  *           the other hand.
  *   pinch   the same hand with nothing in it but the corner of a page.
  *   thumb   a hand holding a sheet up by its lower corner: only the thumb is
- *           in front of the paper, and what is behind the paper is left out
- *           of the picture.
+ *           in front of the paper. The rest of the hand is not drawn wherever
+ *           the page in your hands is (the page marks those pixels: paper.ts),
+ *           so the page hides it exactly, however the page lies.
  *
  * Each pose has one point the room places it by (`anchor`): the pinch of finger
  * and thumb, or the pad of the thumb. The sheet is
@@ -25,8 +26,9 @@
  * way down it, so that however far the hand reaches the arm goes off the
  * bottom of the picture and never ends in mid air.
  */
-import { DoubleSide, Group, LinearFilter, LinearMipmapLinearFilter, Mesh, MeshBasicMaterial, PlaneGeometry, SRGBColorSpace, type Texture, TextureLoader, Vector3 } from "three";
+import { DoubleSide, Group, LinearFilter, LinearMipmapLinearFilter, Mesh, MeshBasicMaterial, NotEqualStencilFunc, PlaneGeometry, SRGBColorSpace, type Texture, TextureLoader, Vector3 } from "three";
 import { HAND_SHEETS } from "./handsheets.js";
+import { HELD_MARK } from "./paper.js";
 
 export type Pose = "pencil" | "pinch" | "thumb";
 
@@ -40,6 +42,10 @@ type Pt = [number, number];
 export const GRIP_LEAN = (-5 * Math.PI) / 180;
 /** Where each pose is held by, on the sheet: where models/player_hand.py put the pinch of finger and thumb, and the pad of the thumb. */
 const ANCHOR: Record<Pose, Pt> = { pencil: [202.4, 242.3], pinch: [202.4, 242.3], thumb: [250, 278] };
+/** The hand that holds a page is turned this far, so that its thumb lies more across the foot of the page than up it, and its arm comes in from the side. */
+export const THUMB_TURN = (25 * Math.PI) / 180;
+/** How far above its own point the thumb of that hand ends once it is turned, in metres at full size (measured on the picture). */
+export const THUMB_REACH = (42.1 / S) * SHEET;
 
 interface Layer {
   sheet: Mesh;
@@ -71,6 +77,10 @@ export class DrawnHand {
       this.group.add(sheet);
       this.layers.push({ sheet, mat });
     }
+    // The layer behind is the one a held page hides (only while this hand is holding it: see update).
+    const behind = this.layers[0]!.mat;
+    behind.stencilFunc = NotEqualStencilFunc;
+    behind.stencilRef = HELD_MARK;
     this.group.visible = false;
   }
 
@@ -96,8 +106,10 @@ export class DrawnHand {
   /** @param brightness how lit the hand is, so it does not glow in a dark room */
   update(_t: number, brightness: number): void {
     if (!this.group.visible) return;
-    // The hand that holds a page up is one picture: there is nothing of it in front of its own thumb.
-    const maps = this.pose === "thumb" ? [this.picture(HAND_SHEETS.thumb), null] : [this.picture(HAND_SHEETS.back), this.picture(HAND_SHEETS.front)];
+    const holds = this.pose === "thumb";
+    const maps = holds ? [this.picture(HAND_SHEETS.thumb.back), this.picture(HAND_SHEETS.thumb.front)] : [this.picture(HAND_SHEETS.back), this.picture(HAND_SHEETS.front)];
+    // Behind the page it holds, the hand is not drawn; its thumb, in the layer in front, always is.
+    this.layers[0]!.mat.stencilWrite = holds;
     this.layers.forEach((l, i) => {
       const map = maps[i] ?? null;
       l.sheet.visible = !!map;
