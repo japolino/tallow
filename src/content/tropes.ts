@@ -66,6 +66,12 @@ export interface Recipe {
   pace?: number;
   /** The weathers this story likes, for the road and its places. */
   skies: readonly Sky[];
+  /**
+   * The shape of the map (docs/MOONSHOT.md, the maps): a road (the default) is walked from one end to the other; a hub
+   * is a place you go out from and come back to, its places visited in any order, the end opening once enough of
+   * them are done. A mystery or a heist is cased from a hub; a chase or an escort is a road.
+   */
+  shape?: "road" | "hub";
   /** Words for the made-up story told when no model writes it: {friend}, {end} and {rival} are filled in. */
   fallback: { title: string; goal: string; won: string; lost: string; rivalName?: string; rivalWho?: string; rivalLost?: string };
 }
@@ -106,7 +112,7 @@ export const RECIPES: readonly Recipe[] = [
 
   /* ------------------------------ heists ------------------------------ */
   R({
-    id: "vault", family: "heist", part: "friend", stops: [6, 7], mix: { person: 2, obstacle: 3, fight: 1 }, lean: { sneak: -1, force: 1 }, joins: true, loot: 3, start: 16, skies: ["clear", "rain", "fog"],
+    id: "vault", shape: "hub", family: "heist", part: "friend", stops: [6, 7], mix: { person: 2, obstacle: 3, fight: 1 }, lean: { sneak: -1, force: 1 }, joins: true, loot: 3, start: 16, skies: ["clear", "rain", "fog"],
     brief: "a heist: something worth a fortune, or worth more than that, is locked away at the end of the road. Get in, take it, get out before it is found missing or moved.",
     drawn: "There is something worth taking, and it is very well kept.",
     climax: { cards: ["keep", "gate", "sentries"], kind: "obstacle", holds: 2 },
@@ -137,7 +143,7 @@ export const RECIPES: readonly Recipe[] = [
 
   /* ------------------------------ mysteries ------------------------------ */
   R({
-    id: "culprit", pace: -1, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 4, obstacle: 1, fight: 1 }, lean: { talk: -1, force: 1 }, joins: true, loot: 3, start: 13, skies: ["rain", "fog", "clear"],
+    id: "culprit", shape: "hub", pace: -1, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 4, obstacle: 1, fight: 1 }, lean: { talk: -1, force: 1 }, joins: true, loot: 3, start: 13, skies: ["rain", "fog", "clear"],
     brief: "a whodunit: a wrong has been done (a theft, a death, a betrayal) and the companion is blamed or hurt by it. Follow the leads from witness to witness, and corner the one who did it before they get away.",
     drawn: "A wrong has been done, and someone is getting away with it.",
     climax: { cards: ["warden", "rival", "host"], kind: "person", holds: 2 },
@@ -145,21 +151,21 @@ export const RECIPES: readonly Recipe[] = [
     fallback: { title: "The Truth at {end}", goal: "A wrong was done, and {friend} is the one being blamed. Whoever really did it will be gone from {end} by {deadline}. Find them first.", won: "At {end} the truth comes out in front of everyone, and {friend} can hold their head up again.", lost: "At {deadline} whoever did it is gone from {end}, and {friend} carries the blame.", rivalWho: "whoever did it, who knows someone is asking questions", rivalLost: "Whoever did it has covered every track. At {end} there is nothing left to find." },
   }),
   R({
-    id: "vanished", pace: -1, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 3, obstacle: 2, fight: 1 }, lean: { talk: -1 }, joins: true, loot: 3, start: 10, skies: ["fog", "clear", "rain"],
+    id: "vanished", shape: "hub", pace: -1, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 3, obstacle: 2, fight: 1 }, lean: { talk: -1 }, joins: true, loot: 3, start: 10, skies: ["fog", "clear", "rain"],
     brief: "a disappearance: someone the companion knows has vanished without a word, and nobody will say where. Follow the trail of who saw what, and find out what happened to them.",
     drawn: "Someone has vanished, and nobody will say where.",
     climax: { cards: ["keep", "warden", "guardian"], kind: "person", holds: 2 },
     fallback: { title: "Gone from {start}", goal: "Someone {friend} knows vanished without a word, and every trail leads toward {end}. Find out what became of them before {deadline}, when the trail goes cold.", won: "At {end} you find them, and the reason they could not come home. {friend} brings them out into the light.", lost: "By {deadline} the trail has gone cold. Whatever happened at {end} stays there." },
   }),
   R({
-    id: "haunting", family: "mystery", part: "friend", stops: [5, 6], mix: { person: 2, obstacle: 3, fight: 1 }, lean: { force: 1, sneak: -1 }, joins: false, loot: 2, start: 16.5, skies: ["fog", "storm", "wind"],
+    id: "haunting", shape: "hub", family: "mystery", part: "friend", stops: [5, 6], mix: { person: 2, obstacle: 3, fight: 1 }, lean: { force: 1, sneak: -1 }, joins: false, loot: 2, start: 16.5, skies: ["fog", "storm", "wind"],
     brief: "a haunting: something strange troubles a place the companion cares about (sounds, sightings, things moved, people afraid). Find out what is really behind it, natural or not, and put it to rest.",
     drawn: "Something strange is going on, and people are frightened.",
     climax: { cards: ["keep", "fire", "guardian"], kind: "person", holds: 2 },
     fallback: { title: "What Walks at {end}", goal: "Something strange troubles {end}, and {friend} is frightened of it. Find out what it is, and put it to rest before {deadline}.", won: "At {end} the thing behind it all is brought out into the open, and the place is quiet again.", lost: "At {deadline} it is worse than ever, and the people of {end} pack their things and leave." },
   }),
   R({
-    id: "conspiracy", pace: -0.5, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 4, obstacle: 1, fight: 1 }, lean: { talk: -1, pay: -1, force: 1 }, joins: true, loot: 3, start: 9, skies: ["clear", "rain"],
+    id: "conspiracy", shape: "hub", pace: -0.5, family: "mystery", part: "friend", stops: [6, 7], mix: { person: 4, obstacle: 1, fight: 1 }, lean: { talk: -1, pay: -1, force: 1 }, joins: true, loot: 3, start: 9, skies: ["clear", "rain"],
     brief: "a conspiracy: people with power are plotting something, and the companion has stumbled onto it. Gather proof from the people in on it, and bring it out before the plot is carried out at the deadline.",
     drawn: "Powerful people are plotting, and you are the only ones who know.",
     climax: { cards: ["warden", "guardian", "keep"], kind: "person", holds: 2 },

@@ -72,7 +72,9 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
   const era = opts.modern ? 1 : 0;
   const n = recipe.stops[0] + Math.floor(rng() * (recipe.stops[1] - recipe.stops[0] + 1));
   const k = n - 1;
-  const forks = k <= 4 ? 1 : k >= 6 ? 2 : rng() < 0.5 ? 1 : 2;
+  const hub = recipe.shape === "hub";
+  // A hub has no forks: every place is one card, and the choice is which to go to next.
+  const forks = hub ? 0 : k <= 4 ? 1 : k >= 6 ? 2 : rng() < 0.5 ? 1 : 2;
   const singles = k - forks * 2;
   // The first stretch is one stop, so the road starts with something met head on; the rest fall as they may.
   const stretches: ("one" | "fork")[] = singles > 0 ? ["one", ...shuffled(rng, [...Array(singles - 1).fill("one"), ...Array(forks).fill("fork")])] : Array(forks).fill("fork");
@@ -121,7 +123,14 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
   const named = (pattern: string): string => pattern.replace("{n}", words[w++ % words.length]!);
   const places: Place[] = [{ id: "start", name: named(START_NAMED[era]), u: 0.08, v: 0.86 }];
   const S = slots.length;
-  slots.forEach((ids, i) => {
+  if (hub) {
+    // The hub in the middle of the sheet, its places round it below and to the sides, the end at the top.
+    places[0] = { ...places[0]!, u: 0.5, v: 0.6 };
+    slots.forEach(([id], i) => {
+      const a = ((-25 + (230 * (i + 0.5)) / S) * Math.PI) / 180;
+      places.push({ id: id!, name: named(STOP_KINDS[id!]!.named[era]), u: clamp(0.5 + 0.36 * Math.cos(a) + (rng() - 0.5) * 0.04, 0.1, 0.9), v: clamp(0.6 + 0.27 * Math.sin(a) + (rng() - 0.5) * 0.04, 0.12, 0.9) });
+    });
+  } else slots.forEach((ids, i) => {
     const t = (i + 1) / (S + 1);
     const u = 0.08 + t * 0.82;
     const v = 0.84 - 0.66 * t + (rng() - 0.5) * 0.1;
@@ -132,15 +141,26 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
       ids.forEach((id, j) => places.push({ id, name: named(STOP_KINDS[id]!.named[era]), u: clamp(u + (j ? 0.03 : -0.03), 0.1, 0.88), v: c + ((j === 0) === up ? -0.17 : 0.17) }));
     }
   });
-  places.push({ id: endCard, name: named(STOP_KINDS[endCard]!.named[era]), u: 0.9, v: 0.13 });
+  places.push({ id: endCard, name: named(STOP_KINDS[endCard]!.named[era]), u: hub ? 0.5 : 0.9, v: 0.13 });
 
   /* ---- the roads ---- */
   const roads: [string, string, number][] = [];
-  let prev = ["start"];
-  for (const ids of [...slots, [endCard]]) {
-    for (const p of prev) for (const q of ids) roads.push([p, q, pick(rng, [1, 1, 1.5])]);
-    prev = ids;
+  // A hub's places are each a leg out from it; going from one to another is back through the hub, both legs.
+  const legs = new Map<string, number>();
+  if (hub) {
+    const spokes = slots.map(([id]) => id!);
+    for (const id of [...spokes, endCard]) legs.set(id, pick(rng, [0.5, 0.5, 0.75]));
+    for (const a of ["start", ...spokes])
+      for (const b of [...spokes, endCard]) if (a !== b) roads.push([a, b, (a === "start" ? 0 : legs.get(a)!) + legs.get(b)!]);
+  } else {
+    let prev = ["start"];
+    for (const ids of [...slots, [endCard]]) {
+      for (const p of prev) for (const q of ids) roads.push([p, q, pick(rng, [1, 1, 1.5])]);
+      prev = ids;
+    }
   }
+  /** How many of a hub's places must be done before its end opens: all but two, and never fewer than two. */
+  const needs = hub ? Math.max(2, Math.min(S, S - 2)) : 0;
 
   /* ---- who stands against you (docs/MOONSHOT.md, 2.5) ---- */
   // A fight, and the last place, have a foe: rated at each way from how hard it is there, with what it is hurt by.
@@ -233,9 +253,18 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
     const easiest = Math.min(...WAYS.filter((x) => s.ways[x]).map((x) => s.ways[x]!.difficulty));
     return PER_STOP + (s.holds ?? 1) * (PER_TRY + easiest * PER_STEP);
   };
-  const longest = new Map<string, number>([["start", 0]]);
-  for (const [a, b, h] of roads) longest.set(b, Math.max(longest.get(b) ?? 0, (longest.get(a) ?? 0) + h + cost(b)));
-  const need = longest.get(endCard)! + 0.5 + (recipe.pace ?? 0);
+  let way: number;
+  if (hub) {
+    // A careful round of a hub: the places it takes, out and back (the dearer of them, as you cannot know which are
+    // cheap before you go), then the end.
+    const rounds = roadStops.map((s) => cost(s.id) + 2 * legs.get(s.id)!).sort((a, b) => b - a);
+    way = rounds.slice(0, needs).reduce((x, y) => x + y, 0) + legs.get(endCard)! + cost(endCard);
+  } else {
+    const longest = new Map<string, number>([["start", 0]]);
+    for (const [a, b, h] of roads) longest.set(b, Math.max(longest.get(b) ?? 0, (longest.get(a) ?? 0) + h + cost(b)));
+    way = longest.get(endCard)!;
+  }
+  const need = way + 0.5 + (recipe.pace ?? 0);
   let hour = Math.ceil((recipe.start + need) * 2) / 2;
   let when = clock(hour);
   const anchor = ANCHORS.find(([a]) => a >= hour - 1 && a <= hour + 0.5);
@@ -261,6 +290,7 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
     places,
     start: "start",
     roads,
+    ...(hub ? { hub: { needs } } : {}),
     stops,
     startHour: recipe.start,
     deadline: { hour, name: when, lost: fill(fb.lost, vars) },
@@ -276,10 +306,12 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
 /** Every way through a road, as the list of stops passed: for checks. */
 export function waysThrough(adv: Adventure): string[][] {
   const out: string[][] = [];
+  const climax = new Set(adv.stops.filter((s) => s.climax).map((s) => s.id));
+  // A place is gone to once; a hub's end only once enough of its places are done.
   const walk = (at: string, path: string[]): void => {
-    const next = adv.roads.filter(([a]) => a === at).map(([, b]) => b);
+    const next = adv.roads.filter(([a, b]) => a === at && !path.includes(b) && !(adv.hub && climax.has(b) && path.length < adv.hub.needs)).map(([, b]) => b);
     if (!next.length) out.push(path);
-    for (const b of next) walk(b, [...path, b]);
+    for (const b of next) if (out.length < 2000) walk(b, [...path, b]);
   };
   walk(adv.start, []);
   return out;
