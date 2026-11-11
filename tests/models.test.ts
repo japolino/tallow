@@ -154,8 +154,12 @@ describe("the minds use the Decision model first", () => {
     expect(r as object).toMatchObject({ way: "sneak" });
   });
 
-  test("picking by meaning is there only with a Decision model, and the rules answer when it cannot tell", async () => {
-    expect(modelMinds(ask).pick).toBeUndefined();
+  test("picking by meaning: the Decision model, else the reader model, and the rules when neither can tell", async () => {
+    // With no Decision model the reader answers in JSON.
+    const reader = modelMinds(async () => '{"pick": "rest"}');
+    expect(await pickBy(reader, "Rest or press on?", "let my wounds close a while", { rest: "rest here", on: "press on" }, () => "on")).toBe("rest");
+    const muddled = modelMinds(async () => "I am not sure.");
+    expect(await pickBy(muddled, "Rest or press on?", "eh", { rest: "rest here", on: "press on" }, () => "on")).toBe("on");
     const decide: Decide = async (_w, _s, q) => (q.pick ? { pick: choice("rest") } : null);
     const minds = modelMinds(ask, { decide });
     const options = { rest: "rest here", on: "press on" };

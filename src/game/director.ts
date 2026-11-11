@@ -23,7 +23,7 @@ import { hourSaid, notches as scheduleNotches } from "../engine/schedule.js";
 import { ASK_AGAIN, ASK_NEXT, ASK_SAID, ASK_TIME_SAID, cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS, shutSaid, UNCLEAR_SAID } from "../engine/tell.js";
 import { couldInstead, tradeOf } from "../engine/effect.js";
 import { faultDue, foeNotices, marginFor, marginLine } from "../engine/margin.js";
-import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, sentDown, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
+import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, checkThrow, personAt, sentDown, slipLines, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldLineStory, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
 import { gearFrom } from "../engine/kit.js";
 import { projectSaid, type Payoff, type Project } from "../engine/project.js";
 import { contentRules, DEFAULT_CONTENT, playable } from "../engine/content.js";
@@ -31,6 +31,11 @@ import { fellowBrief, handedTo, handOver } from "../engine/seats.js";
 import { checkedGrade, rulesRead } from "../meaning/read.js";
 import { abilityNote } from "./prompts.js";
 import { isUse, pickBy, type Minds } from "./minds.js";
+import type { StoryContext } from "./storyroute.js";
+import { withHeard } from "./hear.js";
+import { calledRead } from "./free.js";
+import { foeBy, handedToBy, objectsBy, waitBy } from "./meaning.js";
+import type { Fellow } from "../engine/seats.js";
 
 /** What the table is waiting for, so it can show the right thing meanwhile. */
 export type Beat = "read" | "tell" | "deal";
@@ -120,9 +125,19 @@ export type Stage = "start" | "fork" | "road" | "write" | "given" | "check" | "t
 export interface Director {
   readonly trip: Trip;
   readonly stage: Stage;
-  /** Resolves when the adventure is over. */
+  /** Resolves when the adventure is over, or when it is left for tonight (`left`). */
   readonly done: Promise<Trip>;
+  /** The player stopped for tonight in the middle of it: the trip is kept as it stood, to be taken up again. */
+  readonly left?: boolean;
 }
+
+/** Thrown to leave a story where it stands, for tonight (the "stop" kind of line). */
+class LeftOff extends Error {}
+
+/** Said when the player stops in the middle of a story. */
+export const LEFT_SAID = ["Then we stop here for tonight, in the middle of it. I leave everything where it lies: the cards, the clock, the stones.", "When you sit down again, we go on from this very place."];
+/** Said before a check that tries to get past nothing. */
+export const CHECK_SAYS = "A check, then: it gets you past nothing, but it may tell you something.";
 
 export interface DirectOptions {
   /** How the adventure is got ready: at milestone 4 it is built from a card by a model, and the table deals while it waits. */
@@ -224,7 +239,12 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
   };
   /** After a line, at most one of the other players speaks (everyone, if you asked the table). */
   const fellowsSpeak = async (line: string, m: Moment, way?: Way): Promise<void> => {
-    const says = worldFellows(trip, line, m, way);
+    // Whether a player cold to you would refuse what you mean to do, by who they are: asked by meaning only of those
+    // who could refuse (seats.ts whatTheySay), else the words of their fault decide.
+    const could = (trip.fellows ?? []).filter((f) => !f.at && (f.attitude === "hostile" || f.attitude === "cold" || f.attitude === "wary"));
+    const objections = await Promise.all(could.map(async (f) => [f.id, await objectsBy(minds, f, `${m.stop.situation}\n${line}`).catch(() => null)] as const));
+    const against = Object.fromEntries(objections.filter(([, o]) => o !== null)) as Record<string, boolean>;
+    const says = worldFellows(trip, line, m, way, against);
     if (!says.length) return;
     trip = says[0]!.trip;
     for (const x of says) {
@@ -553,6 +573,25 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
     }
   };
 
+  /** What the story router is told of the place in your way (game/storyroute.ts). */
+  const storyContext = (m: Moment, blow: string): StoryContext => {
+    const p = personAt(trip, m.stop as RoadStop);
+    const fellows = trip.fellows ?? [];
+    const slips = slipLines(trip);
+    return {
+      here: m.stop.name,
+      situation: `${m.stop.situation}${trip.facing?.contest && blow ? ` What is coming at them now: ${blow}` : ""}`,
+      ways: WAYS.filter((x) => m.stop.ways[x] && !m.closed.includes(x) && !shut(m, x)),
+      ...(p ? { person: p.name } : {}),
+      fellows: fellows.filter((f) => !f.at).map((f) => f.name),
+      away: fellows.filter((f) => f.at).map((f) => f.name),
+      slips: slips.length >= 2 ? slips : [],
+      goals: (trip.projects ?? []).filter((x) => x.filled < x.segments).map((x) => ({ id: x.id, goal: x.goal })),
+      contest: !!trip.facing?.contest,
+      luck: canLuck(trip),
+    };
+  };
+
   /** The stop in your way, played try by try until you are past it, round it, or the adventure is over. */
   const atStop = async (stop: RoadStop, ask = ASK_NEXT): Promise<void> => {
     let scaleSaid = false;
@@ -578,20 +617,43 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       const m = trip.facing.moment;
       // The reading starts now, while the page is still in the air.
       const reading = minds.read(w.line, m);
+      // What kind of line it is, said by a model (game/storyroute.ts), asked at the same time. With no model, or none
+      // sure, the word rows below decide, as they always did.
+      const routing = minds.storyRoute ? minds.storyRoute(w.line, storyContext(m, blow)).catch(() => null) : Promise.resolve(null);
+      // How the line lands with the person here, if anyone (game/hear.ts), read by meaning at the same time.
+      const hearing = withHeard(minds, trip, w.line, m.stop as RoadStop);
+      // Who the try is handed to, if anyone: asked only when it comes to a try.
+      let handing: Promise<Fellow | null> | null = null;
+      const handedBy = (): Promise<Fellow | null> => (handing ??= handedToBy(minds, w.line, (trip.fellows ?? []).filter((f) => !f.at)).catch(() => handedTo(w.line, (trip.fellows ?? []).filter((f) => !f.at))));
       await w.given;
-      if (trip.facing.contest && yieldRead(w.line)) {
-        const gives = await pickBy(minds, "Does the player give in, and stop the contest?", w.line, { yes: "yes: they give in, give up or yield", no: "no: they keep at it" }, () => (yieldSure(w.line) ? "yes" : "no"), (p) => table.wait("read", p));
+      const routedFirst = await table.wait("read", routing);
+      // Giving in ends the contest for good, so a router that says so is not taken on its word: it is asked again,
+      // plainly, below. Until then the line is read as if the router had said nothing.
+      const routed = routedFirst?.route === "yield" ? null : routedFirst;
+      // Done for tonight, in the middle of it: everything stays where it lies, kept to be taken up again.
+      if (routed?.route === "stop") {
+        void table.aside();
+        opts.save?.(trip);
+        await table.say(LEFT_SAID);
+        throw new LeftOff();
+      }
+      // No router sure of the line, or one that says they give in: while a contest is on, whether they give in is asked
+      // by meaning, and the words answer only when nothing can.
+      if (!routed && trip.facing.contest && (routedFirst?.route === "yield" || minds.pick || yieldRead(w.line))) {
+        const gives = await pickBy(minds, "Does the player give in, and stop the contest?", w.line, { yes: "yes: they give in, give up or yield", no: "no: they keep at it" }, () => (yieldRead(w.line) && yieldSure(w.line) ? "yes" : "no"), (p) => table.wait("read", p));
         if (gives === "yes") {
           await giveUp(stop);
           return;
         }
       }
       const heard = await table.wait("read", reading);
+      const withRead = await hearing;
+      if (withRead.heard) trip = { ...trip, heard: withRead.heard };
       let said = heard;
       // "Vypra, you take this one": a try handed over with no way named is thrown the way they are best at, of the
       // ways open here.
-      if (said === "none" && !worldFirst(trip, w.line)) {
-        const to = handedTo(w.line, (trip.fellows ?? []).filter((f) => !f.at));
+      if (said === "none" && (routed ? routed.route === "try" : !worldFirst(trip, w.line))) {
+        const to = await table.wait("read", handedBy());
         const open = WAYS.filter((x) => m.stop.ways[x] && !m.closed.includes(x) && !shut(m, x));
         const best = to && open.length ? open.reduce((a, b) => (statOf(to, handStat(to, b, m.attack)) > statOf(to, handStat(to, a, m.attack)) ? b : a)) : null;
         if (best) said = { way: best, attempt: `${to!.name} takes this one` };
@@ -623,14 +685,44 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
         await carried;
         continue;
       }
-      // Some lines are the world's before they are a try (world.ts, its rows that may take a try): a vote, a player sent
-      // off, pressing or reading the person here, asking what they need, a wait on its own. When the world has nothing
-      // to say, they are tries again.
-      const first = said !== "none" ? worldFirstLine(trip, w.line, m) : null;
-      if (said === "none" || first) {
+      // A try, the router says, that the reader took for no try: the way the router named, else the one the words name.
+      if (routed?.route === "try" && (said === "none" || !said)) {
+        const plain = rulesRead(w.line, m);
+        const open = WAYS.filter((x) => m.stop.ways[x] && !m.closed.includes(x));
+        said = { ...(plain ?? {}), way: routed.way ?? plain?.way ?? open[0] ?? "talk", attempt: plain?.attempt ?? w.line.replace(/\s+/g, " ").trim().slice(0, 120) };
+      }
+      // A check called for that tries to get past nothing (to notice, recall, work out): the die is thrown on the stat
+      // it leans on, and the narrator says what it shows. Nothing at the place changes.
+      if (routed?.route === "check") {
+        const hourBefore = trip.sheet.hour;
+        const c = checkThrow(trip, m, routed.stat ?? calledRead(w.line).stat ?? "sense");
+        void table.aside();
+        await table.say([CHECK_SAYS, DIE_SAYS]);
+        next = await table.dieOrLine();
+        if (next) continue;
+        await table.throwDie(c.natural);
+        trip = ponder(trip)!;
+        table.clock(trip.sheet.hour);
+        const answer = fit(await table.wait("tell", minds.answer(w.line, trip.facing!.moment, c.note)));
+        await table.say([c.said, ...(answer ? [answer] : []), timeSaid()]);
+        pondered = true;
+        await ranFrom(hourBefore);
+        if (trip.over) break;
+        await fellowsSpeak(w.line, trip.facing?.moment ?? m);
+        continue;
+      }
+      // What the router said the line is, when it is not a try: only that row of the world reads it.
+      const kind = routed && routed.route !== "try" && routed.route !== "yield" ? routed.route : null;
+      // With no router: some lines are the world's before they are a try (world.ts, its rows that may take a try): a
+      // vote, a player sent off, pressing or reading the person here, asking what they need, a wait on its own. When
+      // the world has nothing to say, they are tries again.
+      const first = !routed && said !== "none" ? worldFirstLine(trip, w.line, m) : null;
+      if (kind || (!routed && (said === "none" || first))) {
         // The world reads it first (world.ts): a goal of your own, time spent, two slips laid together, words to the person here, a look round.
         const hourBefore = trip.sheet.hour;
-        const w2 = first ?? worldLine(trip, w.line, m);
+        // How long a wait is, or until when, by meaning (game/meaning.ts), else by its words.
+        const span = kind === "wait" ? await table.wait("read", waitBy(minds, w.line, trip.sheet.hour).catch(() => null)) : null;
+        const w2 = kind ? (kind === "luck" ? null : worldLineStory(trip, w.line, m, kind, { ...(routed ?? {}), ...(span ? { span } : {}) })) : (first ?? worldLine(trip, w.line, m));
         if (w2) {
           void table.aside();
           const answering = w2.note ? minds.answer(w.line, w2.trip.facing?.moment ?? m, w2.note) : null;
@@ -649,7 +741,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
           continue;
         }
         // A question only luck can settle ("is there a boat at the jetty?"): the narrator throws its own die. Once a place.
-        const asked = canLuck(trip) ? await luckAsked(w.line, m) : null;
+        const asked = canLuck(trip) && (!kind || kind === "luck") ? await luckAsked(w.line, m) : null;
         const thrown = asked ? throwLuck(trip, asked) : null;
         if (asked && thrown) {
           void table.aside();
@@ -682,12 +774,14 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
         await fellowsSpeak(w.line, m);
         continue;
       }
+      if (said === "none") continue; // every line that tries nothing was answered above
       // A try that names no ability leans on one that works by itself, if one fits; the line's grade is held to what it really uses.
-      const contest = trip.facing.contest;
+      const contest = trip.facing?.contest;
       // A try handed to another player is thrown on their stats (docs/MOONSHOT.md, 4.3).
-      const hand = handedTo(w.line, (trip.fellows ?? []).filter((f) => !f.at));
+      const hand = await table.wait("read", handedBy());
+      const target = contest ? await table.wait("read", foeBy(minds, w.line, contest, () => foeNamed(w.line, contest)).catch(() => foeNamed(w.line, contest))) : null;
       const mh: Moment = hand ? { ...m, sheet: { ...m.sheet, stats: { ...handOver(hand).stats }, ...(hand.powerName ? { powerName: hand.powerName } : {}) } } : m;
-      const read = said && withAbility(mh, { ...said, ...(hand ? { stat: handStat(hand, said.way, m.attack) } : {}), line: w.line, trade: tradeOf(w.line) ?? undefined, grade: checkedGrade(said.grade, w.line, mh, alsoReal()), ...(contest ? { target: foeNamed(w.line, contest) } : {}) });
+      const read = said && withAbility(mh, { ...said, ...(hand ? { stat: handStat(hand, said.way, m.attack) } : {}), line: w.line, trade: tradeOf(w.line) ?? undefined, grade: checkedGrade(said.grade, w.line, mh, alsoReal()), ...(contest ? { target } : {}) });
       const check0 = read && nameCheck(mh, read);
       const check = check0 && hand ? { ...check0, by: hand.name } : check0;
       if (check && check.effect === "none") {
@@ -824,13 +918,21 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
     await table.say([levelTaken(a)]);
   };
 
-  const done = play();
+  let left = false;
+  const done = play().catch((e: unknown) => {
+    if (!(e instanceof LeftOff)) throw e;
+    left = true;
+    return trip;
+  });
   return {
     get trip() {
       return trip;
     },
     get stage() {
       return stage;
+    },
+    get left() {
+      return left;
     },
     done,
   };

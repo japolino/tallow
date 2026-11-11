@@ -28,11 +28,14 @@ export type ToBackend =
   /** Small typed questions for the Decision model; answered with null when there is none or it failed. */
   | { type: "decide"; id: string; what: string; state: unknown; questions: Record<string, DecisionQuestion>; ms: number }
   /** The drawer: read the model choices, or change one. */
-  | { type: "models"; id: string; patch?: ModelsPatch };
+  | { type: "models"; id: string; patch?: ModelsPatch }
+  /** The card's lore nearest a scene, by meaning when there is an embedding model (backend.ts, loreNear). */
+  | { type: "lore"; id: string; characterId: string; text: string };
 
 export type ToFrontend =
   | { type: "card"; id: string; card: CardInfo | null }
   | { type: "answer"; id: string; text: string }
   | { type: "decided"; id: string; answers: Record<string, DecisionAnswer | undefined> | null }
   | { type: "models"; id: string; state: ModelsState }
+  | { type: "lore"; id: string; entries: string[] }
   | { type: "error"; id: string; error: string };

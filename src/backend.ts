@@ -51,7 +51,10 @@ async function card(userId: string, characterId: string): Promise<CardInfo | nul
   const c = await spindle.characters.get(characterId, userId);
   if (!c) return null;
   const info: CardInfo = { name: c.name, description: c.description ?? "", personality: c.personality ?? "", scenario: c.scenario ?? "", firstMessage: (c.first_mes ?? "").slice(0, 4000) };
+  // The pictures are looked at while the lore is read (game/card.ts, looks).
+  const seeing = looksOf(userId, characterId, c.image_id ?? null);
   const entries = await loreOf(userId, c.world_book_ids ?? []);
+  books.set(`${userId}:${characterId}`, entries);
   if (entries.length) {
     // A small book goes in whole (as much as fits); a big one is ranked, by meaning when there is an embedding model.
     let near: (number | null)[] | undefined;
@@ -62,7 +65,64 @@ async function card(userId: string, characterId: string): Promise<CardInfo | nul
     }
     info.lore = pickLore(entries, `${info.name}\n${info.description}\n${info.scenario}\n${info.firstMessage}`, near);
   }
+  const looks = await seeing;
+  if (looks) info.looks = looks;
   return info;
+}
+
+/** Each card's lore as last read, for finding the entries nearest a scene. */
+const books = new Map<string, LoreEntry[]>();
+const SCENE_LORE = 3;
+
+/**
+ * The card's lore nearest a scene: by meaning when there is an embedding model (the entries' vectors are kept from the
+ * first time), else by the keys the scene names. Only entries a big book left out of the card's own lore are useful,
+ * but the teller drops any it already has.
+ */
+async function loreNear(userId: string, characterId: string, scene: string): Promise<string[]> {
+  const entries = books.get(`${userId}:${characterId}`) ?? [];
+  if (entries.length <= LORE_MAX) return [];
+  const [q] = (await models.embed(userId, [scene], { ms: 4000, inputType: "query" })) ?? [];
+  const vs = q ? await models.embed(userId, entries.map(loreText), { ms: 12000, inputType: "passage" }) : null;
+  const near = q && vs ? vs.map((v) => (v ? cosine(q, v) : null)) : undefined;
+  return pickLore(entries.filter((e) => !e.constant), scene, near?.filter((_, i) => !entries[i]!.constant)).slice(0, SCENE_LORE);
+}
+
+const MAX_PICTURES = 3;
+const MAX_PICTURE_BYTES = 4 * 1024 * 1024;
+const LOOK_MS = 25_000;
+const LOOK_PROMPT =
+  "These are the pictures of a character card for a story game: its avatar first, then any gallery images. Describe, plainly and in three or four sentences, what they show that a storyteller would need: how the character looks (build, apparent age, clothing, anything not human about them), and the setting, era and kind of world the pictures suggest. Say only what can be seen. If a picture shows someone who looks under 18, say so plainly.";
+
+/**
+ * What the card's pictures show, by the reader model when it can see; null when there are no pictures, no "images"
+ * permission, or the model cannot look at them. Never holds the card up for long.
+ */
+async function looksOf(userId: string, characterId: string, avatar: string | null): Promise<string | null> {
+  try {
+    const gallery = (await spindle.characters.getGallery?.(characterId, userId).catch(() => [])) ?? [];
+    const ids = [...new Set([avatar, ...gallery.map((g) => g.image_id)].filter((x): x is string => !!x))].slice(0, MAX_PICTURES);
+    if (!ids.length || !spindle.images?.readBinary) return null;
+    const parts: { type: "image"; data: string; mime_type: string }[] = [];
+    for (const id of ids) {
+      const meta = await spindle.images.get(id, userId).catch(() => null);
+      const mime = meta?.mime_type ?? "image/png";
+      if (!mime.startsWith("image/")) continue;
+      const bytes = await spindle.images.readBinary(id, userId).catch(() => null);
+      if (!bytes || bytes.byteLength > MAX_PICTURE_BYTES) continue;
+      parts.push({ type: "image", data: Buffer.from(bytes).toString("base64"), mime_type: mime });
+    }
+    if (!parts.length) return null;
+    const messages = [{ role: "user", content: [{ type: "text", text: LOOK_PROMPT }, ...parts] }];
+    // The reader first; if it cannot see, the builder (often the stronger model, more often one that sees).
+    const look = (role: "reader" | "builder") => Promise.race([models.quiet(userId, role, messages as never), new Promise<string>((_, no) => setTimeout(() => no(new Error("timed out")), LOOK_MS))]);
+    const said = await look("reader").catch(() => look("builder"));
+    const t = said.replace(/\s+/g, " ").trim().slice(0, 800);
+    return t.length > 20 ? t : null;
+  } catch (err) {
+    spindle.log.info(`tallow: the card's pictures could not be looked at (${text(err).slice(0, 120)})`);
+    return null;
+  }
 }
 
 spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
@@ -70,6 +130,7 @@ spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
   if (!msg || typeof msg !== "object" || typeof (msg as { id?: unknown }).id !== "string") return;
   try {
     if (msg.type === "card") send({ type: "card", id: msg.id, card: await card(userId, msg.characterId) }, userId);
+    else if (msg.type === "lore") send({ type: "lore", id: msg.id, entries: await loreNear(userId, msg.characterId, msg.text) }, userId);
     else if (msg.type === "ask") send({ type: "answer", id: msg.id, text: await models.quiet(userId, msg.role, msg.messages) }, userId);
     else if (msg.type === "models") {
       if (!msg.patch) models.fresh(userId);

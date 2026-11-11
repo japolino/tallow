@@ -155,6 +155,11 @@ export const CASES: RouteCase[] = [
   { line: "Thread 2.", ctx: "inn", want: "thread", which: "thread-2" },
   { line: "What's this about chalk marks?", ctx: "inn", want: "say" },
 
+  // ---- settings ----
+  { line: "No gore please, keep that off-screen.", ctx: "inn", want: "settings" },
+  { line: "(OOC: can we turn the explicit stuff off for now?)", ctx: "bar", want: "settings" },
+  { line: "Let's keep torture out of the story entirely.", ctx: "forest", want: "settings" },
+
   // ---- notebook and done ----
   { line: "notebook", ctx: "inn", want: "notebook" },
   { line: "What do I know so far?", ctx: "inn", want: "notebook", ok: ["say"] },

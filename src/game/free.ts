@@ -24,6 +24,8 @@ import type { Route, RouteContext, Routed } from "./route.js";
 import { checkedGrade } from "../meaning/read.js";
 import { abilityCard, type Table, type Written } from "./director.js";
 import { isUse, pickBy, type Minds } from "./minds.js";
+import { contentBy } from "./meaning.js";
+import { withHeard } from "./hear.js";
 
 export interface RoamOptions {
   table: Table;
@@ -240,7 +242,11 @@ export async function roam(o: RoamOptions): Promise<Trip> {
     const line = w.line.trim();
     const hourBefore = trip.sheet.hour;
 
-    const set = contentFromLine(line, trip.adv.content ?? DEFAULT_CONTENT);
+
+    const routed = await table.wait("read", routing);
+    const kind: Route | "leave" | null = COMMAND_NOTEBOOK.test(line) ? "notebook" : routed ? routed.route : byWords(trip, line);
+    // What the game may contain, changed at the table: read by meaning when the router says so, by the words when no model could tell.
+    const set = kind === "settings" ? await table.wait("read", contentBy(minds, line, trip.adv.content ?? DEFAULT_CONTENT)) : !routed ? contentFromLine(line, trip.adv.content ?? DEFAULT_CONTENT) : null;
     if (set) {
       void table.aside();
       trip = { ...trip, adv: { ...trip.adv, content: set } };
@@ -249,9 +255,6 @@ export async function roam(o: RoamOptions): Promise<Trip> {
       await table.say([contentSaid(set)]);
       continue;
     }
-
-    const routed = await table.wait("read", routing);
-    const kind: Route | "leave" | null = COMMAND_NOTEBOOK.test(line) ? "notebook" : routed ? routed.route : byWords(trip, line);
 
     if (kind === "done") {
       void table.aside();
@@ -368,6 +371,8 @@ export async function roam(o: RoamOptions): Promise<Trip> {
     if (!check0 || !check) {
       // Not a try. With no model sure, the world's rows first (a goal of your own, a wait, work at a goal); then, or when
       // a model said so, the narrator says what happens.
+      // How the line lands with the person here, by meaning, before the world's rows hear it (game/hear.ts).
+      if (!routed) trip = await table.wait("read", withHeard(minds, trip, line, m.stop as RoadStop));
       const w2 = routed ? null : worldLineFree(trip, line, m);
       void table.aside();
       if (w2) {

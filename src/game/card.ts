@@ -14,11 +14,21 @@ export interface CardInfo {
   /** A few lorebook entries, already chosen, as plain text. */
   lore?: string[];
   /**
+   * What the card's pictures show (its avatar and a gallery image or two), described by a model that can see: looks,
+   * setting and kind of world. Read with the card's words everywhere the card is read (cardText).
+   */
+  looks?: string;
+  /**
    * The card is a world, place or scenario rather than one person (its name is a land, a town, a game; it narrates
    * many people). Then nobody in the story is called by the card's name: the companion or the one courted is a
    * person from that world. Set by the sitting (session.ts) from `looksLikeWorld` or the Decision model.
    */
   world?: boolean;
+  /**
+   * Whether a model read the card's character as under 18 or written as a child. Set by the sitting (session.ts) from
+   * the Decision model or the reader; with the card's words (card/child.ts) it keeps them from ever being courted.
+   */
+  minor?: boolean;
 }
 
 /* A card's words that say it is a world or a scenario, not a person. Strong ones decide alone. */
@@ -83,6 +93,7 @@ export function cardText(card: CardInfo, max = 7000): string {
     ["Description", card.description, 4000],
     ["Personality", card.personality, 800],
     ["Scenario", card.scenario, 1200],
+    ["Looks (from the card's pictures)", card.looks, 800],
     ["First message", card.firstMessage, 1500],
   ];
   let out = `Name: ${card.name}\n`;
@@ -94,7 +105,7 @@ export function cardText(card: CardInfo, max = 7000): string {
 }
 
 /** Whether the card's character may be courted: never anyone the card reads as a child (docs/DESIGN.md, 7). */
-export const courtable = (card: CardInfo): boolean => !isChild(card.name, card.description, card.personality, card.scenario, card.firstMessage);
+export const courtable = (card: CardInfo): boolean => !card.minor && !isChild(card.name, card.description, card.personality, card.scenario, card.firstMessage);
 
 /** The tropes this card is offered. Only tropes the card can support (3.1): a courtship needs someone who may be courted. */
 export const tropesFor = (card: CardInfo): Trope[] => (courtable(card) ? ["rescue", "courtship"] : ["rescue"]);

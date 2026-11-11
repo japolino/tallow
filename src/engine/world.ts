@@ -8,14 +8,14 @@
  * Pure: a trip in, a trip and some lines out. Every number is decided here, by code and a seeded die.
  */
 import { clockTo, companionOf, placeName, type Companion, type RoadStop, type Trip } from "./adventure.js";
-import { readAgeBand } from "./content.js";
+import { ageFrom } from "./content.js";
 import { getClue, keysKnown, layTogether, newCasebook, slipNamed, type Clue } from "./clues.js";
 import { seededRng } from "./dice.js";
 import { ATTITUDE_STEP, attitudeIndex, favourDone, hearLine, hunch, PATIENCE, lieTo, lineKind, moveAttitude, newVisit, pressDifficulty, pressed, readThem, released, rulesLine, type Attitude, type Person } from "./people.js";
 import { goalNamed, PAYOFF_DOES, payoffOf, projectSaid, startProject, workOn, type Payoff, type Project } from "./project.js";
 import { doubt } from "./clues.js";
 import { kitFight } from "./kit.js";
-import { goingOn, hourSaid, hoursNamed, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken } from "./schedule.js";
+import { goingOn, hourSaid, hoursNamed, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken, type TimeRead } from "./schedule.js";
 import { asksTable, feel, spoke, spotlight, talkItOver, vote, whatTheySay, type Fellow, type Said, type Style } from "./seats.js";
 import { hasPower, shut, statOf, TARGETS, WAY_STATS, WAYS, type Moment, type Stat, type Way } from "./moment.js";
 import type { Tier } from "./moment.js";
@@ -68,7 +68,7 @@ export function fellowOf(c: Companion, power: boolean): Fellow {
     toward: {},
     lastSpoke: -1,
     overruled: 0,
-    age: readAgeBand(c.name, c.who),
+    age: ageFrom(c.age, c.name, c.who),
     ...(c.id === "friend" ? { fromCard: true } : {}),
   };
 }
@@ -311,6 +311,76 @@ export function worldLineRouted(t: Trip, line: string, m: Moment, kind: "goal" |
   return { trip: hourKept(clockTo(t, t.sheet.hour + 1)), lines: ["You wait an hour."], hours: 1 };
 }
 
+/** The slips you hold, in their own words, in the order they are numbered at the table (torn ones left out). */
+export function slipLines(t: Trip): string[] {
+  return (t.book?.slips ?? []).filter((s) => s.state !== "torn").map((s) => clueOf(t, s.clue)?.text ?? s.clue);
+}
+
+/**
+ * A check the player calls for that tries to get past nothing (game/storyroute.ts, "check"): to notice, recall or work
+ * something out. One throw on the stat named, against the usual 12; what it shows is for the narrator to tell, true
+ * to the scene. It changes nothing at the place: no way closes, the other side gains nothing.
+ */
+export function checkThrow(t: Trip, m: Moment, stat: Stat): { natural: number; tier: Tier; said: string; note: string } {
+  const th = quietThrow(`check:${t.seed}:${t.sheet.hour}:${stat}`, statOf(m.sheet, stat));
+  const worked = th.tier === "success" || th.tier === "crit_success" || th.tier === "partial";
+  const said = `A check on your ${statName(stat, m.sheet.powerName)}: the die shows ${th.natural}. ${worked ? (th.tier === "partial" ? "You get part of it." : "It works.") : "Nothing comes clear."}`;
+  const note = worked
+    ? `The player made a check on their ${statName(stat, m.sheet.powerName)} and it ${th.tier === "partial" ? "half worked: give them one real, definite thing they notice, recall or work out, and leave the rest of it unsure" : "worked: tell them plainly and definitely what they notice, recall or work out: a name, a detail, a sign, a fact. If the scene does not say, make up something that fits it. Never answer that it is hard to tell, or that there is nothing to know"}. Keep it true to the scene; it changes nothing there and gets them past nothing.`
+    : "The player made a check and it failed: they learn nothing for sure. Do not invent a new danger or change the scene; it is only that nothing comes clear.";
+  return { natural: th.natural, tier: th.tier, said, note };
+}
+
+/** What a model may say a line in a story is, besides a try, a question for luck or a give-in (game/storyroute.ts). */
+export type StoryKind = "say" | "speak" | "look" | "press" | "sizeup" | "favour" | "wait" | "prepare" | "goal" | "work" | "compare" | TableMove;
+
+/**
+ * A line in a story a model has already said the kind of (game/storyroute.ts): only that row of the world reads it,
+ * whatever its words. Null when the world has nothing to do with it (said, or a look that finds nothing new, or a
+ * person who is not here), and the narrator answers it.
+ */
+export function worldLineStory(t: Trip, line: string, m: Moment, kind: StoryKind, o: { goal?: string; who?: string; span?: { until?: number; hours?: number } } = {}): Heard {
+  const seed = `${t.seed}:${t.sheet.hour}:${line.length}`;
+  const kept = (h: Heard): Heard => (h ? { ...h, trip: hourKept(h.trip) } : null);
+  const p = personAt(t, m.stop as RoadStop);
+  switch (kind) {
+    case "say":
+      return null;
+    case "speak":
+      return p ? kept(spokenTo(t, line, m, p, seed)) : null;
+    case "look": {
+      if (!t.book) return null;
+      const here = cluesOf(t).filter((c) => c.from?.place === m.stop.id && !c.from?.person);
+      const g = gotAll(t, here.map((c) => ({ c, how: "seen" as const })));
+      return g.lines.length ? kept(g) : null;
+    }
+    case "press":
+    case "sizeup":
+    case "favour":
+      return p ? kept(personActs(t, line, m, p, seed, kind === "sizeup" ? "read" : kind)) : null;
+    case "wait":
+    case "prepare":
+      return kept(timeSpent(t, line, m, seed, kind, kind === "wait" ? o.span : undefined));
+    case "goal":
+      return worldLineRouted(t, line, m, "goal");
+    case "work":
+      return worldLineRouted(t, line, m, "work", o.goal);
+    case "compare":
+      return kept(compareSlips(t, line, m, seed));
+    default: {
+      const table = tableLine(t, line, m, kind, o.who);
+      if (table) return kept(table);
+      // What the router heard, with nobody to do it with: said so, rather than read as something else.
+      const alone = !withYou(t).length;
+      if ((kind === "vote" || kind === "talkover") && alone) return { trip: t, lines: [`There is nobody else at the table to ${kind === "vote" ? "vote with" : "talk it over with"}. It is your call.`], free: true };
+      if (kind === "regroup") return { trip: t, lines: [(t.fellows ?? []).length ? "Everyone is here with you already." : "There is nobody to call back: you are on your own."], free: true };
+      const who = kind === "send" ? ((o.who ? (t.fellows ?? []).find((f) => f.name === o.who) : undefined) ?? fellowNamed(t, line)) : null;
+      if (who && !who.at) return { trip: t, lines: [`${who.name} would go, but where? Name a place on the map: one on the road, or one you have had inked.`], free: true };
+      return null;
+    }
+  }
+}
+
 /** A goal in the line's own words, when the usual phrasing is not there: "I've decided I'm going to build a tavern". */
 function goalOfLine(line: string): string {
   const s = line
@@ -522,8 +592,13 @@ function compareSlips(t: Trip, line: string, m: Moment, seed: string): Heard {
 }
 
 /** Time spent in the story (docs/MOONSHOT.md, 5.2): a wait, a watch, a follow, getting ready, or a long stretch. */
-function timeSpent(t: Trip, line: string, m: Moment, seed: string): Heard {
-  const tr = timeRead(line, t.sheet.hour);
+function timeSpent(t: Trip, line: string, m: Moment, seed: string, said?: "wait" | "prepare", span?: { until?: number; hours?: number }): Heard {
+  const words = timeRead(line, t.sheet.hour);
+  // How long, or until when, as a model read it (game/meaning.ts waitBy), over what the words say.
+  const read: TimeRead | null = span && (span.until !== undefined || span.hours !== undefined) && (!words || words.act === "wait") ? { act: "wait", ...span } : words;
+  // As the router said: a wait is a wait (watching and following are waits too) and getting ready is getting ready,
+  // whatever the words; how long, and until when, still come from them.
+  const tr: TimeRead | null = !said ? read : said === "prepare" ? { act: "prepare" } : read && read.act !== "prepare" ? read : { act: "wait" };
   if (!tr) return null;
   const hours = timeTaken(tr, t.sheet.hour);
   const from = t.sheet.hour;
@@ -573,11 +648,12 @@ function spokenTo(t: Trip, line: string, m: Moment, p: Person, seed: string): He
   const visit = t.visits?.[m.stop.id] ?? newVisit(p.id);
   if (visit.ended) return { trip: t, lines: [`${p.name} has had enough of you for now.`], note: `${p.name} will not talk any more this visit.` };
   // A lie (docs/MOONSHOT.md, 3.3): a throw behind the narrator's hand, your Guile against their Sense. You are not told how it went.
-  const lying = LIE.test(line);
+  const byModel = t.heard?.line === line ? t.heard.read : null;
+  const lying = byModel ? byModel.kind === "lie" : LIE.test(line);
   const lie = lying ? lieTo(p, statOf(m.sheet, "guile"), seed) : null;
   // A line they answer with something you do not have yet does not use their patience (people.ts, hearLine).
   const answers = released(p).some((id) => !(t.book?.slips ?? []).some((x) => x.clue === id));
-  const h = hearLine(lie ? lie.person : p, visit, rulesLine(line, p, lying), answers);
+  const h = hearLine(lie ? lie.person : p, visit, byModel ?? rulesLine(line, p, lying), answers);
   let trip: Trip = { ...t, people: { ...(t.people ?? {}), [p.id]: h.person }, visits: { ...(t.visits ?? {}), [m.stop.id]: h.visit } };
   // Their feeling counts in talking them round: the change goes into the warmth of the moment too.
   if (h.moved && trip.facing) trip = { ...trip, facing: { ...trip.facing, moment: { ...trip.facing.moment, warm: (trip.facing.moment.warm ?? 0) + h.moved } } };
@@ -755,12 +831,12 @@ export interface FellowSays {
  * The other players (docs/MOONSHOT.md, 4): after your line, at most one of them speaks, the keenest, and only if keen
  * enough; everyone when you ask the table. Code chooses what they say; a model words it in their voice.
  */
-export function worldFellows(t: Trip, line: string, m: Moment, way?: Way): FellowSays[] {
+export function worldFellows(t: Trip, line: string, m: Moment, way?: Way, against?: Record<string, boolean>): FellowSays[] {
   const fellows = t.fellows ?? [];
   if (!fellows.length) return [];
   const turn = (t.turn ?? 0) + 1;
   const asked = asksTable(line);
-  const mo = { turn, text: `${m.stop.situation} ${line}`, ...(way ? { way } : {}), asked, big: !!(m.stop as RoadStop).climax && turn % 3 === 0, bold: /\b(charge|all out|recklessly|kick the door)\b/i.test(line), seed: t.seed };
+  const mo = { turn, text: `${m.stop.situation} ${line}`, ...(way ? { way } : {}), asked, big: !!(m.stop as RoadStop).climax && turn % 3 === 0, bold: /\b(charge|all out|recklessly|kick the door)\b/i.test(line), seed: t.seed, ...(against && Object.keys(against).length ? { against } : {}) };
   const ids = spotlight(fellows, mo, m.stop.id).slice(0, asked ? 3 : 1);
   let trip: Trip = { ...t, turn };
   const out: FellowSays[] = [];
@@ -906,6 +982,9 @@ const withoutAt = (f: Fellow): Fellow => {
   return rest;
 };
 
+/** What a line does at the table. */
+export type TableMove = "vote" | "talkover" | "regroup" | "send";
+
 /** How long it takes to call everyone back together, in hours. */
 const REGROUP_HOURS = 0.5;
 
@@ -917,22 +996,24 @@ const VOTE = /\b(let's vote|we vote|put it to a vote|vote on it|show of hands|we
  * The table, read from a line (4): a player sent off to a place on the map, everyone called back, or a vote. Null when
  * the line is none of these.
  */
-export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: number }) | null {
+export function tableLine(t: Trip, line: string, m: Moment, said?: TableMove, sent?: string): (Told & { hours?: number }) | null {
   const fellows = t.fellows ?? [];
   if (!fellows.length) return null;
   const l = line.toLowerCase();
-  if (REGROUP.test(line) && fellows.some((f) => f.at)) {
+  // As the router said, else by the words.
+  const is = (k: TableMove, words: boolean): boolean => (said ? said === k : words);
+  if (is("regroup", REGROUP.test(line)) && fellows.some((f) => f.at)) {
     // Word has to reach them, and they have to come back: half an hour, and the other side's clock runs meanwhile.
     const from = t.sheet.hour;
     const r = rejoin(clockTo(t, from + REGROUP_HOURS), fellows.filter((f) => f.at).map((f) => f.id));
     const c = worldClock(r.trip, from, from + REGROUP_HOURS);
     return { trip: c.trip, lines: [`You send word, and the table comes back together. That takes half an hour: it is now ${hourSaid(from + REGROUP_HOURS)}.`, ...r.lines, ...c.lines], ...(r.inked ? { inked: r.inked } : {}), hours: REGROUP_HOURS };
   }
-  if (asksTable(line) && !VOTE.test(line) && withYou(t).length) {
+  if (is("talkover", asksTable(line) && !VOTE.test(line)) && withYou(t).length) {
     const o = talkOver({ ...t, proposals: undefined });
     if (o.lines.length) return { ...o, free: true };
   }
-  if (VOTE.test(line)) {
+  if (is("vote", VOTE.test(line))) {
     const here = withYou(t);
     if (!here.length) return null;
     const open = WAYS.filter((w) => !shut(m, w));
@@ -951,8 +1032,8 @@ export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: n
     return { trip, lines: [`Hands go up: ${hands.join(", ")}. The table goes with ${WAY_SHORT[won]}. (A mark: ${lever.name}, for ${won}.)`], free: true };
   }
   // Splitting up: a player named, a place on the map named, and a word for going there.
-  const who = fellows.find((f) => new RegExp(`\\b${f.name.toLowerCase().split(/\s+/)[0]}\\b`).test(l));
-  if (who && !who.at && SPLIT.test(line)) {
+  const who = (sent ? fellows.find((f) => f.name === sent) : undefined) ?? fellows.find((f) => new RegExp(`\\b${f.name.toLowerCase().split(/\s+/)[0]}\\b`).test(l));
+  if (who && !who.at && is("send", SPLIT.test(line))) {
     // A place on the road is on the map before you; any other has to be inked first.
     const known = (p: { id: string; name: string }): boolean => !t.book || t.book.mapped.includes(p.name) || t.book.mapped.includes(p.id) || t.visited.includes(p.id) || t.adv.stops.some((s) => s.id === p.id);
     // By the name said, the longest that fits ("Pyre Gate" is not "Salt Gate"); by an id only when no name fits.
@@ -971,6 +1052,9 @@ export function tableLine(t: Trip, line: string, m: Moment): (Told & { hours?: n
 
 const PRESS = /\b(press (him|her|them|harder|again|on (it|that))|press (the|that) [a-z]+ for (answers|more|details|the truth|it)|i press(?!\s+(?:the|a|an|my|our|your|its|this|that|on|onward|onwards|ahead|forward|through|into|against|down|up|in|button|buzzer|bell|key|switch)\b)|keep pressing|lean on|lean hard|push (him|her|them|harder)|make (him|her|them) talk|intimidate|i insist|tell me everything|you're hiding|you are hiding|what (aren't|are not|else aren't) you telling|what else (do you know|are you hiding))\b/i;
 const READ = /\b(read (him|her|them)|read (his|her|their) face|(is|was|are|were) (he|she|they|[a-z]+) lying|are you lying|lying (to me )?about|lied (to me|about)|telling (me )?the truth|is (that|it|this) true|do i believe (him|her|them)|can i trust (him|her|them|that)|(study|search|watch) (his|her|their) face)\b/i;
+/** What a line does to the person here beyond talking. */
+export type PersonAct = "press" | "read" | "favour";
+
 const FAVOUR = /\b(what can i do for you|what do you need|what do you want from me|can i help you|i('ll| will) help you|do you a favou?r|owe you one|a favou?r)\b/i;
 
 /**
@@ -979,18 +1063,20 @@ const FAVOUR = /\b(what can i do for you|what do you need|what do you want from 
  * true (Sense against their skill at lying), or ask what they need (a favour: a project of four, and once it is done
  * they would do a great deal for you). Null when the line is none of these.
  */
-export function personActs(t: Trip, line: string, m: Moment, p: Person, seed: string): Told | null {
+export function personActs(t: Trip, line: string, m: Moment, p: Person, seed: string, said?: PersonAct): Told | null {
   const visit = t.visits?.[m.stop.id] ?? newVisit(p.id);
+  // What the line does to them: as the router said, else by its words.
+  const act: PersonAct | null = said ?? (PRESS.test(line) ? "press" : READ.test(line) ? "read" : FAVOUR.test(line) ? "favour" : null);
   // Done with you for this visit: pressing, reading or asking them is no try at the place, and is not read as one.
-  if (visit.ended) return PRESS.test(line) || READ.test(line) || FAVOUR.test(line) ? { trip: t, lines: [`${p.name} has had enough of you for now. Pressing them again will get you nothing here.`], note: `${p.name} will not talk any more this visit.` } : null;
+  if (visit.ended) return act ? { trip: t, lines: [`${p.name} has had enough of you for now. Pressing them again will get you nothing here.`], note: `${p.name} will not talk any more this visit.` } : null;
   const set = (trip: Trip, person: Person, v = visit): Trip => {
     const moved = attitudeIndex(person.attitude) - attitudeIndex(p.attitude);
     let out: Trip = { ...trip, people: { ...(trip.people ?? {}), [p.id]: person }, visits: { ...(trip.visits ?? {}), [m.stop.id]: v } };
     if (moved && out.facing) out = { ...out, facing: { ...out.facing, moment: { ...out.facing.moment, warm: (out.facing.moment.warm ?? 0) + moved } } };
     return out;
   };
-  if (PRESS.test(line)) {
-    const frightened = lineKind(line) === "threat" || /\b(intimidate|lean on|lean hard|loom|or else)\b/i.test(line);
+  if (act === "press") {
+    const frightened = (t.heard?.line === line ? t.heard.read.kind : lineKind(line)) === "threat" || /\b(intimidate|lean on|lean hard|loom|or else)\b/i.test(line);
     const stat: Stat = frightened ? "brawn" : statOf(m.sheet, "guile") > statOf(m.sheet, "charm") ? "guile" : "charm";
     const th = quietThrow(`press:${seed}`, statOf(m.sheet, stat), TARGETS[pressDifficulty(p)]);
     const head = `You press ${p.name} (a ${th.natural}, and your ${statName(stat)}).`;
@@ -1007,7 +1093,7 @@ export function personActs(t: Trip, line: string, m: Moment, p: Person, seed: st
     const cost = attitudeIndex(person.attitude) < attitudeIndex(p.attitude) ? ` It costs you: ${p.name} ${ATTITUDE_SAID[person.attitude]}.` : "";
     return { ...got, lines: [`${head} ${clue ? `${p.name} gives it up.` : `${p.name} has nothing more to give.`}${cost}`, ...got.lines], note: personNote(person, clue ? [clue.text] : []) };
   }
-  if (READ.test(line)) {
+  if (act === "read") {
     const theirs = new Set([...p.knows.map((k) => k.clue), ...(p.lie ? [p.lie.clue] : [])]);
     // The thing you name ("is he lying about the river?"), or else the last thing they told you.
     const named = t.book ? slipNamed(line, t.book, cluesOf(t)) : null;
@@ -1028,7 +1114,7 @@ export function personActs(t: Trip, line: string, m: Moment, p: Person, seed: st
     }
     return { trip, lines: [`${head} ${r.told === "true" ? "that was the truth, as far as they know it." : "you cannot tell."}`] };
   }
-  if (FAVOUR.test(line) && p.wants) {
+  if (act === "favour" && p.wants) {
     if (p.helped) return { trip: t, lines: [`${p.name} owes you already, and knows it.`] };
     const id = `favour:${p.id}`;
     const have = (t.projects ?? []).find((x) => x.id === id);

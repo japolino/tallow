@@ -6,7 +6,8 @@
  *
  *   bun --env-file=.env.local scripts/play-real.ts --card card.json --lines lines.txt [--seed s]
  *
- * lines.txt has one player line per line; when they run out, the night ends.
+ * lines.txt has one player line per line; when they run out, the night ends. A line that starts with "FORK:" is kept
+ * for the next fork in a story, and only for a fork.
  */
 import { readFileSync } from "node:fs";
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
@@ -15,6 +16,8 @@ import type { Table } from "../src/game/director.js";
 import { modelMinds } from "../src/game/modelminds.js";
 import type { Message, Role } from "../src/game/prompts.js";
 import { sit } from "../src/game/session.js";
+import type { RoadStop } from "../src/engine/adventure.js";
+import { forkRead } from "../src/engine/tell-adventure.js";
 
 const env = process.env;
 const arg = (k: string): string | undefined => {
@@ -57,7 +60,8 @@ const table = {
     for (const x of l) out(`NARRATOR: ${x}`);
   },
   async write() {
-    const line = lines.shift() ?? "done for tonight";
+    const i = lines.findIndex((l) => !l.startsWith("FORK:"));
+    const line = i >= 0 ? lines.splice(i, 1)[0]! : "done for tonight";
     out(`\n[${at()}] YOU: ${line}`);
     return { line, given: Promise.resolve() };
   },
@@ -80,8 +84,19 @@ const table = {
   async deal() {},
   async turn() {},
   async clear() {},
-  async fork() {
-    return "";
+  // As the room does it (game/roomtable.ts): a player sent the other way first, then the meaning, then the words.
+  async fork(stops: RoadStop[], read?: (line: string) => string | null) {
+    const i = lines.findIndex((l) => l.startsWith("FORK:"));
+    const line = i >= 0 ? lines.splice(i, 1)[0]!.slice(5).trim() : "left";
+    out(`
+[${at()}] YOU (at the fork: ${stops.map((s, i) => `${i + 1}. ${s.name}`).join(" / ")}): ${line}`);
+    const own = read?.(line);
+    if (own) return own;
+    const options = Object.fromEntries(stops.map((s, i) => [String(i), stops.length > 2 ? `${i + 1}. ${s.name}, ${s.teaser}` : `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
+    const k = await minds.pick?.(stops.length > 2 ? "Which place do you go to?" : "Which way do you go, left or right?", line, options).catch(() => null);
+    const id = k && k in options ? stops[Number(k)]!.id : (forkRead(line, stops) ?? stops[0]!.id);
+    out(`    (fork: ${stops.find((s) => s.id === id)?.name}${k ? "" : ", by the words"})`);
+    return id;
   },
   async offer() {
     return 0;

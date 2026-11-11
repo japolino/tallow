@@ -13,7 +13,7 @@ import { CITY_COURTSHIP, COURTSHIP, NIGHT_RESCUE, RESCUE } from "../content/adve
 import { partOf, type Adventure, type Companion, type RoadStop } from "../engine/adventure.js";
 import { cardKind } from "../engine/cards.js";
 import { KEYS } from "../engine/clues.js";
-import { readAgeBand } from "../engine/content.js";
+import { ageFrom } from "../engine/content.js";
 import { STATS, WAYS, type CoreStat, type Stat, type Way } from "../engine/moment.js";
 import { clock } from "../engine/tell.js";
 import { cardText, courtable, type CardInfo, type Trope } from "./card.js";
@@ -63,11 +63,11 @@ export interface Words {
   companions: Record<string, { name: string; who: string }>;
   loot: Record<string, string>;
   /** In a rescue: the card's character, who comes with you. */
-  friend?: { name?: string; who: string; good_at: Stat; likes: Way; dislikes: Way };
+  friend?: { name?: string; who: string; good_at: Stat; likes: Way; dislikes: Way; age?: string };
   courted?: { who: string };
   rival?: { name: string; who: string; lost: string };
   /** The person at a stop (engine/furnish.ts), by the stop's id: their name, who they are, what they want now. */
-  people?: Record<string, { name: string; who: string; wants: string }>;
+  people?: Record<string, { name: string; who: string; wants: string; age?: string }>;
   /** What there is to find out (engine/furnish.ts): each clue's fact, a line long, by its id. */
   clues?: Record<string, string>;
   /** What the other side does, by its clock (engine/furnish.ts): a line each, by id. */
@@ -88,11 +88,11 @@ export function wordsOf(adv: Adventure): Words {
     companions: Object.fromEntries(adv.companions.map((c) => [c.id, { name: c.name, who: c.who }])),
     loot: Object.fromEntries(adv.loot.map((l) => [l.id, l.name])),
   };
-  if (partOf(adv) === "friend") w.friend = { name: "their name", who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force" };
+  if (partOf(adv) === "friend") w.friend = { name: "their name", who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force", age: "adult, elder, young-adult or minor: how old they are written as" };
   if (adv.courted) w.courted = { who: adv.courted.who };
   if (adv.rival) w.rival = { name: adv.rival.name, who: adv.rival.who, lost: adv.rival.lost };
   const people = adv.stops.filter((s) => s.person);
-  if (people.length) w.people = Object.fromEntries(people.map((s) => [s.id, { name: s.person!.name, who: "who they are, in a line", wants: s.person!.wants ?? "" }]));
+  if (people.length) w.people = Object.fromEntries(people.map((s) => [s.id, { name: s.person!.name, who: "who they are, in a line", wants: s.person!.wants ?? "", age: "adult, elder, young-adult or minor: how old they are written as" }]));
   if (adv.clues?.length) w.clues = Object.fromEntries(adv.clues.map((c) => [c.id, c.text]));
   if (adv.appointments?.length) w.moves = Object.fromEntries(adv.appointments.map((a) => [a.id, a.what]));
   return w;
@@ -273,7 +273,7 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
     const stat = STATS.includes(f.good_at as CoreStat) ? (f.good_at as CoreStat) : "charm";
     const likes = WAYS.includes(f.likes as Way) ? (f.likes as Way) : "talk";
     const dislikes = WAYS.includes(f.dislikes as Way) && f.dislikes !== likes ? (f.dislikes as Way) : likes === "force" ? "sneak" : "force";
-    const friend: Companion = { id: FRIEND, name, card: "companion", who: take(f.who, 200, `${name}, who asked for your help`), stat, likes, dislikes };
+    const friend: Companion = { id: FRIEND, name, card: "companion", who: take(f.who, 200, `${name}, who asked for your help`), stat, likes, dislikes, ...(typeof f.age === "string" ? { age: f.age.slice(0, 20) } : {}) };
     adv.companions = [...adv.companions, friend];
     adv.party = [FRIEND];
   }
@@ -290,7 +290,7 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
     const wp = obj(ppl[s.id]);
     const name = take(wp.name, 40, s.person.name);
     const who = plain(wp.who, 200) ?? "";
-    return { ...s, person: { ...s.person, name, wants: take(wp.wants, 120, s.person.wants ?? ""), ...(who ? { look: who } : {}), age: readAgeBand(name, who) } };
+    return { ...s, person: { ...s.person, name, wants: take(wp.wants, 120, s.person.wants ?? ""), ...(who ? { look: who } : {}), age: ageFrom(wp.age, name, who) } };
   });
   const cw = obj(w.clues);
   // A clue that names a place inks it on the map by the name the place has now.

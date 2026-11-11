@@ -82,6 +82,8 @@ export interface Companion {
   likes: Way;
   /** Getting past a stop this way they hold against you, and say so: 1 goodwill lost. */
   dislikes: Way;
+  /** How old the builder said they are written as (adult, elder, young-adult or minor); read with their words (content.ts ageFrom). */
+  age?: string;
 }
 
 /** A thing you keep. Using it later makes one way one step easier, once, at any stop. */
@@ -170,6 +172,11 @@ export type Ending = "won" | "deadline" | "rival" | "turned_back" | "taken" | "y
 
 /** Where you are in an adventure. */
 export interface Trip {
+  /**
+   * The line just said, as a model read it for the person here (game/hear.ts), so the world's rows hear it by meaning
+   * rather than by its words. Only for that line: any other line is read by its words (people.ts, rulesLine).
+   */
+  heard?: { line: string; read: import("./people.js").LineRead };
   adv: Adventure;
   seed: string;
   /** What you carry. Its stats are your own, without your companions' help. */

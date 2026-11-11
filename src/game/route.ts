@@ -21,6 +21,7 @@ export const ROUTES = {
   work: "work at a goal: they spend time on a goal they already have (listed below): working on it, tending it, putting hours into it, doing what it needs.",
   thread: "take on a matter: they say they take on, as a whole undertaking, one of the matters going on in the world (listed below), or name one by its number: \"I'll find that missing girl\", \"fine, we take the job\", \"thread 2\". Only talking to someone in it, asking about it, or going somewhere, is not this.",
   notebook: "the notebook: speaking to the narrator, not in the story, they ask what has been written down: the places, what is going on, what they know so far.",
+  settings: "settings: speaking to the narrator, not in the story, they change what the game may contain or how it plays: explicit scenes on or off, dark themes on or off, who decides when they are caught, or something that must never appear or must happen off-screen (\"no gore please\", \"turn the heat off\", \"keep torture off-screen\").",
   done: "stop: speaking to the narrator, not in the story, they want to stop playing for now (\"I'm done for tonight\", \"let's stop here\", \"good night!\"). Their character going to sleep is rest.",
 } as const;
 export type Route = keyof typeof ROUTES;

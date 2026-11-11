@@ -42,6 +42,16 @@ export const ADULT_BANDS: readonly AgeBand[] = ["adult", "elder", "young-adult"]
 export const isAdult = (band: AgeBand | undefined): boolean => !!band && ADULT_BANDS.includes(band);
 
 /**
+ * A person's age band from what a model said of them and from their own words together: a minor if either says so,
+ * else the model's adult band when it gave one, else what the words say. The words never overrule a model's "minor".
+ */
+export function ageFrom(said: unknown, ...texts: (string | null | undefined)[]): AgeBand {
+  const rules = readAgeBand(...texts);
+  if (rules === "minor" || said === "minor") return "minor";
+  return typeof said === "string" && (ADULT_BANDS as readonly string[]).includes(said) ? (said as AgeBand) : rules;
+}
+
+/**
  * A person's age band, read from their own words by code (the same rule as the card's own character, card/child.ts):
  * any sign of a child is a minor; a stated age of 18 or more is an adult (65 or more an elder); words like "old woman"
  * make an elder; plain adult words make an adult; anything else is unclear.

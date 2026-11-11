@@ -25,7 +25,8 @@ import { abilityRule, levelTaken } from "../engine/tell-adventure.js";
 import { drawRecipe, familiesFor, familiesSaid, FAMILY_SAID, storyRead, type Family, type Recipe, type StoryAnswer } from "../content/tropes.js";
 import { buildAdventure, FRIEND, modernCard } from "./build.js";
 import { cardText, courtable, looksLikeWorld, type CardInfo } from "./card.js";
-import { KIND, SETTING } from "./decisions.js";
+import { KIND, MINOR, SETTING } from "./decisions.js";
+import { campaignBy, contentBy, someoneNewBy } from "./meaning.js";
 import { abilityCard, direct, type Director, type Table } from "./director.js";
 import { roam } from "./free.js";
 import { pickBy, type Minds } from "./minds.js";
@@ -204,6 +205,19 @@ async function worldCard(card: CardInfo, minds: Minds, reading: <T>(p: Promise<T
   return kind === "world" ? true : kind === "person" ? false : guess;
 }
 
+/**
+ * Whether the card's character is a minor, by meaning (docs/DESIGN.md, 7): true when a model says so, or says it
+ * cannot tell and the card's words lean young; undefined when no model answers, and the words alone decide.
+ */
+async function minorCard(card: CardInfo, minds: Minds): Promise<boolean | undefined> {
+  if (card.minor !== undefined) return card.minor;
+  if (!minds.pick) return undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((r) => (timer = setTimeout(() => r(null), KIND_MS)));
+  const said = await Promise.race([minds.pick(MINOR.question, cardText(card, 3000), MINOR.options, MINOR.task).catch(() => null), timeout]).finally(() => clearTimeout(timer));
+  return said === "minor" ? true : said === "adult" ? false : undefined;
+}
+
 /** Things still held at the end of a story won, to keep for the next: a few, with ids that cannot meet the next road's. */
 export const keptThings = (t: Trip): Loot[] =>
   t.kept
@@ -215,7 +229,8 @@ export const keptThings = (t: Trip): Loot[] =>
 export async function sit(o: SittingOptions): Promise<Trip | null> {
   const { table } = o;
   const reading = <T>(p: Promise<T>): Promise<T> => table.wait("read", p);
-  const card: CardInfo = { ...o.card, world: await worldCard(o.card, o.minds, reading) };
+  const [world, minor] = await Promise.all([worldCard(o.card, o.minds, reading), minorCard(o.card, o.minds)]);
+  const card: CardInfo = { ...o.card, world, ...(minor !== undefined ? { minor } : {}) };
   const offered = familiesFor(courtable(card));
   let kept = o.kept ?? null;
   let last: Trip | null = null;
@@ -292,6 +307,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     return hero;
   };
 
+  /** A story was left in the middle of it, for tonight (director.ts, `left`): the sitting ends there. */
+  let leftOff = false;
   /** A story of a kind, drawn, built and played, and what came of it kept (the stories, and a thread pulled in free form). */
   const playStory = async (answer: Family | "any", askedFor: string, someoneNew: boolean, longGame: boolean): Promise<Trip> => {
     const recipe = drawRecipe(answer, o.seed, kept?.played ?? [], offered);
@@ -343,6 +360,11 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     });
     o.started?.(d);
     last = await d.done;
+    // Left for tonight in the middle of it: kept as it stood (director.ts saved it), nothing more is made of it now.
+    if (d.left) {
+      leftOff = true;
+      return last;
+    }
     kept = await after(last, hero, kept);
     stories++;
     return last;
@@ -426,6 +448,11 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       const d = direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
       o.started?.(d);
       last = await d.done;
+      if (d.left) {
+        await table.say(GOODNIGHT.slice(0, 1));
+        o.leave?.();
+        return last;
+      }
       const hero: Hero = kept?.hero ? heroNow(kept.hero) : heroNow({ name: "the traveller", cls: "courier", who: t.adv.who, sheet: t.sheet, perks: t.perks } as Hero);
       kept = await after(last, hero, kept);
       stories++;
@@ -449,7 +476,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       const w = await table.write();
       await w.given;
       // Content set at the table, before the story is chosen (docs/MOONSHOT.md, 7.6).
-      const set = contentFromLine(w.line, content ?? DEFAULT_CONTENT);
+      // Read by meaning first (game/meaning.ts), with the words when no model can tell.
+      const [set, wantsNew, wantsLong] = await reading(Promise.all([contentBy(o.minds, w.line, content ?? DEFAULT_CONTENT), kept ? someoneNewBy(o.minds, w.line, () => wantsSomeoneNew(w.line)) : Promise.resolve(false), campaignBy(o.minds, w.line, () => wantsCampaign(w.line))]));
       if (set) {
         content = set;
         o.keepContent?.(set);
@@ -457,24 +485,19 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
         await table.say([contentSaid(set)]);
         // A story asked for in the same line is still asked for ("heat on, and something with a heist"); a line that
         // only sets content waits for the story.
-        const named = wantsFree(w.line) ? "free" : storyRead(w.line, offered, false);
-        if (!named) continue;
-        someoneNew = !!kept && wantsSomeoneNew(w.line);
-        longGame = longGame || wantsCampaign(w.line);
+        const named = await pickBy(o.minds, "Does the line also ask for a kind of story, or no story at all? If so, which?", w.line, { ...options, none: "it asks for no story yet" }, () => (wantsFree(w.line) ? "free" : storyRead(w.line, offered, false) ?? "none"), reading);
+        if (!named || named === "none" || named === "done") continue;
+        someoneNew = wantsNew;
+        longGame = longGame || wantsLong;
         askedFor = w.line;
         answer = named;
         break;
       }
-      someoneNew = !!kept && wantsSomeoneNew(w.line);
-      longGame = longGame || wantsCampaign(w.line);
+      someoneNew = wantsNew;
+      longGame = longGame || wantsLong;
       askedFor = w.line;
-      // No story at all is said in plain words, and is read before anything else.
-      if (wantsFree(w.line)) {
-        void table.aside();
-        answer = "free";
-        break;
-      }
-      answer = await pickBy(o.minds, first ? "What kind of story is it to be, or no story at all?" : "Another story, and what kind? Or no story at all? Or done for tonight?", w.line, options, () => storyRead(w.line, offered, !first) ?? (someoneNew ? "any" : null), reading);
+      // What kind of story, or none at all, by meaning; the words only when no model can tell.
+      answer = await pickBy(o.minds, first ? "What kind of story is it to be, or no story at all?" : "Another story, and what kind? Or no story at all? Or done for tonight?", w.line, options, () => (wantsFree(w.line) ? "free" : storyRead(w.line, offered, !first) ?? (someoneNew ? "any" : null)), reading);
       void table.aside();
       if (answer) break;
       await table.say([storyAgain(offered, !first)]);
@@ -492,5 +515,10 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       return last;
     }
     await playStory(answer, askedFor, someoneNew, longGame);
+    if (leftOff) {
+      await table.say(GOODNIGHT.slice(0, 1));
+      o.leave?.();
+      return last;
+    }
   }
 }

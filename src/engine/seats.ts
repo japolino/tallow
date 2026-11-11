@@ -68,6 +68,11 @@ export interface Moment2 {
   big?: boolean;
   /** Your line throws caution away. */
   bold?: boolean;
+  /**
+   * Who objects to what you mean to do, as a model read it (game/meaning.ts, objectsBy): fellow id to yes or no. A
+   * fellow not in it is judged by the words of their fault.
+   */
+  against?: Record<string, boolean>;
   seed: string;
 }
 
@@ -132,7 +137,7 @@ export function whatTheySay(f: Fellow, m: Moment2, o: { notices?: readonly Notic
     const notice = o.notices!.find((n) => n.id === seen.id)!;
     return { kind: "notice", fact: seen.says, notice };
   }
-  const against = touches(m.text, faultWords(f.fault)) || (/\b(burn|kill|murder|torture|poison)\b/i.test(m.text) && f.style !== "brawler");
+  const against = m.against?.[f.id] ?? (touches(m.text, faultWords(f.fault)) || (/\b(burn|kill|murder|torture|poison)\b/i.test(m.text) && f.style !== "brawler"));
   if (against && (f.attitude === "hostile" || f.attitude === "cold" || f.attitude === "wary")) return { kind: "refuse", fact: `will not go along with it: ${f.fault ?? "it goes against who they are"}` };
   if (o.lie && statOf(f, "sense") >= o.lie.by) return { kind: "advise", fact: `${o.lie.who} is lying, and not well` };
   if (m.way && WAY_STATS[m.way].includes(bestOf(f)) && statOf(f, bestOf(f)) >= 3) return { kind: "offer", fact: `offers to set it up, or to do it themselves: this is what they are good at` };

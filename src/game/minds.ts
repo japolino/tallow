@@ -5,11 +5,14 @@
  * answer, and a delay that can be made long on purpose so the table's waits can be looked at.
  */
 import type { RouteContext, Routed } from "./route.js";
+import type { StoryContext, StoryRouted } from "./storyroute.js";
 import type { Ability } from "../engine/abilities.js";
 import type { RoadStop, Trip, Use } from "../engine/adventure.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
 import type { Moment, Outcome, Read, Tier, Way } from "../engine/moment.js";
 import { lookSaid } from "../engine/tell.js";
+import type { LineRead, Person } from "../engine/people.js";
+import type { ContentSettings } from "../engine/content.js";
 import { askLike, rulesReading } from "../meaning/read.js";
 
 /**
@@ -75,6 +78,22 @@ export interface Minds {
    * is there or sure, and the word rules decide.
    */
   route?(line: string, ctx: RouteContext): Promise<Routed | null>;
+  /**
+   * In a story, at the place in your way: what kind of line it is (game/storyroute.ts): a try, said, words to the
+   * person here, a look, a question for luck, pressing or reading them, a wait, a goal, the table, giving in. The
+   * Decision model, else the reader model; null when neither is there or sure, and the word rows decide.
+   */
+  storyRoute?(line: string, ctx: StoryContext): Promise<StoryRouted | null>;
+  /**
+   * How a line said to a person lands (game/hear.ts): its kind, the likes it touches, whether it touches what they
+   * want. Null when no model can tell, and the words decide (people.ts, rulesLine).
+   */
+  hear?(line: string, p: Person): Promise<LineRead | null>;
+  /**
+   * Whether a line set at the table changes what the story may contain (engine/content.ts), read by meaning: the new
+   * settings, "same" when it changes nothing, or null when no model can tell and the words decide (contentFromLine).
+   */
+  content?(line: string, s: ContentSettings): Promise<ContentSettings | "same" | null>;
 }
 
 /**

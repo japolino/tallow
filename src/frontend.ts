@@ -154,7 +154,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     if (mine !== sitting || !r.desk) return;
     // The teller is given the card's world in a few lines, so what it says sounds like that world.
     const world = card ? cardText(card as CardInfo, 700) : "";
-    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world }), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`) });
+    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world }), ...(characterId && granted.includes("embeddings") ? { lore: (text: string) => call({ type: "lore", characterId, text }).then((m) => (m.type === "lore" ? m.entries : [])) } : {}), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`) });
     const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24), ...(minds.pick ? { pick: minds.pick } : {}) });
     if (!card) {
       await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
