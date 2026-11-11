@@ -9,12 +9,15 @@
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
 import { firstJson, type Message } from "./prompts.js";
 import { sureChoice } from "./decisions.js";
+import { STATS, type Stat } from "../engine/moment.js";
+import { STAT_MEANS } from "../engine/tell.js";
 
 /** What a line can be, each said for the model. The order is the order they are offered in. */
 export const ROUTES = {
-  say: "say or do: anything they say to someone, ask, look at, take in, or do that simply happens and is answered by the world: talking, asking someone a question, flirting, looking round, reaching for something, an everyday action with nothing against it. Most lines are this.",
-  try: "try: something that could go wrong in a way that matters, so the die decides it: anything someone or something could refuse, resist or catch them at (persuading someone who could say no, sneaking past, picking a lock, fighting, climbing something dangerous, lying to someone who might see through it), and any check, roll or test the player asks for in so many words (\"I make a check to see if someone is watching me\").",
-  go: "go somewhere: they set off for another place, away from where they are now (to an inn, out of town, into the woods, home, back to a place they know). Moving about inside the place they are in is say or do. Going to where one of the matters going on is, is still go.",
+  say: "say or do: anything they say to someone, ask, look at, take in what is plainly there, or do that simply happens and is answered by the world: talking, asking someone a question, flirting, looking round, reaching for something, an everyday action with nothing against it. Most lines are this.",
+  try: "try: something that could go wrong in a way that matters, so the die decides it: anything someone or something could refuse, resist or catch them at (persuading someone who could say no, sneaking past, picking a lock, fighting, climbing something dangerous, lying to someone who might see through it, running from someone who wants to stop or chase them), and any roll the player asks for to do something (\"can I roll to sneak past?\", \"roll for it\").",
+  check: "a check: they try to notice, find, sense, recall or work out something that is not plain, that they could miss or get wrong, so a roll should decide what they learn; whether or not they ask for a roll. Searching hard for something hidden, listening at a door, scanning the crowd for anyone watching, studying tracks or a mechanism to see how it works, racking their memory for what a crest or a legend means, trying to catch what someone hides in their manner; and any check they ask for to know something (\"I make a perception check\", \"I make a check to see if someone is watching me\"). Taking in what is plainly there, or asking the narrator what someone or something looks like or to describe a place, is say or do.",
+  go: "go somewhere: they set off for another place, away from where they are now (to an inn, out of town, into the woods, home, back to a place they know). Moving about inside the place they are in is say or do. Running from someone who wants to stop or chase them is try. Going to where one of the matters going on is, is still go.",
   rest: "rest: they sleep, or rest for some hours to get their strength back.",
   wait: "wait: they only let time pass, doing nothing else (\"I wait until dawn\").",
   goal: "goal: they name a new long-term venture of their own, something that takes days or weeks of work (\"I want to open a bakery\", \"let's train an army of ants\"). Wanting to know, find or check something now is not a goal.",
@@ -50,6 +53,8 @@ export interface Routed {
   thread?: string;
   /** For work: which. */
   goal?: string;
+  /** For check: the quality it leans on, when the model was sure. */
+  stat?: Stat;
 }
 
 const NEW = "new";
@@ -93,6 +98,7 @@ export function routeQuestions(line: string, ctx: RouteContext): { state: unknow
       instructions: "If the line takes on one of the matters going on, which?",
       criteria: { ...Object.fromEntries(ctx.threads.map((t, i) => [t.id, `${i + 1}. ${t.said}`])), [NONE]: "none of them" },
     };
+  questions.stat = { type: "choice", instructions: "If the line asks for a check, which quality of their character does it lean on? Sense is noticing and reading people; wits is knowing and working things out.", criteria: Object.fromEntries(STATS.map((x) => [x, `${x}: ${STAT_MEANS[x]}`])) };
   if (ctx.goals.length)
     questions.goal = {
       type: "choice",
@@ -110,7 +116,7 @@ export function routeFromAnswers(answers: Record<string, DecisionAnswer | undefi
   if (!answers) return null;
   const route = sureChoice(answers.route, min) as Route | null;
   if (!route || !routesFor(ctx).includes(route)) return null;
-  return checked({ route, place: answers.place?.type === "choice" ? answers.place.choice : undefined, thread: answers.thread?.type === "choice" ? answers.thread.choice : undefined, goal: answers.goal?.type === "choice" ? answers.goal.choice : undefined }, ctx);
+  return checked({ route, place: answers.place?.type === "choice" ? answers.place.choice : undefined, thread: answers.thread?.type === "choice" ? answers.thread.choice : undefined, goal: answers.goal?.type === "choice" ? answers.goal.choice : undefined, stat: sureChoice(answers.stat, min) as Stat | undefined }, ctx);
 }
 
 /* ------------------------------ the reader model ------------------------------ */
@@ -122,7 +128,7 @@ export function routeMessages(line: string, ctx: RouteContext): Message[] {
     "The kinds of line are:",
     ...routes.map((r) => `- ${r}: ${ROUTES[r]}`),
     "Judge what the player means to do, by all of the line, not by single words in it.",
-    `Answer with JSON only: {"route": ${routes.map((r) => `"${r}"`).join(" | ")}${ctx.places.length ? `, "place": one of the known places by name, or "${NEW}", only for go` : ""}${ctx.threads.length ? `, "thread": the id of the matter, only for thread` : ""}${ctx.goals.length ? `, "goal": the id of the goal, only for work` : ""}}.`,
+    `Answer with JSON only: {"route": ${routes.map((r) => `"${r}"`).join(" | ")}${ctx.places.length ? `, "place": one of the known places by name, or "${NEW}", only for go` : ""}${ctx.threads.length ? `, "thread": the id of the matter, only for thread` : ""}${ctx.goals.length ? `, "goal": the id of the goal, only for work` : ""}, "stat": ${STATS.map((x) => `"${x}"`).join(" | ")}, only for check}.`,
   ].join("\n");
   const user = [
     `Where they are, ${ctx.here}: ${quoted(ctx.situation, 1500)}`,
@@ -140,17 +146,18 @@ export function routeMessages(line: string, ctx: RouteContext): Message[] {
 }
 
 export function parseRoute(text: string, ctx: RouteContext): Routed | null {
-  const j = firstJson(text) as { route?: unknown; place?: unknown; thread?: unknown; goal?: unknown } | null;
+  const j = firstJson(text) as { route?: unknown; place?: unknown; thread?: unknown; goal?: unknown; stat?: unknown } | null;
   if (!j || typeof j.route !== "string") return null;
   const route = j.route.trim().toLowerCase() as Route;
   if (!routesFor(ctx).includes(route)) return null;
   const s = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
-  return checked({ route, place: s(j.place), thread: s(j.thread), goal: s(j.goal) }, ctx);
+  return checked({ route, place: s(j.place), thread: s(j.thread), goal: s(j.goal), stat: s(j.stat)?.toLowerCase() as Stat | undefined }, ctx);
 }
 
 /** Only what is real stays: a known place or "new", an open matter, a goal they have. */
 function checked(r: Routed, ctx: RouteContext): Routed {
   const out: Routed = { route: r.route };
+  if (r.route === "check" && r.stat && (STATS as readonly string[]).includes(r.stat)) out.stat = r.stat;
   if (r.route === "go") {
     const known = ctx.places.find((p) => p.toLowerCase() === r.place?.toLowerCase());
     out.place = known ?? NEW;

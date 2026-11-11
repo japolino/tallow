@@ -8,7 +8,7 @@ import type { DecisionAnswer } from "lumiverse-spindle-types";
 import { COURIER, RESCUE } from "../src/content/adventures.js";
 import type { Trip } from "../src/engine/adventure.js";
 import { nameCheck } from "../src/engine/moment.js";
-import { CHECK_SAYS, direct, LEFT_SAID, type Director, type Table } from "../src/game/director.js";
+import { direct, LEFT_SAID, type Director, type Table } from "../src/game/director.js";
 import { standIns, type Minds } from "../src/game/minds.js";
 import { parseStoryRoute, STORY_ROUTE_NAMES, storyRouteFromAnswers, storyRouteMessages, storyRouteQuestions, storyRoutesFor, type StoryContext, type StoryRoute, type StoryRouted } from "../src/game/storyroute.js";
 import { STORY_CASES, STORY_CONTEXTS } from "./story-cases.js";
@@ -137,13 +137,21 @@ describe("the director, with a router", () => {
     const line = "I want to make a check to know if somebody is watching me";
     const { log, asked, stops } = await play([line], { [line]: { route: "check", stat: "sense" } });
     const next = after(log, line, 4);
-    expect(next).toContain(CHECK_SAYS);
+    expect(next[0]).toMatch(/^A check on your Sense, then\./);
     expect(next).toContain("throw");
     expect(log.slice(log.indexOf(`> ${line}`) + 1).join(" ")).toMatch(/sense/i);
     // the place is still where it was: the next line is written at the same stop
     expect(stops[1]).toBe(stops[0]);
     expect(asked[0]!.here).toBeTruthy();
     expect(asked[0]!.ways.length).toBeGreaterThan(0);
+  });
+
+  test("a line that only does something it could miss is called for a roll, unasked, and what is to be found there is found", async () => {
+    const line = "I run my fingers along the wall, feeling for any loose stone or hidden catch.";
+    const { log } = await play([line], { [line]: { route: "check", stat: "sense" } });
+    const next = after(log, line, 4);
+    expect(next[0]).toMatch(/^That needs a roll: a check on your Sense/);
+    expect(next).toContain("throw");
   });
 
   test("done for tonight in the middle of it leaves the story where it stands, saved, and no more is played", async () => {

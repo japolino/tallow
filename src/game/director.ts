@@ -23,7 +23,7 @@ import { hourSaid, notches as scheduleNotches } from "../engine/schedule.js";
 import { ASK_AGAIN, ASK_NEXT, ASK_SAID, ASK_TIME_SAID, cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS, shutSaid, UNCLEAR_SAID } from "../engine/tell.js";
 import { couldInstead, tradeOf } from "../engine/effect.js";
 import { faultDue, foeNotices, marginFor, marginLine } from "../engine/margin.js";
-import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, checkThrow, personAt, sentDown, slipLines, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldLineStory, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
+import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, checkCalled, checkThrow, personAt, sentDown, slipLines, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldLineStory, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
 import { gearFrom } from "../engine/kit.js";
 import { projectSaid, type Payoff, type Project } from "../engine/project.js";
 import { contentRules, DEFAULT_CONTENT, playable } from "../engine/content.js";
@@ -34,6 +34,7 @@ import { isUse, pickBy, type Minds } from "./minds.js";
 import type { StoryContext } from "./storyroute.js";
 import { withHeard } from "./hear.js";
 import { calledRead } from "./free.js";
+import { asksForRoll } from "../engine/project.js";
 import { foeBy, handedToBy, objectsBy, waitBy } from "./meaning.js";
 import type { Fellow } from "../engine/seats.js";
 
@@ -136,8 +137,7 @@ class LeftOff extends Error {}
 
 /** Said when the player stops in the middle of a story. */
 export const LEFT_SAID = ["Then we stop here for tonight, in the middle of it. I leave everything where it lies: the cards, the clock, the stones.", "When you sit down again, we go on from this very place."];
-/** Said before a check that tries to get past nothing. */
-export const CHECK_SAYS = "A check, then: it gets you past nothing, but it may tell you something.";
+
 
 export interface DirectOptions {
   /** How the adventure is got ready: at milestone 4 it is built from a card by a model, and the table deals while it waits. */
@@ -695,16 +695,20 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       // it leans on, and the narrator says what it shows. Nothing at the place changes.
       if (routed?.route === "check") {
         const hourBefore = trip.sheet.hour;
-        const c = checkThrow(trip, m, routed.stat ?? calledRead(w.line).stat ?? "sense");
+        const stat = routed.stat ?? calledRead(w.line).stat ?? "sense";
+        const c = checkThrow(trip, m, stat);
         void table.aside();
-        await table.say([CHECK_SAYS, DIE_SAYS]);
+        // Asked for, or called for by what they did, as at a real table: "that needs a roll".
+        await table.say([checkCalled(stat, m, asksForRoll(w.line)), DIE_SAYS]);
         next = await table.dieOrLine();
         if (next) continue;
         await table.throwDie(c.natural);
-        trip = ponder(trip)!;
+        // What the check turned up at the place, if anything (a look round's clues), is theirs.
+        trip = ponder(c.trip)!;
         table.clock(trip.sheet.hour);
         const answer = fit(await table.wait("tell", minds.answer(w.line, trip.facing!.moment, c.note)));
-        await table.say([c.said, ...(answer ? [answer] : []), timeSaid()]);
+        await table.say([c.said, ...(answer ? [answer] : []), ...c.found, timeSaid()]);
+        for (const place of c.inked ?? []) await table.ink?.(place);
         pondered = true;
         await ranFrom(hourBefore);
         if (trip.over) break;

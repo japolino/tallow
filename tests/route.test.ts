@@ -35,7 +35,7 @@ describe("the questions", () => {
     const route = q.questions.route as { criteria: Record<string, string> };
     expect(Object.keys(route.criteria)).not.toContain("thread");
     expect(route.criteria.work).toContain("build a watermill on the stream");
-    expect(Object.keys(q.questions)).toEqual(["route", "place", "goal"]);
+    expect(Object.keys(q.questions)).toEqual(["route", "place", "stat", "goal"]);
     const sys = routeMessages("x", CONTEXTS.inn!)[0]!.content;
     expect(sys).not.toContain("- work:");
     expect(sys).toContain("- thread:");

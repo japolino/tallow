@@ -19,7 +19,7 @@ import { nameCheck, shut, WAYS, type Check, type Moment, type Read, type Stat } 
 import { asksForRoll } from "../engine/project.js";
 import { levelSaid, restSaid } from "../engine/tell-adventure.js";
 import { cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS } from "../engine/tell.js";
-import { worldLineFree, worldLineRouted } from "../engine/world.js";
+import { checkCalled, checkThrow, worldLineFree, worldLineRouted } from "../engine/world.js";
 import type { Route, RouteContext, Routed } from "./route.js";
 import { checkedGrade } from "../meaning/read.js";
 import { abilityCard, type Table, type Written } from "./director.js";
@@ -352,6 +352,24 @@ export async function roam(o: RoamOptions): Promise<Trip> {
         await ran();
         continue;
       }
+    }
+    // A check that gets them past nothing (to notice, find, recall, work out): asked for, or called for by what they
+    // did ("that needs a roll"). The die is thrown on its quality, and the narrator says what it shows.
+    if (kind === "check") {
+      const stat = routed?.stat ?? calledRead(line).stat ?? "sense";
+      const c = checkThrow(trip, m, stat);
+      void table.aside();
+      await table.say([checkCalled(stat, m, asksForRoll(line)), DIE_SAYS]);
+      next = await table.dieOrLine();
+      if (next) continue;
+      await table.throwDie(c.natural);
+      trip = ponder(c.trip) ?? c.trip;
+      table.clock(trip.sheet.hour);
+      const said = await narrate(line, c.note);
+      await table.say([c.said, ...(said ? [said] : []), ...c.found]);
+      trip = remember(trip, line, [c.said, said].filter(Boolean).join(" "));
+      await ran();
+      continue;
     }
     if (kind === "goal" || kind === "work" || kind === "wait") {
       void table.aside();

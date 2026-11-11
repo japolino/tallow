@@ -99,6 +99,12 @@ export const STORY_CASES: StoryCase[] = [
   { line: "I lean against the wall, roll my aching shoulder, and tell whoever's in charge here about the last job I had, the caravan that never arrived, the three days I spent in the ditch afterwards, and then I wait.", ctx: "brawl", want: "say", ok: ["try", "wait"] },
 
   // ---- check ----
+  { line: "I run my fingers along the shelves, feeling for a loose board or a hidden catch.", ctx: "archive", want: "check" },
+  { line: "I search the dust on the floor for footprints.", ctx: "archive", want: "check" },
+  { line: "I rack my brains: have I heard of Sergeant Holt before?", ctx: "gate", want: "check", ok: ["say"] },
+  { line: "I watch the monk's hands while he talks. Is he nervous about something?", ctx: "chapel", want: "check", ok: ["sizeup"] },
+  { line: "What can I see from here?", ctx: "gate", want: "look", ok: ["say"] },
+  { line: "I make a dash for it, straight past the dockhands to the alley door.", ctx: "brawl", want: "try" },
   { line: "I make a perception check.", ctx: "archive", want: "check" },
   { line: "Can I roll to remember whose crest is on the sergeant's cloak?", ctx: "gate", want: "check" },
   { line: "I roll to see if I spot any traps on the stairs.", ctx: "archive", want: "check" },
@@ -132,9 +138,9 @@ export const STORY_CASES: StoryCase[] = [
   { line: "\"Brother, those books, are they yours? I've not seen hands like that since my mother's.\"", ctx: "chapel", want: "speak" },
 
   // ---- look ----
-  { line: "I look round the gate for another way out.", ctx: "gate", want: "look", ok: ["say"] },
-  { line: "I search the stairwell for anything useful.", ctx: "archive", want: "look" },
-  { line: "I examine the lock closely.", ctx: "archive", want: "look", ok: ["say"] },
+  { line: "I look round the gate for another way out.", ctx: "gate", want: "check", ok: ["say", "look"] },
+  { line: "I search the stairwell for anything useful.", ctx: "archive", want: "check", ok: ["look"] },
+  { line: "I examine the lock closely.", ctx: "archive", want: "check", ok: ["say", "look"] },
   { line: "I look around the chapel, at the books and the walls.", ctx: "chapel", want: "look" },
 
   // ---- luck ----

@@ -29,6 +29,13 @@ export const CONTEXTS: Record<string, RouteContext> = {
     ...harrow,
     goals: [],
   },
+  chase: {
+    here: "Hollowfang Wood",
+    situation: "Here: A moonlit clearing in a dark forest. What has just happened: A lamia uncoils across the path ahead, smiling with far too many teeth. She tells you, sweetly, that she will count to ten, and that she does so love it when they run; her tail is already twitching, and she makes it plain she wants a chase she means to win.",
+    places: ["the Coiled Kettle", "the river gate"],
+    ...harrow,
+    goals: [],
+  },
   inn: {
     here: "the Coiled Kettle",
     situation: "Here: A low, smoky inn by the river gate, full of Order men off duty and travellers who missed the bells, with a lamia innkeeper coiled behind the bar.",
@@ -61,7 +68,9 @@ export const CONTEXTS: Record<string, RouteContext> = {
 
 export const CASES: RouteCase[] = [
   // ---- said at the table and gone wrong ----
-  { line: "I want to make a check to know if somebody is watching me", ctx: "forest", want: "try" },
+  { line: "I want to make a check to know if somebody is watching me", ctx: "forest", want: "check" },
+  { line: "I make a dash for it.", ctx: "chase", want: "try" },
+  { line: "Fine. I turn and run for the river as fast as my legs will go.", ctx: "chase", want: "try", ok: ["go"] },
   { line: "I go back out to the gate and talk to the woodsman outside the walls through the grille. What did you see?", ctx: "inn", want: "go", which: "the river gate", ok: ["say"] },
   { line: "I talk to the woodsman. What exactly did you see out there?", ctx: "gate", want: "say" },
   { line: "I lean on the bar and tell the keeper about the sea, the long grey swell of it, the gulls, the salt in everything, and how I swore I'd never go back, and then I smile at her.", ctx: "inn", want: "say" },
@@ -74,10 +83,10 @@ export const CASES: RouteCase[] = [
   { line: "I ask the Order men at the long table if they've heard anything about the chalk marks.", ctx: "inn", want: "say" },
   { line: "I wink at the lamia and ask her what a nice snake like her is doing in a place like this.", ctx: "inn", want: "say" },
   { line: "I sit down next to the woman in the red coat and ask if the seat's taken.", ctx: "bar", want: "say" },
-  { line: "I listen to the giggling. Where is it coming from?", ctx: "forest", want: "say", ok: ["try"] },
+  { line: "I listen to the giggling. Where is it coming from?", ctx: "forest", want: "check", ok: ["try", "say"] },
   { line: "I call out into the trees: \"I know you're there. Come out, I won't hurt you.\"", ctx: "forest", want: "say" },
   { line: "I keep walking deeper into the wood, one hand on my sword.", ctx: "forest", want: "say", ok: ["go"] },
-  { line: "I crouch and look at the ground for tracks.", ctx: "forest", want: "say", ok: ["try"] },
+  { line: "I crouch and look at the ground for tracks.", ctx: "forest", want: "check", ok: ["try", "say"] },
   { line: "I take off my wet cloak and hang it by the fire, then rub my hands together to get the feeling back.", ctx: "inn", want: "say" },
   { line: "I tell the woodsman I'll see what I can do, and ask him the girl's name.", ctx: "gate", want: "say", ok: ["thread"] },
   { line: "What does the woodsman look like?", ctx: "gate", want: "say" },
@@ -89,12 +98,20 @@ export const CASES: RouteCase[] = [
   { line: "I kiss her.", ctx: "bar", want: "say", ok: ["try"] },
   { line: "Can you describe the chapel to me?", ctx: "inn", want: "say" },
   { line: "I want to see what the chalk marks look like, so I ask the innkeeper if she's seen them.", ctx: "inn", want: "say" },
-  { line: "I want to find out who is giggling, so I follow the sound.", ctx: "forest", want: "say", ok: ["try", "go"] },
+  { line: "I want to find out who is giggling, so I follow the sound.", ctx: "forest", want: "check", ok: ["try", "go", "say"] },
   { line: "I hum an old marching song to keep my spirits up as I walk.", ctx: "forest", want: "say" },
 
+  // ---- check: asked for, or only called for by what they do ----
+  { line: "I make a perception check.", ctx: "forest", want: "check" },
+  { line: "Can I roll to see if I notice anything?", ctx: "forest", want: "check" },
+  { line: "I stop dead and listen. Where is that giggling coming from?", ctx: "forest", want: "check", ok: ["say"] },
+  { line: "I search the trees around me for tracks or anything that's been dragged.", ctx: "forest", want: "check" },
+  { line: "I run my fingers along the cellar wall, feeling for a loose stone or a hidden catch.", ctx: "inn", want: "check" },
+  { line: "I rack my brains: have I heard any old stories about this wood?", ctx: "forest", want: "check", ok: ["say"] },
+  { line: "I watch the keeper while she talks. Is she hiding something?", ctx: "inn", want: "check", ok: ["say"] },
+  { line: "I look around the inn.", ctx: "inn", want: "say" },
+
   // ---- try ----
-  { line: "I make a perception check.", ctx: "forest", want: "try" },
-  { line: "Can I roll to see if I notice anything?", ctx: "forest", want: "try" },
   { line: "Roll for it.", ctx: "forest", want: "try" },
   { line: "I'd like to roll stealth to slip past the bouncer.", ctx: "bar", want: "try" },
   { line: "I try to sneak past the bouncer to the back door.", ctx: "bar", want: "try" },
@@ -107,12 +124,12 @@ export const CASES: RouteCase[] = [
   { line: "I swipe the purse off the drunk Order man's belt while he's laughing.", ctx: "inn", want: "try" },
   { line: "I punch him.", ctx: "bar", want: "try" },
   { line: "I haggle the bartender down on the price of the room.", ctx: "inn", want: "try" },
-  { line: "I try to spot who's watching me without letting on that I've noticed.", ctx: "forest", want: "try" },
-  { line: "I want to test if the lamia is lying to me.", ctx: "inn", want: "try" },
+  { line: "I try to spot who's watching me without letting on that I've noticed.", ctx: "forest", want: "check", ok: ["try"] },
+  { line: "I want to test if the lamia is lying to me.", ctx: "inn", want: "check", ok: ["try"] },
   { line: "I run for it, back toward the path, as fast as I can.", ctx: "forest", want: "try", ok: ["go"] },
   { line: "I grab the chrome-armed bouncer's wrist and twist it behind his back.", ctx: "bar", want: "try" },
   { line: "I hide behind a tree and hold my breath until whatever it is passes.", ctx: "forest", want: "try" },
-  { line: "Let me roll to see if I can pick up the trail.", ctx: "forest", want: "try" },
+  { line: "Let me roll to see if I can pick up the trail.", ctx: "forest", want: "check", ok: ["try"] },
 
   // ---- go ----
   { line: "I head to the chapel.", ctx: "inn", want: "go", which: "the chapel" },

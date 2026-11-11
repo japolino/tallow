@@ -319,7 +319,9 @@ export function nameCheck(m: Moment, read: Read): Check | null {
   const opened = !!why && ability?.does === "open" && (why === "closed" || why === "not_here");
   if (why && !opened) return null;
   const here = m.stop.ways[read.way] ?? { difficulty: 2 as Difficulty, price: read.way === "pay" ? 2 : 0 };
-  const allowed = (read.way === "force" && m.attack?.length ? m.attack : WAY_STATS[read.way]).filter((s) => s !== "power" || hasPower(m.sheet));
+  // A contest's own stats come first (a war of words is fought with charm and guile), but what the player plainly does
+  // is what is rolled: a dash out of a war of words is on their grace, not their charm.
+  const allowed = [...new Set([...(read.way === "force" && m.attack?.length ? m.attack : []), ...WAY_STATS[read.way]])].filter((s) => s !== "power" || hasPower(m.sheet));
   const stat = read.stat && allowed.includes(read.stat) ? read.stat : allowed[0]!;
   const lever = m.stop.levers.find((l) => l.id === read.lever && l.way === read.way && leverLeft(m, l)) ?? null;
   const cold = read.way === "talk" && m.sheet.goodwill <= 0;

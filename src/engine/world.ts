@@ -7,6 +7,7 @@
  *
  * Pure: a trip in, a trip and some lines out. Every number is decided here, by code and a seeded die.
  */
+import { STAT_MEANS } from "./tell.js";
 import { clockTo, companionOf, placeName, type Companion, type RoadStop, type Trip } from "./adventure.js";
 import { ageFrom } from "./content.js";
 import { getClue, keysKnown, layTogether, newCasebook, slipNamed, type Clue } from "./clues.js";
@@ -321,14 +322,36 @@ export function slipLines(t: Trip): string[] {
  * something out. One throw on the stat named, against the usual 12; what it shows is for the narrator to tell, true
  * to the scene. It changes nothing at the place: no way closes, the other side gains nothing.
  */
-export function checkThrow(t: Trip, m: Moment, stat: Stat): { natural: number; tier: Tier; said: string; note: string } {
+export function checkThrow(t: Trip, m: Moment, stat: Stat): { natural: number; tier: Tier; said: string; note: string; trip: Trip; found: string[]; inked?: string[] } {
   const th = quietThrow(`check:${t.seed}:${t.sheet.hour}:${stat}`, statOf(m.sheet, stat));
   const worked = th.tier === "success" || th.tier === "crit_success" || th.tier === "partial";
   const said = `A check on your ${statName(stat, m.sheet.powerName)}: the die shows ${th.natural}. ${worked ? (th.tier === "partial" ? "You get part of it." : "It works.") : "Nothing comes clear."}`;
+  // What there is to be found at this place (the clues of a look round), turned up by a check that works: all of it,
+  // or one thing on a partial.
+  let trip = t;
+  let found: string[] = [];
+  let inked: string[] | undefined;
+  if (worked && t.book) {
+    const here = cluesOf(t).filter((c) => c.from?.place === m.stop.id && !c.from?.person && !t.book!.slips.some((x) => x.clue === c.id));
+    const g = gotAll(t, (th.tier === "partial" ? here.slice(0, 1) : here).map((c) => ({ c, how: "seen" as const })));
+    trip = g.trip;
+    found = g.lines;
+    inked = g.inked;
+  }
+  const foundNote = found.length ? ` What they turn up, which you must show them finding: ${found.join(" ")}` : "";
   const note = worked
-    ? `The player made a check on their ${statName(stat, m.sheet.powerName)} and it ${th.tier === "partial" ? "half worked: give them one real, definite thing they notice, recall or work out, and leave the rest of it unsure" : "worked: tell them plainly and definitely what they notice, recall or work out: a name, a detail, a sign, a fact. If the scene does not say, make up something that fits it. Never answer that it is hard to tell, or that there is nothing to know"}. Keep it true to the scene; it changes nothing there and gets them past nothing.`
+    ? `The player made a check on their ${statName(stat, m.sheet.powerName)} and it ${th.tier === "partial" ? "half worked: give them one real, definite thing they notice, recall or work out, and leave the rest of it unsure" : "worked: tell them plainly and definitely what they notice, recall or work out: a name, a detail, a sign, a fact. If the scene does not say, make up something that fits it. Never answer that it is hard to tell, or that there is nothing to know"}. Keep it true to the scene; it changes nothing there and gets them past nothing.${foundNote}`
     : "The player made a check and it failed: they learn nothing for sure. Do not invent a new danger or change the scene; it is only that nothing comes clear.";
-  return { natural: th.natural, tier: th.tier, said, note };
+  return { natural: th.natural, tier: th.tier, said, note, trip, found, ...(inked?.length ? { inked } : {}) };
+}
+
+/**
+ * What the narrator says before a check is thrown: taken as asked for, or, when the player only did something that
+ * may miss (searched, listened, tried to remember), called for, as at a real table: "that needs a roll".
+ */
+export function checkCalled(stat: Stat, m: Moment, asked: boolean): string {
+  const s = statName(stat, m.sheet.powerName);
+  return asked ? `A check on your ${s}, then. It gets you past nothing, but it may tell you something.` : `That needs a roll: a check on your ${s} (${STAT_MEANS[stat]}), to see what you make of it. It gets you past nothing, but it may tell you something.`;
 }
 
 /** What a model may say a line in a story is, besides a try, a question for luck or a give-in (game/storyroute.ts). */
