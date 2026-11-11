@@ -14,7 +14,7 @@ import { offerRoom, stockOffer, type Ability } from "../engine/abilities.js";
 import { ahead, arrive, placeOf, withParty, type Loot, attempt, companionOf, hoursTo, lootOf, placeName, ponder, prefers, rest, startTrip, takeAbility, tripNow, useAbility, weary, withAbility, withContest, yieldContest, type Adventure, type RoadStop, type Sky, type Trip } from "../engine/adventure.js";
 import { cardKind } from "../engine/cards.js";
 import { coming, contestKind, foeNamed, renamed, yieldRead, yieldSure, type Contest, type ContestNames } from "../engine/contest.js";
-import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, dangerSaveSaid, luckAsk, luckNote, luckSaid, saveAsk, saveSaid, yieldSaid } from "../engine/tell-adventure.js";
+import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, takenOutOf, dangerSaveSaid, luckAsk, luckNote, luckSaid, saveAsk, saveSaid, yieldSaid } from "../engine/tell-adventure.js";
 import { canLuck, luckRead, throwLuck, type LuckAsk } from "../engine/luck.js";
 import { giveIn, narratorTurn, refuse, tempting, type Move } from "../engine/dread.js";
 import { leverLeft, nameCheck, shut, statOf, TRY_HOURS, WAYS, wayStates, type Against, type Check, type Lever, type Moment, type Sheet, type Way } from "../engine/moment.js";
@@ -26,7 +26,7 @@ import { faultDue, foeNotices, marginFor, marginLine } from "../engine/margin.js
 import { fellowSaid, forkSplit, handSaid, handStat, payoffsNow, sentDown, worldFirst, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
 import { gearFrom } from "../engine/kit.js";
 import { projectSaid, type Payoff, type Project } from "../engine/project.js";
-import { contentRules, playable } from "../engine/content.js";
+import { contentRules, DEFAULT_CONTENT, playable } from "../engine/content.js";
 import { fellowBrief, handedTo, handOver } from "../engine/seats.js";
 import { checkedGrade, rulesRead } from "../meaning/read.js";
 import { abilityNote } from "./prompts.js";
@@ -191,13 +191,13 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
   const sky = (at?: RoadStop | null): void => table.weather?.(at?.weather ?? trip.adv.weather ?? "clear");
   /** What the game allows, for the models (content.ts): only clear adults are ever in a scene with heat or dark themes. */
   const rules = (): string | undefined => {
-    const c = trip.adv.content;
-    if (!c) return undefined;
+    // A story kept from before it carried settings plays with the defaults.
+    const c = trip.adv.content ?? DEFAULT_CONTENT;
     const bands = [...trip.adv.stops.map((s) => s.person?.age), ...(trip.fellows ?? []).map((f) => f.age)].filter((b) => b !== undefined);
     return contentRules(c, bands.length ? bands : ["adult"]);
   };
   /** A model's words as they may be played (content.ts): the veil when they were refused or crossed a line. */
-  const fit = (text: string): string => (trip.adv.content && text ? playable(text, trip.adv.content) : text);
+  const fit = (text: string): string => (text ? playable(text, trip.adv.content ?? DEFAULT_CONTENT) : text);
   /** The candle's notches follow what you know of the other side's clock. */
   const notches = (): void => {
     const s = trip.schedule;
@@ -731,7 +731,9 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       knowNow();
       // In a contest, a try that works but does not end it is "more"; the round's own facts go to the teller too.
       const more = turn.round ? o.past && !turn.cleared && !turn.taken : turn.more;
-      const note = narratorNote(o, more) + (turn.round ? ` ${contestNote(turn.round, contestKind(stop), blow)}` : "");
+      // Taken out means what it means in this world (kit.ts), and with the dice deciding, the scene goes the winners' way.
+      const taken = turn.round?.taken ? takenOutOf(trip.adv.kit, `${trip.seed}:${stop.id}`, (trip.adv.content ?? DEFAULT_CONTENT).diceDecide) : undefined;
+      const note = narratorNote(o, more) + (turn.round ? ` ${contestNote(turn.round, contestKind(stop), blow, taken)}` : "");
       const telling = minds.tell(o, stop, note, more);
       const [sum, says] = rollLines(o);
       const told = fit(await table.wait("tell", telling));

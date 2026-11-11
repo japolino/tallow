@@ -6,8 +6,11 @@ import { FIGHT_VERBS, priceOf, VERB_PRICE } from "../src/engine/abilities.js";
 import { allowedTakenOut, contentRules, crossesLine, DEFAULT_CONTENT, playable, readAgeBand, readContent, refused, sceneDark, sceneHeat, VEIL_SAID } from "../src/engine/content.js";
 import { playRound, startContest } from "../src/engine/contest.js";
 import { checkKit, gearOf, kitFromWords, kitLines, STOCK_KITS, stockKit } from "../src/engine/kit.js";
+import { contestNote, takenOutOf } from "../src/engine/tell-adventure.js";
 
 const hot = { ...DEFAULT_CONTENT, heat: true, dark: true };
+/** Everything turned off at the table. */
+const cool = { ...DEFAULT_CONTENT, heat: false, dark: false, diceDecide: false };
 
 describe("a kit for every world", () => {
   test("a card's words pick the stock kit", () => {
@@ -41,8 +44,10 @@ describe("a kit for every world", () => {
   });
 
   test("claimed only where the content settings allow it", () => {
-    expect(stockKit("monster-romance", DEFAULT_CONTENT).takenOut).not.toContain("claimed");
+    expect(stockKit("monster-romance", cool).takenOut).not.toContain("claimed");
     expect(stockKit("monster-romance", hot).takenOut).toContain("claimed");
+    // On by default: there is no switch for it but the table.
+    expect(stockKit("monster-romance", DEFAULT_CONTENT).takenOut).toContain("claimed");
   });
 
   test("the first page says the world in a few lines", () => {
@@ -101,10 +106,29 @@ describe("content settings", () => {
   test("heat and dark themes need the setting and a clear adult band for everyone", () => {
     expect(sceneHeat(hot, ["adult", "elder"])).toBe("explicit");
     expect(sceneHeat(hot, ["adult", "unclear"])).toBe("fade");
-    expect(sceneHeat(DEFAULT_CONTENT, ["adult"])).toBe("fade");
+    expect(sceneHeat(cool, ["adult"])).toBe("fade");
+    expect(sceneHeat(DEFAULT_CONTENT, ["adult"])).toBe("explicit");
     expect(sceneDark(hot, ["adult", "minor"])).toBe(false);
     expect(contentRules(hot, ["adult", "minor"])).toContain("not clearly an adult");
-    expect(allowedTakenOut(["claimed", "wounded"], DEFAULT_CONTENT)).toEqual(["wounded"]);
+    expect(allowedTakenOut(["claimed", "wounded"], cool)).toEqual(["wounded"]);
+  });
+
+  test("heat, dark themes and the dice deciding are on unless turned off at the table", () => {
+    expect(DEFAULT_CONTENT).toMatchObject({ heat: true, dark: true, diceDecide: true });
+    expect(readContent({})).toMatchObject({ heat: true, dark: true, diceDecide: true });
+    expect(readContent({ heat: false, lines: ["spiders"] })).toMatchObject({ heat: false, dark: true, diceDecide: true, lines: ["spiders"] });
+  });
+
+  test("taken out means what it means in this world, never death, and with the dice deciding the scene goes the winners' way", () => {
+    const kit = stockKit("monster-romance", DEFAULT_CONTENT);
+    const seen = new Set(Array.from({ length: 40 }, (_, i) => takenOutOf(kit, `s${i}`, true).means));
+    expect([...seen].every((x) => kit.takenOut.includes(x))).toBe(true);
+    expect(takenOutOf({ takenOut: ["killed"] }, "k", true).means).not.toBe("killed");
+    const round = { won: false, beaten: [], hit: 0, hits: [], landed: 1, taken: true } as unknown as Parameters<typeof contestNote>[0];
+    const claimed = { means: "claimed" as const, follow: true };
+    expect(contestNote(round, "struggle", "", claimed)).toContain("goes the winners' way");
+    expect(contestNote(round, "struggle", "", claimed)).toContain("claimed by those who beat them");
+    expect(contestNote(round, "struggle", "", { ...claimed, follow: false })).toContain("do not say what happens after");
   });
 
   test("a refusal or a line crossed is a veil, and play goes on", () => {

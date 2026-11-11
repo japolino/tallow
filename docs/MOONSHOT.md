@@ -419,12 +419,14 @@ A **long goal** needs one new thing: a **project**, after Blades in the Dark's l
 
 The community this lives in is adults only, and adult themes are welcome. So content becomes a setting per chat, not a filter built into the builder. This replaces DESIGN.md section 7's "keep everything non-explicit" whenever the settings say so.
 
-| Setting | Off (the default) | On |
+| Setting | Off | On (the default for heat, dark themes and the dice) |
 |---|---|---|
 | heat | the scene fades at the door | explicit, written by the chat's own model and preset |
 | dark themes | everyone in an intimate scene is willing | dubious and unwilling themes, where the world kit calls for them: monsters that hunt and claim, a captured rival, a villain's lair |
 | let the dice decide | a die decides whether your hero is caught; what happens next is your choice | lose the contest, and the scene goes the way the world says |
 | lines and veils | none | the tabletop safety tool, used as tuning: *lines* never appear, *veils* happen off-screen. Set once, kept for the chat |
+
+Heat, dark themes and letting the dice decide are on by default (2026-11-11): there is no switch for them in the drawer, only the table, where "heat off" or "no dark themes" turns one off and is kept. Being taken out of a contest means one of the world's own outcomes (its kit's `takenOut`, never death), and with the dice deciding the teller shows the scene going the winners' way (`takenOutOf` and `contestNote` in tell-adventure.ts); claimed is one of them only in a world that lists it.
 
 With the settings on, the builder stops removing adult material from the card and lorebook, and the world kit may use it as stakes: taken out can mean claimed, a threat's want can be you, a corruption track can sit on your hero beside the fault. Characters played by the AI can be unwilling when dark themes are on and the world fits it. Mechanically it is the same contest of composure, chase or capture as anything else: code decides who has the upper hand; your model writes what follows.
 

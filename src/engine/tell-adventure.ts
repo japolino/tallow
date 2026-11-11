@@ -13,7 +13,8 @@ import { LUCK_YES, type Luck } from "./luck.js";
 import { STATS, type Lever, type Way } from "./moment.js";
 import { TRY_HOURS } from "./moment.js";
 import { clock, KIND_SAYS, span, STAT_MEANS, STAT_NAME } from "./tell.js";
-import { kitLines } from "./kit.js";
+import { kitLines, type TakenOut, type WorldKit } from "./kit.js";
+import { seededRng } from "./dice.js";
 
 const WAY_DOING: Record<Way, string> = { talk: "talk your way past", sneak: "slip by unseen", force: "go at a thing head on", pay: "pay your way" };
 
@@ -209,8 +210,28 @@ export function roundSaid(r: Round, c: Contest | undefined, kind: ContestKind): 
 /** How a save against the danger in a contest went: said after you throw it. */
 export const dangerSaveSaid = (save: Save): string => `${saveSaid(save)}${save.kept ? "" : " A notch on your dial."}`;
 
+/** What being taken out means, said for the teller: never death, for the rules never kill you in a contest. */
+const TAKEN_MEANS: Record<Exclude<TakenOut, "killed">, string> = {
+  wounded: "beaten and left hurt",
+  captured: "taken prisoner by those who beat them",
+  claimed: "claimed by those who beat them, who take what they want of the player, as the winners do in this world",
+  shamed: "shamed in front of everyone and driven off",
+  exiled: "driven out, and told never to come back",
+};
+
+/**
+ * What being taken out means here: one of the world's own (kit.ts, `takenOut`, already held to the content settings),
+ * drawn by the seed, never death. `follow` (the dice decide, content.ts): the teller shows what follows, the winners'
+ * way; without it, the teller says it and stops, and what follows is the player's.
+ */
+export function takenOutOf(kit: Pick<WorldKit, "takenOut"> | undefined, seed: string, follow: boolean): { means: Exclude<TakenOut, "killed">; follow: boolean } {
+  const pool = (kit?.takenOut ?? []).filter((x): x is Exclude<TakenOut, "killed"> => x !== "killed");
+  const list = pool.length ? pool : (["wounded", "captured"] as const);
+  return { means: list[Math.floor(seededRng(`taken:${seed}`)() * list.length)]!, follow };
+}
+
 /** What the teller must keep true about a round of a contest, added to what it is told of the try. */
-export function contestNote(r: Round, kind: ContestKind, blow: string): string {
+export function contestNote(r: Round, kind: ContestKind, blow: string, taken?: { means: Exclude<TakenOut, "killed">; follow: boolean }): string {
   const facts = [`This is one round of a ${kind === "fight" ? "fight" : kind === "words" ? "war of words" : "struggle"}.`];
   if (r.won) facts.push("With this, the player has won it: the last of what stood against them is beaten, gives way, or runs.");
   else if (r.beaten.length) facts.push(`${cap(r.beaten.map((b) => b.name).join(" and "))} ${r.beaten.length > 1 ? "are" : "is"} beaten, but it is not over.`);
@@ -218,7 +239,8 @@ export function contestNote(r: Round, kind: ContestKind, blow: string): string {
   else facts.push("It does nothing to them.");
   if (!r.won && blow) facts.push(r.landed > 1 ? `What was coming at the player (${blow}) lands hard.` : r.landed ? `What was coming at the player (${blow}) lands.` : `What was coming at the player (${blow}) does not reach them.`);
   if (r.danger?.came) facts.push(`And now ${r.danger.dial.name}: it is here.${r.danger.save ? (r.danger.save.kept ? " The player sees it coming and keeps it off themselves." : " It reaches the player.") : ""}`);
-  if (r.taken) facts.push("The player is taken out: overpowered, cornered or shamed off, but not killed. Do not say what happens after.");
+  if (r.taken && taken?.follow) facts.push(`The player is taken out, and here that means they are ${TAKEN_MEANS[taken.means]}. They lost, and the scene goes the winners' way: show it happening, within what this story allows. They are not killed.`);
+  else if (r.taken) facts.push(`The player is taken out: overpowered, cornered or shamed off, but not killed${taken ? `; here that means they are ${TAKEN_MEANS[taken.means]}` : ""}. Say it, and do not say what happens after.`);
   return facts.join(" ");
 }
 

@@ -95,7 +95,7 @@ export function kitFor(card: CardInfo, modern: boolean | undefined, content: Con
   let id: KitId = kitFromWords(text);
   if (modern === true && (id === "medieval" || id === "high-fantasy")) id = "modern";
   if (modern === false && id === "modern") id = "medieval";
-  const settings = content ?? { heat: false, dark: false, diceDecide: false, lines: [], veils: [] };
+  const settings = content ?? DEFAULT_CONTENT;
   // Hell is an old world of its own: its era, fears and foes, not the generic kingdoms and towers.
   if ((id === "medieval" || id === "high-fantasy") && infernalWords(text)) return checkKit(INFERNAL_KIT, "high-fantasy", settings);
   return stockKit(id, settings);
@@ -219,7 +219,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
   let last: Trip | null = null;
   let stories = 0;
   // What the game allows, which can be changed at the table between stories.
-  let content = o.content;
+  // The settings go with every story, so the narrator is always told what is allowed (content.ts: on unless turned off).
+  let content: ContentSettings = o.content ?? DEFAULT_CONTENT;
 
   /** When a story is over: what became of everyone, an ability and a thing or two if it was won, and the table cleared. */
   const after = async (t0: Trip, hero: Hero, kept0: Kept | null): Promise<Kept> => {

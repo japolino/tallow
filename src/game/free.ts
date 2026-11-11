@@ -72,8 +72,8 @@ export function freeTurnLines(turn: Turn): string[] {
 export async function roam(o: RoamOptions): Promise<Trip> {
   const { table, minds } = o;
   let trip = faceScene(o.trip);
-  const fit = (text: string): string => (trip.adv.content && text ? playable(text, trip.adv.content) : text);
-  const rules = (): string | undefined => (trip.adv.content ? contentRules(trip.adv.content, ["adult"]) : undefined);
+  const fit = (text: string): string => (text ? playable(text, trip.adv.content ?? DEFAULT_CONTENT) : text);
+  const rules = (): string => contentRules(trip.adv.content ?? DEFAULT_CONTENT, ["adult"]);
   const knowNow = (): void =>
     minds.know?.(
       trip.adv.who,

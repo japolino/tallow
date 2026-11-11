@@ -1,6 +1,7 @@
 /**
  * Content settings (docs/MOONSHOT.md, 7.6). The community this lives in is adults only, and adult themes are welcome,
- * so content is a setting per chat, not a filter built into the builder.
+ * so content is a setting per chat, not a filter built into the builder. Heat, dark themes and letting the dice decide
+ * are on unless the player turns them off at the table ("heat off"); there is no switch for them anywhere else.
  *
  * Two rules hold whatever the settings:
  *   1. Nobody read as a child, ever. Every person record gets an age band, checked by code; nobody without a clear
@@ -14,11 +15,11 @@ import { isChild } from "./card/child.js";
 import type { TakenOut } from "./kit.js";
 
 export interface ContentSettings {
-  /** Off: the scene fades at the door. On: explicit, written by the chat's own model and preset. */
+  /** Off: the scene fades at the door. On (the default): explicit, written by the chat's own model and preset. */
   heat: boolean;
-  /** Off: everyone in an intimate scene is willing. On: dubious and unwilling themes, where the world calls for them. */
+  /** Off: everyone in an intimate scene is willing. On (the default): dubious and unwilling themes, where the world calls for them. */
   dark: boolean;
-  /** Off: a die decides whether your hero is caught; what happens next is your choice. On: lose, and the scene goes the world's way. */
+  /** Off: a die decides whether your hero is caught; what happens next is your choice. On (the default): lose, and the scene goes the world's way. */
   diceDecide: boolean;
   /** Never appear. */
   lines: string[];
@@ -26,13 +27,13 @@ export interface ContentSettings {
   veils: string[];
 }
 
-export const DEFAULT_CONTENT: ContentSettings = { heat: false, dark: false, diceDecide: false, lines: [], veils: [] };
+export const DEFAULT_CONTENT: ContentSettings = { heat: true, dark: true, diceDecide: true, lines: [], veils: [] };
 
-/** Settings from whatever was kept, each field checked. */
+/** Settings from whatever was kept, each field checked: on unless it was turned off. */
 export function readContent(raw: unknown): ContentSettings {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string").map((x) => x.trim().toLowerCase().slice(0, 40)).filter(Boolean).slice(0, 20) : []);
-  return { heat: o.heat === true, dark: o.dark === true, diceDecide: o.diceDecide === true, lines: list(o.lines), veils: list(o.veils) };
+  return { heat: o.heat !== false, dark: o.dark !== false, diceDecide: o.diceDecide !== false, lines: list(o.lines), veils: list(o.veils) };
 }
 
 /** The age band of a person in a story. Only the adult bands may be in heat or dark scenes. */
