@@ -1,20 +1,22 @@
 /**
  * Free form (engine/free.ts, game/free.ts): no story, only the world. Theatre of the mind: a place you are at stands
  * before you with every way open and nothing to get past; a die only for what could go wrong; places kept in the
- * narrator's notebook; threads in the air that move on with the clock, and become a story when pulled.
+ * narrator's notebook; threads going on in the world that the narrator knows of and never pushes, which move on with
+ * the clock, quietly, and become a story when taken on.
  */
 import { describe, expect, test } from "bun:test";
 import { COURIER } from "../src/content/adventures.js";
 import { attempt, startTrip, type Trip } from "../src/engine/adventure.js";
 import { rulesHero } from "../src/engine/hero.js";
-import { checkFreeWorld, FREE_TROPE, faceScene, freeAdventure, freeOf, goneTo, hereOf, LOG_MAX, nameStart, NO_DEADLINE, notebookPage, placeIn, placeNamed, remember, riskyWords, START_NAME, stockThreads, threadPulled, threadsRun, type Thread } from "../src/engine/free.js";
+import { checkFreeWorld, FREE_TROPE, faceScene, freeAdventure, freeOf, goneTo, hereOf, LOG_MAX, nameStart, NO_DEADLINE, notebookPage, placeIn, placeNamed, remember, riskyWords, sceneSituation, START_NAME, stockThreads, threadPulled, threadsRun, type Thread } from "../src/engine/free.js";
 import { nameCheck, WAYS } from "../src/engine/moment.js";
 import { worldBegin } from "../src/engine/world.js";
 import type { CardInfo } from "../src/game/card.js";
 import type { Director, Table } from "../src/game/director.js";
-import { freeOpen } from "../src/game/free.js";
+import { calledRead, freeOpen, NARRATOR_LOST } from "../src/game/free.js";
+import { asksForRoll } from "../src/engine/project.js";
 import { standIns } from "../src/game/minds.js";
-import { parseRisk } from "../src/game/prompts.js";
+import { parseRisk, parseTell, ROAM_TELL, roamMessages } from "../src/game/prompts.js";
 import { FREE_OFFER, GOODNIGHT, greeting, sit, wantsFree, type Kept } from "../src/game/session.js";
 
 const MAREN: CardInfo = { name: "Maren", description: "Maren Vell is a ferrywoman of thirty who keeps the crossing at Dunmore." };
@@ -104,6 +106,20 @@ describe("the threads", () => {
     expect(r.lines[1]).toContain("That is over now");
     expect(freeOf(r.trip)!.threads[0]!.done).toBe("gone");
     expect(threadsRun(r.trip).lines).toEqual([]);
+  });
+
+  test("the narrator knows what is going on, as it now stands, and is told never to steer toward it", () => {
+    const thread: Thread = { id: "thread-1", family: "rescue", said: "A woodsman outside the walls has seen something.", words: "woodsman", steps: ["One.", "Two.", "Three."], step: 0, every: 6, since: 19 };
+    let t = begun("f6", [thread]);
+    const said = (x: Trip) => x.facing!.stop.situation ?? "";
+    expect(said(t)).toContain("A woodsman outside the walls has seen something.");
+    expect(said(t)).toContain("never steer them towards it");
+    expect(said(t)).toContain("it is there to be found");
+    t = threadsRun({ ...t, sheet: { ...t.sheet, hour: 25 } }).trip;
+    expect(said(t)).toContain("Lately: One.");
+    t = threadsRun({ ...t, sheet: { ...t.sheet, hour: 40 } }).trip;
+    expect(said(t)).toContain("Over now: Three.");
+    expect(sceneSituation(freeOf(t)!)).toBe(said(t));
   });
 
   test("a thread is pulled by its number or by its words with a will to act, not by talk about it", () => {
@@ -269,7 +285,8 @@ describe("a sitting in free form", () => {
     await sit({ card: MAREN, seed: "free-night", table: tableFor(lines, log, d), minds, ask: null, started: (x) => (d.now = x), keep: (k) => (kept = k), save: (t) => (saved = t), leave: () => (left = true) });
     expect(log).toContain(freeOpen("Maren's world"));
     expect(log).not.toContain("[deal]");
-    expect(log.some((l) => l.startsWith("There are two things in the air."))).toBe(true);
+    // Nothing going on in the world is put to the player: no list of threads, no word reaching them.
+    expect(log.some((l) => l.includes("in the air") || l.startsWith("Word reaches you"))).toBe(false);
     expect(log.some((l) => l.startsWith("[die]"))).toBe(true);
     expect(log.filter((l) => l.startsWith("[die]")).length).toBe(1);
     expect(log.some((l) => l.startsWith("[page] The narrator's notebook") && l.includes("You are at the docks"))).toBe(true);
@@ -290,6 +307,48 @@ describe("a sitting in free form", () => {
     expect(log).toContain("[deal]");
     expect(log.some((l) => l.startsWith("And you are back at"))).toBe(true);
     expect(saved!.adv.free!.threads[0]!.done).toBe("played");
+  });
+
+  test("a narrator that gives no answer says so, lets no time pass, and the line is kept for the next answer", async () => {
+    const log: string[] = [];
+    const d = { now: null as Director | null };
+    const long = `I lean on the bar and tell the keeper about the sea, ${"the long grey swell of it, ".repeat(30)}and smile at her.`;
+    const lines = ["no story, just let me roam", "I am a courier named Tam", long, "I ask her what she thinks", "done for tonight"];
+    const seen: string[] = [];
+    let hour = -1;
+    const roam = async (line: string, m: { stop: { situation?: string } }): Promise<string> => {
+      if (line === long) return "";
+      if (line) seen.push(`${line} || ${m.stop.situation ?? ""}`);
+      return "She listens, and nods slowly.";
+    };
+    const quiet = { ...minds, risky: async () => false, roam, read: async () => "none" as const };
+    await sit({ card: MAREN, seed: "free-lost", table: { ...tableFor(lines, log, d), clock: (h: number) => void (hour = h) }, minds: quiet, ask: null, started: (x) => (d.now = x) });
+    expect(log).toContain(NARRATOR_LOST);
+    expect(log.some((l) => /nothing comes of it/i.test(l))).toBe(false);
+    const next = seen.find((s) => s.startsWith("I ask her what she thinks"))!;
+    expect(next).toContain("I lean on the bar and tell the keeper about the sea");
+    expect(next).toContain("(not yet answered)");
+    expect(hour).toBeGreaterThan(0);
+  });
+
+  test("a line the clock takes (a wait) is still answered by the narrator, all of it", async () => {
+    const log: string[] = [];
+    const d = { now: null as Director | null };
+    const line = "I pour the keeper a cup of my own wine, tell her it is from the hills where I was born, and wait.";
+    const notes: string[] = [];
+    const roam = async (l: string, _m: unknown, note?: string): Promise<string> => (l === line && notes.push(note ?? ""), "She tastes it, and her face softens.");
+    const quiet = { ...minds, risky: async () => false, roam, read: async () => "none" as const };
+    await sit({ card: MAREN, seed: "free-wait", table: tableFor(["no story, just let me roam", "I am a courier named Tam", line, "done for tonight"], log, d), minds: quiet, ask: null, started: (x) => (d.now = x) });
+    expect(notes.length).toBe(1);
+    expect(notes[0]).toContain("Answer the rest of what they wrote");
+    expect(log).toContain("She tastes it, and her face softens.");
+  });
+
+  test("the free narrator reads a long line whole, and may answer it at length", () => {
+    const line = `I ${"say something kind and careful, ".repeat(40)}and smile.`;
+    const user = roamMessages(line, begun().facing!.moment)[1]!.content;
+    expect(user).toContain("and smile.");
+    expect(parseTell("A sentence that runs on. ".repeat(30), ROAM_TELL)!.length).toBeGreaterThan(480);
   });
 
   test("with a model, the night begins at a place written for the world, and a quiet ask of someone is thrown for", async () => {
@@ -317,5 +376,18 @@ describe("a sitting in free form", () => {
     expect(log.some((l) => l.includes("there was no story"))).toBe(true);
     expect(log.some((l) => l.startsWith("We were in the middle of things, at the old mill."))).toBe(true);
     expect(log).toContain(GOODNIGHT[0]!);
+  });
+});
+
+describe("a check the player calls for", () => {
+  test("is thrown, on noticing when it is about being watched, and named in the player's own words", () => {
+    const line = "I want to make a check to know if somebody is watching me";
+    expect(asksForRoll(line)).toBe(true);
+    expect(asksForRoll("can I roll for it?")).toBe(true);
+    expect(asksForRoll("I make a perception check")).toBe(true);
+    expect(asksForRoll("I check the door")).toBe(false);
+    const r = calledRead(line);
+    expect(r.stat).toBe("sense");
+    expect(r.attempt).toBe("know if somebody is watching you");
   });
 });

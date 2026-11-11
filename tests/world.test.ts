@@ -137,6 +137,9 @@ describe("projects", () => {
     expect(goalNamed("I want to open a shop that sells English breakfasts.")).toBe("open a shop that sells English breakfasts");
     expect(goalNamed("Let's train an army of ants")).toBe("train an army of ants");
     expect(goalNamed("I open the door")).toBeNull();
+    // Wanting something now is not a venture.
+    expect(goalNamed("I want to make a check to know if somebody is watching me")).toBeNull();
+    expect(goalNamed("I want to find out who is giggling in the trees")).toBeNull();
   });
 
   test("it pays off as something the other rules use", () => {

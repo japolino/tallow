@@ -49,6 +49,8 @@ export interface Kept {
 
 /** How long a model is given to write a big bad before the stock one is used. */
 const FRONT_MS = 30000;
+/** The free world is written while the player says who they are, so it can take longer: a slow model still makes it. */
+const FREE_WORLD_MS = 60000;
 
 /** A big bad for a campaign: written by a model from the card's world and checked by code, or the stock one. */
 export async function writeFront(ask: Ask | null, world: string, stock: Front, asked = ""): Promise<Front> {
@@ -68,7 +70,7 @@ export async function writeFront(ask: Ask | null, world: string, stock: Front, a
 export async function writeFreeWorld(ask: Ask | null, world: string, who: string, seed: string, hour: number): Promise<FreeDraft> {
   if (!ask) return checkFreeWorld(null, seed, hour);
   try {
-    const text = await Promise.race([ask(freeWorldMessages(world, who), "builder"), new Promise<string>((_, no) => setTimeout(() => no(new Error("slow")), FRONT_MS))]);
+    const text = await Promise.race([ask(freeWorldMessages(world, who), "builder"), new Promise<string>((_, no) => setTimeout(() => no(new Error("slow")), FREE_WORLD_MS))]);
     return checkFreeWorld(firstJson(text), seed, hour);
   } catch {
     return checkFreeWorld(null, seed, hour);

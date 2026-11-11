@@ -288,6 +288,39 @@ export function worldLineFree(t: Trip, line: string, m: Moment): Heard {
 }
 const FREE_ROWS = ["goal", "work", "time"];
 
+/**
+ * A line a model has already said is a goal, work at one, or a wait (game/route.ts): the world does it, whatever the
+ * words. A goal is named from the line when the words do not name it; a wait with no length is an hour.
+ */
+export function worldLineRouted(t: Trip, line: string, m: Moment, kind: "goal" | "work" | "wait", goalId?: string): Told & { hours?: number } {
+  const seed = `${t.seed}:${t.sheet.hour}:${line.length}`;
+  if (kind === "goal") {
+    const goal = goalNamed(line) ?? goalOfLine(line);
+    const p = startProject(`project-${(t.projects?.length ?? 0) + 1}`, goal, undefined, "person");
+    return { trip: { ...t, projects: [...(t.projects ?? []), p] }, lines: [`You set yourself a goal. ${projectSaid(p)} Spend time on it when you like: say you work on it, and for how long.`], free: true };
+  }
+  if (kind === "work") {
+    const p = (t.projects ?? []).find((x) => x.id === goalId && x.filled < x.segments) ?? workedOn(t, line, m.stop.id);
+    if (p) {
+      const w = workIt(t, line, m, p, seed);
+      return { ...w, trip: hourKept(w.trip) };
+    }
+  }
+  const spent = timeSpent(t, line, m, seed);
+  if (spent) return { ...spent, trip: hourKept(spent.trip) };
+  return { trip: hourKept(clockTo(t, t.sheet.hour + 1)), lines: ["You wait an hour."], hours: 1 };
+}
+
+/** A goal in the line's own words, when the usual phrasing is not there: "I've decided I'm going to build a tavern". */
+function goalOfLine(line: string): string {
+  const s = line
+    .replace(/^.*?\b(?:want to|wanna|going to|gonna|plan to|mean to|intend to|decided to|would like to|'d like to|let'?s|will)\s+/i, "")
+    .split(/[.!?]/)[0]!
+    .replace(/\s+/g, " ")
+    .trim();
+  return (s || line.trim()).slice(0, 140);
+}
+
 /** Whether any row of the world may take a line the reader took for a try. */
 export function worldFirst(t: Trip, line: string): boolean {
   return ROWS.some((r) => r.first(t, line));

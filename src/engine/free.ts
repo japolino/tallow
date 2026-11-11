@@ -7,9 +7,11 @@
  * as it was, a fresh moment, so each risky thing is its own (the die, your stats, the prices and the clock are the
  * same as ever). Your goals, waits and work are the world's rows (world.ts), as in a story.
  *
- * What is new is the threads: two or three things in the air, each on a clock of its own. Leave one, and every few
- * hours it takes a step without you; at its last step it is gone. Pull on one, and it becomes a story of its kind
- * (content/tropes.ts), played out on its own road, after which you are back where you were.
+ * What is new is the threads: two things going on in the world, each on a clock of its own. They are never put to you:
+ * the narrator knows of them, and brings one in only where it fits what you do, and they are in the notebook for
+ * whoever looks. Left alone, one moves on every few hours, quietly; at its last step it is over. Go after one, and it is
+ * there to be found; say you take it on, and it can become a story of its kind (content/tropes.ts), played out on its
+ * own road, after which you are back where you were.
  *
  * Everything here is code: nothing a model says moves a clock or opens a thread.
  */
@@ -188,13 +190,32 @@ export function nameStart(t: Trip, name: string): Trip {
 /** The place you are at. */
 export const hereOf = (w: FreeWorld): FreePlace => w.places.find((p) => p.id === w.here) ?? w.places[0]!;
 
-/** What the narrator has in mind at a place: what it is like, and what has just happened there. */
+/**
+ * What is going on in the world, for the narrator: each thread as it now stands, or that it is over. Background, never
+ * a push: the narrator brings one in only where it fits what the player does.
+ */
+export function goingOn(w: FreeWorld): string {
+  const items = w.threads
+    .filter((x) => x.done !== "played")
+    .map((x) => (x.done === "gone" ? `Over now: ${x.steps[x.steps.length - 1] ?? x.said}` : `${x.said}${x.step ? ` Lately: ${x.steps[x.step - 1]}` : ""}`));
+  return items.length ? ` Going on in this world, which the narrator knows of: ${items.join(" / ")} Bring one in only where it fits what the player does, and never steer them towards it. If they go after someone or something in it, it is there to be found.` : "";
+}
+
+/** What the narrator has in mind at a place: what it is like, what has just happened there, and what is going on. */
 export function sceneSituation(w: FreeWorld): string {
   const p = hereOf(w);
   const lately = w.log.length ? ` What has just happened: ${w.log.join(" ")}` : "";
   // The place first, so a prompt that cuts the situation short still has it; the world it is in after.
   const world = w.setting ? ` The world it is in: ${w.setting}` : "";
-  return `Here: ${p.said} Nothing here stands in the player's way: they are free to do as they like, and only something that could go wrong is a try.${lately}${world}`;
+  return `Here: ${p.said} Nothing here stands in the player's way: they are free to do as they like, and only something that could go wrong is a try.${lately}${goingOn(w)}${world}`;
+}
+
+/** The place you are at, standing as the free world now is: its situation told afresh, nothing else changed. */
+export function resituate(t: Trip): Trip {
+  const w = freeOf(t);
+  if (!w || !t.facing) return t;
+  const situation = sceneSituation(w);
+  return { ...t, facing: { ...t.facing, stop: { ...t.facing.stop, situation }, moment: { ...t.facing.moment, stop: { ...t.facing.moment.stop, situation } } } };
 }
 
 /** The place you are at, as a stop: every way open at it, none of them hard, and nothing to get past. */
@@ -320,10 +341,9 @@ export function remember(t: Trip, line: string, said: string): Trip {
     const x = s.replace(/\s+/g, " ").trim();
     return x.length > n ? `${x.slice(0, n).replace(/\s+\S*$/, "")}…` : x;
   };
-  const entry = `The player: ${clip(line, 140)}${said ? ` Then: ${clip(said, 180)}` : ""}`;
+  const entry = `The player: ${clip(line, 300)}${said ? ` Then: ${clip(said, 240)}` : " (not yet answered)"}`;
   const log = [...w.log, entry].slice(-LOG_MAX);
-  const next = withFree(t, { ...w, log });
-  return next.facing ? { ...next, facing: { ...next.facing, stop: { ...next.facing.stop, situation: sceneSituation({ ...w, log }) }, moment: { ...next.facing.moment, stop: { ...next.facing.moment.stop, situation: sceneSituation({ ...w, log }) } } } } : next;
+  return resituate(withFree(t, { ...w, log }));
 }
 
 /* ------------------------------ the threads ------------------------------ */
@@ -332,8 +352,8 @@ export function remember(t: Trip, line: string, said: string): Trip {
 export const openThreads = (w: FreeWorld): Thread[] => w.threads.filter((x) => !x.done);
 
 /**
- * The clock has moved on: every thread left alone takes the steps its hours allow, said as word reaching you; at its
- * last step it is gone.
+ * The clock has moved on: every thread left alone takes the steps its hours allow; at its last step it is gone. The
+ * lines say what happened, for anything that wants them; free form does not say them, for the narrator knows (goingOn).
  */
 export function threadsRun(t: Trip): { trip: Trip; lines: string[] } {
   const w = freeOf(t);
@@ -350,7 +370,7 @@ export function threadsRun(t: Trip): { trip: Trip; lines: string[] } {
     }
     return th;
   });
-  return { trip: withFree(t, { ...w, threads }), lines };
+  return { trip: resituate(withFree(t, { ...w, threads })), lines };
 }
 
 const PULL = /\b(look into|looking into|follow(?:ing)? up|take (?:it|this|that|the job) on|take on|get involved|help (?:with|them|her|him)|deal with|go after|find out|track|chase|investigate|do something about|i'?ll (?:do|take) it|pull on)\b/i;
@@ -399,7 +419,7 @@ export function notebookPage(t: Trip): { heading: string; his: string[] } {
   const threads = w.threads.map((x, i) => `${i + 1}. ${x.said}${x.done === "played" ? " (played out)" : x.done === "gone" ? " (gone by)" : x.step ? ` (it has moved ${x.step === 1 ? "once" : `${x.step} times`})` : ""}`);
   return {
     heading: "The narrator's notebook",
-    his: [`You are at ${here.name}. It is ${hourSaid(t.sheet.hour)}.`, ...(others.length ? [`Places you know: ${others.join(", ")}.`] : []), ...(threads.length ? ["In the air:", ...threads] : [])],
+    his: [`You are at ${here.name}. It is ${hourSaid(t.sheet.hour)}.`, ...(others.length ? [`Places you know: ${others.join(", ")}.`] : []), ...(threads.length ? ["Going on in the world:", ...threads] : [])],
   };
 }
 

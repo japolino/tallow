@@ -4,6 +4,7 @@
  * is no model: a list of plain words for the reading, fixed lines for the telling, the things in the scene for an
  * answer, and a delay that can be made long on purpose so the table's waits can be looked at.
  */
+import type { RouteContext, Routed } from "./route.js";
 import type { Ability } from "../engine/abilities.js";
 import type { RoadStop, Trip, Use } from "../engine/adventure.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
@@ -68,6 +69,12 @@ export interface Minds {
    * there is one, else the reader model). Null when it cannot be told, and the rules (riskyWords) answer.
    */
   risky?(line: string, m: Moment): Promise<boolean | null>;
+  /**
+   * Free form: what kind of line it is (game/route.ts): said, a try, going somewhere, a rest, a wait, a goal, work at
+   * one, taking on a matter, the notebook, or stopping. The Decision model, else the reader model; null when neither
+   * is there or sure, and the word rules decide.
+   */
+  route?(line: string, ctx: RouteContext): Promise<Routed | null>;
 }
 
 /**

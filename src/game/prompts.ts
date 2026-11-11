@@ -175,12 +175,12 @@ export function tellMessages(o: Outcome, stop: RoadStop, note: string, more: boo
 }
 
 /** A teller's answer, made fit to be said: plain, short, one paragraph. Null if there is nothing usable. */
-export function parseTell(text: string): string | null {
+export function parseTell(text: string, max = 480): string | null {
   let s = text.replace(/```[\s\S]*?```/g, " ").replace(/[*_#`]+/g, "").replace(/\s+/g, " ").trim();
   s = s.replace(/^(?:narrator|the narrator)\s*:\s*/i, "").replace(/^["“](.*)["”]$/, "$1").trim();
   if (s.length < 8) return null;
-  if (s.length > 480) {
-    const cut = s.slice(0, 480);
+  if (s.length > max) {
+    const cut = s.slice(0, max);
     const end = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
     s = end > 80 ? cut.slice(0, end + 1) : `${cut.trim()}…`;
   }
@@ -225,10 +225,16 @@ export function answerMessages(line: string, m: Moment, ctx: TellContext = {}, n
  * Free form (engine/free.ts): the narrator says what happens when the player does something ordinary, or what a place
  * is like. It may add the small things and people a place has; it never settles something risky (code throws for that).
  */
+/** How much of a player's line the free narrator reads, and how long its answer may run: a long line is answered in full. */
+export const ROAM_LINE = 2000;
+export const ROAM_TELL = 1000;
+
 export function roamMessages(line: string, m: Moment, ctx: TellContext = {}, note?: string): Message[] {
   const system = [
     "You are the narrator of a tabletop roleplaying game, a quiet voice across a table in a dark room. There is no set story tonight: the player is free in the world and does as they like.",
-    "Say what happens next, in one to four short sentences, at most 80 words, in the second person and the present tense. Plain words, said aloud. No numbers, no dice, no game words, no markdown.",
+    "Say what happens next, in the second person and the present tense: two to six sentences, at most 140 words, and more of it when they have written more. Plain words, said aloud. No numbers, no dice, no game words, no markdown.",
+    "Answer what the player did, first and directly: if they speak to someone, that person answers them; if they go to someone or after something, they find it, or find out where it is. Never steer them elsewhere or toward what you would rather they did: the night goes where they take it.",
+    "Take up what they wrote, all of it: what they say is heard and answered in kind, what they do is seen and has its effect, the details they give matter. Never pass it over, and never say that nothing comes of it.",
     "Keep to what the player wrote: do not act or speak for them beyond it, and do not decide their feelings. You may bring in what belongs in the place: people going about their business, small details, someone who answers them, a thing they could use. The people in it have wants of their own and may say no. Leave the scene open, ending on something the player can answer or act on.",
     "If what they do is risky or opposed, show them about to try it, not how it turns out: that is for the die. Never kill, wound or rob the player in your words. Nothing sexual or explicit.",
   ].join("\n");
@@ -237,7 +243,7 @@ export function roamMessages(line: string, m: Moment, ctx: TellContext = {}, not
     `Where they are, ${m.stop.name}: ${m.stop.situation}`,
     ctx.who ? `The player: ${ctx.who}` : "",
     ctx.with?.length ? `With them: ${ctx.with.join("; ")}.` : "",
-    line ? `They wrote: "${line.replace(/"/g, "'").slice(0, 400)}"` : "",
+    line ? `They wrote: "${line.replace(/"/g, "'").slice(0, ROAM_LINE)}"` : "",
     note ? `What must be true, and must be shown: ${note}` : "",
   ]
     .filter(Boolean)
@@ -249,7 +255,7 @@ export function roamMessages(line: string, m: Moment, ctx: TellContext = {}, not
 }
 
 /**
- * A night of free form (engine/free.ts, checkFreeWorld): the place it begins at and two things in the air, written for
+ * A night of free form (engine/free.ts, checkFreeWorld): the place it begins at and two things going on in it, written for
  * the card's world. Code checks it, keeps the clocks, and makes up whatever does not check from its stock.
  */
 export function freeWorldMessages(world: string, who = ""): Message[] {
@@ -257,7 +263,7 @@ export function freeWorldMessages(world: string, who = ""): Message[] {
     "You set up a night of free play in a tabletop roleplaying game: no set story, only the world, and the player does as they like in it.",
     'Answer with JSON only: {"place": {"name": "...", "said": "..."}, "threads": [{"kind": "...", "said": "...", "words": ["..."], "steps": ["...", "...", "..."]}, {...}]}.',
     '"place": where the night begins, somewhere that belongs in this world and has people about. "name": what it is called, at most six words, as you would say it aloud ("the Gilded Eel", "Mother Sarn\'s kitchen", "the night market under the bridge"). "said": what it is like there, in one or two sentences.',
-    '"threads": two things in the air in this world, of two different kinds, each something the player might hear of tonight. "kind" is one of: rescue (someone to be saved), heist (something to be taken), mystery (something to be found out), journey (somewhere to get to, or someone to get out), hunt (someone or something to be tracked down), survival (something to be lived through). "said": the thing as talk going round, in one sentence, with no names the player has to know. "words": three to six words a player would use about it. "steps": three short sentences, what happens if it is left alone, one step at a time; the third is the end of it, and then it is over.',
+    '"threads": two things going on in this world, of two different kinds, each something the player might come across tonight if they go about it. The player is never told of them: they are there to be found. "kind" is one of: rescue (someone to be saved), heist (something to be taken), mystery (something to be found out), journey (somewhere to get to, or someone to get out), hunt (someone or something to be tracked down), survival (something to be lived through). "said": the thing as talk going round, in one sentence, with no names the player has to know. "words": three to six words a player would use about it. "steps": three short sentences, what happens if it is left alone, one step at a time; the third is the end of it, and then it is over.',
     "The first thread is something for tonight; the second can wait a day or so. Plain words, no markdown. Everything must fit the world it is written for.",
   ].join("\n");
   const user = [world ? `The world:\n${world.slice(0, 1400)}` : "A world of your choosing.", who ? `The player: ${who.slice(0, 300)}` : ""].filter(Boolean).join("\n\n");

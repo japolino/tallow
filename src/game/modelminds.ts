@@ -7,13 +7,14 @@
  * Reading a line goes to the Decision model first: a typed answer in about a second, where an ordinary model takes
  * several. Only when it is not sure which way the line goes is the reader model asked, and then the rules.
  */
+import { parseRoute, routeFromAnswers, routeMessages, routeQuestions } from "./route.js";
 import type { Ability } from "../engine/abilities.js";
 import { rulesHero, type Hero } from "../engine/hero.js";
 import { RISK_OPTIONS, RISK_QUESTION } from "../engine/free.js";
 import type { Minds } from "./minds.js";
 import { standIns } from "./minds.js";
 import { pickFromAnswers, pickQuestions, readFromAnswers, readQuestions, type Decide } from "./decisions.js";
-import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, readMessages, riskMessages, tellMessages, type Ask, type TellContext } from "./prompts.js";
+import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, ROAM_TELL, readMessages, riskMessages, tellMessages, type Ask, type TellContext } from "./prompts.js";
 
 export interface ModelMindsOptions {
   /** Give up on a model after this long and use the stand-in (ms). */
@@ -97,14 +98,31 @@ export function modelMinds(ask0: Ask, o: ModelMindsOptions = {}): Minds & { hero
       return plain.answer(line, m, note);
     },
     async roam(line, m, note) {
-      try {
-        const s = parseTell(await within(ask(roamMessages(line, m, { ...known, ...o.context?.() }, note), "teller"), ms));
-        if (s) return s;
-        fell("roam", "empty answer");
-      } catch (e) {
-        fell("roam", e);
+      // Free play has nothing to fall back on but the narrator, so a failed answer is asked for once more.
+      for (let i = 0; i < 2; i++) {
+        try {
+          const s = parseTell(await within(ask(roamMessages(line, m, { ...known, ...o.context?.() }, note), "teller"), ms), ROAM_TELL);
+          if (s) return s;
+          fell("roam", "empty answer");
+        } catch (e) {
+          fell("roam", e);
+        }
       }
       return "";
+    },
+    async route(line, ctx) {
+      if (o.decide) {
+        const got = routeFromAnswers(await decided("route", routeQuestions(line, ctx)), ctx);
+        if (got) return got;
+      }
+      try {
+        const r = parseRoute(await within(ask(routeMessages(line, ctx), "reader"), ms), ctx);
+        if (r) return r;
+        fell("route", "answer did not check");
+      } catch (e) {
+        fell("route", e);
+      }
+      return null;
     },
     async risky(line, m) {
       if (o.decide) {

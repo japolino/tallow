@@ -129,10 +129,21 @@ export function workOn(p: Project, tier: Tier, need: number, seed: string): { pr
 }
 
 /** Whether a line names a goal of your own ("I want to open a shop...", "let's start a business..."). */
+/**
+ * Words that say a line wants something now, not a venture: a check or a roll, finding something out, noticing. "I want
+ * to make a check to know if somebody is watching me" is a try, not a goal.
+ */
+const NOT_A_GOAL = /\b(check|roll|rolls|dice|die|throw|test|whether|see if|know if|tell if|find out|figure out|work out|notice|spot|sense|watching|listen|hear|look)\b/i;
+
 export function goalNamed(line: string): string | null {
+  if (NOT_A_GOAL.test(line) || asksForRoll(line)) return null;
   const m = /\b(?:i|we)\s+(?:want|wanna|mean|plan|intend|would like|'d like)\s+to\s+(open|start|build|found|train|breed|raise|run|set up|make|become|find|hunt for|search for|dig for)\s+(.{4,140})/i.exec(line) ?? /\blet'?s\s+(open|start|build|found|train|breed|raise|run|set up|search for|hunt for|dig for)\s+(.{4,140})/i.exec(line);
   return m ? `${m[1]} ${m[2]!.replace(/[.!]+$/, "")}`.trim() : null;
 }
+
+/** The player asks for the die themselves: "I make a perception check", "can I roll for it", "let me roll". */
+export const ASKS_ROLL = /\b(?:make|do|roll|take|call for|throw|want|try)\s+(?:a|an|the|for a|for an)?\s*(?:[a-z]+\s+)?(?:check|roll|test|save|saving throw)\b|\broll(?:ing)?\s+(?:the\s+)?(?:die|dice|for)\b|\b(?:can|could|may|let)\s+(?:i|me|us|we)\s+roll\b/i;
+export const asksForRoll = (line: string): boolean => ASKS_ROLL.test(line);
 
 /** The clock in words, for the narrator: "the breakfast shop: 2 of 6, still to do: find eggs and bacon". */
 export function projectSaid(p: Project): string {
