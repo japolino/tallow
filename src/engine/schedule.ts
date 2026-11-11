@@ -95,7 +95,8 @@ export function runClock(s: Schedule, from: number, to: number): Ran {
     if (canHappen(sch, a)) {
       sch = { ...sch, happened: [...sch.happened, { id: a.id, at: t }] };
       events.push({ a, at: t, known: sch.known.includes(a.id) });
-    } else if (a.otherwise && !sch.stopped.includes(a.id)) {
+    } else if (a.otherwise && !sch.stopped.includes(a.id) && (a.needs ?? []).some((n) => sch.stopped.includes(n))) {
+      // Only a need that was stopped sends on to the branch: one that has simply not happened yet does not.
       const alt = sch.appointments.find((x) => x.id === a.otherwise);
       if (alt && !done(sch, alt.id) && !sch.stopped.includes(alt.id)) {
         sch = { ...sch, happened: [...sch.happened, { id: alt.id, at: t }] };
@@ -121,13 +122,26 @@ export function notches(s: Schedule, now: number): { id: string; at: number }[] 
     .sort((x, y) => x.at - y.at);
 }
 
-/** What is going on at a place at an hour: anything that has started there and not yet finished. */
+/**
+ * What is going on at a place at an hour: anything that has started there and not yet finished. A one-off only if it
+ * really happened (a branch from the hour it happened in place of another); a routine every day.
+ */
 export function goingOn(s: Schedule, where: string, hour: number): Appointment[] {
   return s.appointments.filter((a) => {
     if (a.where !== where || s.stopped.includes(a.id)) return false;
-    const t = a.daily ? nextAt(a, hour - (a.lasts ?? 0.25)) : a.at;
-    return t <= hour && hour <= t + (a.lasts ?? 0.25) && canHappen(s, a);
+    if (a.daily) {
+      const t = nextAt(a, hour - (a.lasts ?? 0.25));
+      return t <= hour && hour <= t + (a.lasts ?? 0.25) && canHappen(s, a);
+    }
+    const ran = s.happened.find((h) => h.id === a.id);
+    return !!ran && ran.at <= hour && hour <= ran.at + (a.lasts ?? 0.25);
   });
+}
+
+/** What the other side meant to do at a place and has not yet done: stopped, once you are past that place. */
+export function stoppedAt(s: Schedule, where: string): { schedule: Schedule; stopped: Appointment[] } {
+  const gone = s.appointments.filter((a) => a.where === where && !a.daily && !done(s, a.id) && !s.stopped.includes(a.id));
+  return { schedule: gone.reduce((x, a) => stop(x, a.id), s), stopped: gone };
 }
 
 // ---- Things to do with time (5.2) ----
@@ -149,8 +163,10 @@ const NUMBERS: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, fiv
 /** The hour a line names ("until midnight", "till 2", "near eleven"), on or after `now`. */
 export function hourNamed(line: string, now: number): number | null {
   const l = line.toLowerCase();
-  for (const [w, h] of Object.entries(HOUR_WORDS)) if (new RegExp(`\\b${w}\\b`).test(l)) return later(h, now);
-  const m = /\b(?:until|till|til|to|near|around|about|by|at)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?::(\d{2}))?\s*(am|pm|o'clock)?/.exec(l);
+  // An hour word before a noun names a thing, not the hour: "wait for the morning guard to leave" waits for the guard.
+  const OK_AFTER = "comes|came|breaks|falls|and|then|or|when|before|to|at|if|so|while|i|we|here|there|for|in|by|on|tomorrow|tonight";
+  for (const [w, h] of Object.entries(HOUR_WORDS)) if (new RegExp(`\\b${w}\\b(?!\\s+(?!(?:${OK_AFTER})\\b)[a-z]+)`).test(l)) return later(h, now);
+  const m = /\b(?:until|till|til|to|near|around|about|by|at|rings?|strikes?|chimes?|tolls?)\s+(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?::(\d{2}))?\s*(am|pm|o'clock)?/.exec(l);
   if (!m) return null;
   let h = Number.isNaN(Number(m[1])) ? NUMBERS[m[1]!]! : Number(m[1]);
   if (m[3] === "pm" && h < 12) h += 12;

@@ -10,8 +10,8 @@
 import { budgetAt, capAt, fitAbility, fitHand, readAbility, readCalling, STOCK_CALLINGS, VERB_PRICE, VERB_SAYS, VERBS, type Ability } from "../engine/abilities.js";
 import { companionOf, placeName, type RoadStop, type Trip, type Use } from "../engine/adventure.js";
 import { abilityRule, endSaid } from "../engine/tell-adventure.js";
-import { CLASSES, makeHero, type Hero } from "../engine/hero.js";
-import { canUse, GRADES, leverLeft, ALL_STATS, STATS, WAYS, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
+import { CLASSES, makeHero, STAT_BUDGET, type Hero } from "../engine/hero.js";
+import { canUse, GRADES, leverLeft, ALL_STATS, STAT_MAX, STATS, WAYS, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
 import { SETUP_VERBS } from "../meaning/read.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
 import { STAT_MEANS } from "../engine/tell.js";
@@ -374,7 +374,7 @@ export function heroMessages(line: string, world = ""): Message[] {
     "A player at a tabletop game says who they are, in their own words. You read it into a character for the rules, and write what they can do.",
     "The kinds of person are:",
     ...CLASSES.map((c) => `- ${c.id}: ${c.name}, ${c.is} (starting stats ${STATS.map((s) => `${s} ${c.stats[s]}`).join(", ")})`),
-    "Pick the kind closest to what they wrote. You may move the stats to fit them better: each stat is 0 to 4, and the four always add up to exactly 6.",
+    `Pick the kind closest to what they wrote. You may move the stats to fit them better: each stat is 0 to ${STAT_MAX}, and the six always add up to exactly ${STAT_BUDGET}.`,
     "Then write their calling (what they are, in this world, in two or three words, and a line), the two stats it leans on, a one-word name for their store of strength (heat, nerve, breath, favours: something that fits them), and one fault that can make trouble for them, written to follow the word you (for example: cannot leave a debt unpaid; will not back down once a blade is out).",
     `And write three abilities: one trick, and two others. Together the two others may cost at most ${budgetAt(1)}, and neither more than ${capAt(1)}.`,
     "The verbs an ability can have:",
@@ -460,7 +460,7 @@ export function parseOffer(text: string, have: readonly Ability[], room: number,
 export const abilityNote = (a: Ability, store?: string): string => `${a.name}: ${a.looks.replace(/[.]+$/, "")}. In the rules: ${abilityRule(a, store)}`;
 
 /** A big bad for a campaign, from the card's world (campaign.ts, checkFront): one long threat across many stories. */
-export function frontMessages(world: string): Message[] {
+export function frontMessages(world: string, asked = ""): Message[] {
   const system = [
     "You write the big bad of a tabletop campaign: one long threat across many stories, after Apocalypse World's fronts.",
     'Answer with JSON only: {"name": "the lich under the abbey", "wants": "to rise as the undying king on the longest night", "steps": [six short steps it takes in plain sight, the last one the end], "hands": [two to four lieutenants or cults it sends, one a story], "keys": [three things that would undo it: where its heart is kept, its true name, the rite that unbinds it]}.',
@@ -468,6 +468,6 @@ export function frontMessages(world: string): Message[] {
   ].join("\n");
   return [
     { role: "system", content: system },
-    { role: "user", content: world ? `The world:\n${world}` : "A world of your choosing, old and dark." },
+    { role: "user", content: [world ? `The world:\n${world}` : "A world of your choosing, old and dark.", asked ? `What the player asked for (the big bad is theirs to name, if they named one):\n${asked.slice(0, 400)}` : ""].filter(Boolean).join("\n\n") },
   ];
 }

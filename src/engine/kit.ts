@@ -220,6 +220,31 @@ export function kitFromWords(text: string): KitId {
   return best;
 }
 
+/** Words of Hell and its kind: a card set among devils is not a fantasy of kingdoms and towers. */
+const INFERNAL = /\b(hell|hells|infernal|inferno|demons?|demonic|devils?|diabolic\w*|damned|damnation|brimstone|abyss\w*|hellfire|hellish|fallen angels?|archdevils?|archdemons?|imps?|pacts?|souls?|underworld|lucifer|satan\w*|beelzebub|asmodeus|mephisto\w*|circles? of hell)\b/gi;
+
+/**
+ * Whether a card is set in Hell or among devils: two or more of Hell's words, said more than the words of a plain
+ * fantasy or an old world. A card that only mentions a demon or a soul once is not.
+ */
+export function infernalWords(text: string): boolean {
+  const hits = text.match(INFERNAL) ?? [];
+  const kinds = new Set(hits.map((w) => w.toLowerCase().replace(/s$/, ""))).size;
+  const count = (id: KitId) => (text.match(new RegExp(KIT_WORDS[id].source, "gi")) ?? []).length;
+  return kinds >= 2 && hits.length * 1.5 > Math.max(count("high-fantasy"), count("medieval"));
+}
+
+/** What Hell changes in an old world's kit: the era, its fears, what hurts its foes, what they want. Checked like a model's kit. */
+export const INFERNAL_KIT = {
+  name: "Brimstone and broken pacts",
+  magic: "high",
+  era: "the pits, courts and burning roads of Hell; chains, brimstone and pacts",
+  fears: "devils, damnation, a broken pact, a name given away",
+  power: "Faith",
+  hurts: ["holy", "salt", "iron", "true name", "light"],
+  wants: ["your soul", "your name", "a pact signed"],
+} as const;
+
 const str = (v: unknown, max: number): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : "");
 const pickList = <T extends string>(v: unknown, list: readonly T[], max = 6): T[] =>
   Array.isArray(v) ? [...new Set(v.map((x) => (typeof x === "string" ? x.trim().toLowerCase() : "")).filter((x): x is T => (list as readonly string[]).includes(x)))].slice(0, max) : [];

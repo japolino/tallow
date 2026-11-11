@@ -298,7 +298,8 @@ export function familiesSaid(offered: readonly Family[]): string {
 export type StoryAnswer = Family | "any" | "done";
 
 const ANY = /\b(surprise|you (?:choose|pick|decide)|choose for me|pick for me|anything|any of them|whatever|up to you|random|your choice|dealer'?s choice|don'?t mind|no preference)/i;
-const DONE = /\b(done|enough|stop|no more|good ?night|bye|leave|quit|that'?s all|finish|call it a night|not tonight|no thanks?|i'?m tired|later)\b/i;
+// Words for stopping play, never for what a story does: "a story where we stop a cult" or "leave the city" is a story.
+const DONE = /\b(i'?m done|we'?re done|done for (tonight|now|the night)|that'?s enough|enough for (tonight|now)|stop (here|now|for tonight|for now|playing)|let'?s stop|no more|good ?night|bye|quit|that'?s all|call it a (night|day)|not tonight|no thanks?|i'?m tired|maybe later|another time)\b|^\s*(done|enough|stop|later|no)\s*[.!]*\s*$/i;
 
 /** Which family a written line asks for, "any" to let the narrator choose, "done" (when it may stop) to stop for tonight; null when it cannot be told. */
 export function storyRead(line: string, offered: readonly Family[], canStop = false): StoryAnswer | null {

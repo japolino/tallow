@@ -188,13 +188,17 @@ export function handedTo(line: string, fellows: readonly Fellow[]): Fellow | nul
   const l = line.toLowerCase();
   for (const f of fellows) {
     const n = f.name.toLowerCase().split(/\s+/)[0]!;
-    if (new RegExp(`\\b${n}\\b[^.]*\\b(you do|you try|you go|your turn|take this|handle|talk to|deal with|you talk|you climb|you pick)\\b|\\b(let|have)\\s+${n}\\b`).test(l)) return f;
+    // "Let Mira try", "have Mira pick it", "get Mira to talk": the name, then a verb. Never "I have Mira's rope".
+    if (new RegExp(`\\b${n}\\b[^.]*\\b(you do|you try|you go|your turn|take this|handle|talk to|deal with|you talk|you climb|you pick)\\b|\\b(let|have|get)\\s+${n}\\s+(to\\s+)?(?!and\\b|or\\b|with\\b|too\\b|here\\b|now\\b)[a-z]{2,}`).test(l)) return f;
   }
   return null;
 }
 
-/** Whether a line asks the table what they think. */
-export const asksTable = (line: string): boolean => /\b(what do you (two|both|all|guys) think|what do we do|any ideas|thoughts\?|what say you|talk it over|let's vote|we vote)\b/i.test(line);
+/**
+ * Whether a line asks the table what they think: the one reader for talking it over, a vote, and every player having
+ * their say (world.ts). "What do you think?" alone is said to whoever is in front of you, not to the table.
+ */
+export const asksTable = (line: string): boolean => /\b(talk (it|this) over|what do you (two|both|all|guys|lot) think|what does everyone think|what (should|do|shall) we do|any ideas|what say you|let's vote|we vote)\b|\bthoughts\?/i.test(line);
 
 /** Words that tell a way of playing from a card's own description, when there is no model. */
 const STYLE_WORDS: Record<Style, RegExp> = {

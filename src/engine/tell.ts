@@ -136,7 +136,7 @@ export function rollLines(o: Outcome): string[] {
   const sum = c.add ? `With your ${statName(c.stat, c.statName)} (+${c.add}) that makes ${o.total}.` : `Your ${statName(c.stat, c.statName)} adds nothing, so it stays ${o.total}.`;
   const keep = c.bane ? "the worse counts" : "the better counts";
   const dice = o.naturals ? `The dice show ${o.naturals[0]} and ${o.naturals[1]}; ${keep}, ${o.natural}.` : `The die shows ${o.natural}.`;
-  const tier = o.slipped ? `That is not enough, but your ${c.ability?.name ?? "luck"} turns it: it works, at a cost.` : TIER_SAYS[o.tier];
+  const tier = o.slipped ? `That is not enough, but your ${c.ability?.name ?? "luck"} turns it: it works, at a cost.` : o.steady ? `That is not enough, but this is what you are good at: it works, at a cost.` : TIER_SAYS[o.tier];
   return [`${dice} ${sum} You needed ${c.target}.`, tier];
 }
 
@@ -229,7 +229,7 @@ const HARD_SAID = ["That is an easy thing here.", "That is a fair thing to ask h
 /** The check, named aloud before the die is touched. */
 export function checkSaid(c: Check): string[] {
   const how = c.way === "sneak" && c.stat === "grace" ? "" : HOW[c.way][c.stat] ?? "";
-  const lines = [`I take it you mean to ${WAY_VERB[c.way]}${how ? `, ${how}` : ""}.`, `That tests your ${statName(c.stat, c.statName)}: ${STAT_MEANS[c.stat]}.`, HARD_SAID[c.difficulty]];
+  const lines = [`I take it you mean to ${WAY_VERB[c.way]}${how ? `, ${how}` : ""}.`, `That tests ${c.by ? `${c.by}'s` : "your"} ${statName(c.stat, c.statName)}: ${STAT_MEANS[c.stat]}.`, HARD_SAID[c.difficulty]];
   if (c.lever) lines.push(`You are using ${c.lever.name}. That is a weight on your side.`);
   if (c.ability) lines.push(abilitySaid(c));
   if (c.warm) lines.push("They are warmer to you now: that is a step easier.");
@@ -264,7 +264,7 @@ export function effectSaid(c: Check): string[] {
   if (c.hurts?.length) out.push(`They are hurt by ${andList(c.hurts)}, and you use it: a weight on your side.`);
   if (c.effect && EFFECT_SAID[c.effect]) out.push(EFFECT_SAID[c.effect]);
   if (c.position && POSITION_SAID[c.position]) out.push(POSITION_SAID[c.position]);
-  if (c.sure) out.push("This is what you are good at: even if the die goes badly, it works, at a cost.");
+  if (c.sure) out.push("This is what you are good at: unless the die shows a 1, it works, if only at a cost.");
   return out;
 }
 
@@ -283,7 +283,7 @@ export function abilitySaid(c: Check): string {
   if (c.edge) return `Your ${a.name}: you throw two dice, and the better one counts.${paid}`;
   if (c.opened) return `Your ${a.name} opens a way that was shut to you here, for this one try.${paid}`;
   if (c.ward) return `Your ${a.name}: if it goes wrong, it costs ${c.ward} less.${paid}`;
-  if (c.slip) return `Your ${a.name}: if this fails, it works at a cost instead.${paid}`;
+  if (c.slip) return `Your ${a.name}: if this fails, it works at a cost instead (a 1 still fails).${paid}`;
   if (a.does === "aid") return `Your ${a.name}: your company's help counts for ${a.much} more.${paid}`;
   if (a.does === "sway") return `Your ${a.name}: they warm to you. That is ${a.much === 1 ? "a step" : `${a.much} steps`} easier, now and for the rest of this place.${paid}`;
   return `Your ${a.name}: that is ${a.much === 1 ? "a step" : `${a.much} steps`} easier.${paid}`;
@@ -328,5 +328,5 @@ export function shutSaid(way: Way, why: Shut, price = 0): string {
 /** The short line that heads the narrator's writing on a turn's page: what the try was. */
 export function checkHeading(c: Check): string {
   const withs = [c.lever?.name, c.ability ? `your ${c.ability.name}` : undefined].filter(Boolean);
-  return `${WAY_NAME[c.way]}, on your ${statName(c.stat, c.statName)}. ${DIFFICULTY_NAME[c.difficulty]}${withs.length ? `, with ${withs.join(" and ")}` : ""}${c.edge && !c.bane ? ", two dice, the better" : c.bane && !c.edge ? ", two dice, the worse" : ""}.`;
+  return `${WAY_NAME[c.way]}, on ${c.by ? `${c.by}'s` : "your"} ${statName(c.stat, c.statName)}. ${DIFFICULTY_NAME[c.difficulty]}${withs.length ? `, with ${withs.join(" and ")}` : ""}${c.edge && !c.bane ? ", two dice, the better" : c.bane && !c.edge ? ", two dice, the worse" : ""}.`;
 }

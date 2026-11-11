@@ -11,20 +11,21 @@
  * Enter, before the page has reached the narrator.
  */
 import { offerRoom, stockOffer, type Ability } from "../engine/abilities.js";
-import { ahead, arrive, placeOf, type Loot, attempt, companionOf, HEALTH_MAX, hoursTo, lootOf, placeName, ponder, prefers, rest, startTrip, takeAbility, tripNow, useAbility, withAbility, withContest, yieldContest, type Adventure, type RoadStop, type Sky, type Trip } from "../engine/adventure.js";
+import { ahead, arrive, placeOf, withParty, type Loot, attempt, companionOf, hoursTo, lootOf, placeName, ponder, prefers, rest, startTrip, takeAbility, tripNow, useAbility, weary, withAbility, withContest, yieldContest, type Adventure, type RoadStop, type Sky, type Trip } from "../engine/adventure.js";
 import { cardKind } from "../engine/cards.js";
-import { coming, contestKind, foeNamed, renamed, yieldRead, type Contest, type ContestNames } from "../engine/contest.js";
+import { coming, contestKind, foeNamed, renamed, yieldRead, yieldSure, type Contest, type ContestNames } from "../engine/contest.js";
 import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, dangerSaveSaid, luckAsk, luckNote, luckSaid, saveAsk, saveSaid, yieldSaid } from "../engine/tell-adventure.js";
 import { canLuck, luckRead, throwLuck, type LuckAsk } from "../engine/luck.js";
 import { giveIn, narratorTurn, refuse, tempting, type Move } from "../engine/dread.js";
 import { leverLeft, nameCheck, shut, WAYS, wayStates, type Against, type Check, type Lever, type Moment, type Sheet, type Way } from "../engine/moment.js";
 import { arriveSaid, backSaid, campAsk, campRead, endPage, endSaid, firstPage, forkSaid, levelSaid, levelTaken, PRESS_ON, restSaid, startSaid, stopPage, turnSaid, usedSaid, moveNote, moveRule, spendSaid, temptSaid, temptRead, temptYes, TEMPT_NO } from "../engine/tell-adventure.js";
+import { hourSaid, notches as scheduleNotches } from "../engine/schedule.js";
 import { ASK_AGAIN, ASK_NEXT, ASK_SAID, ASK_TIME_SAID, cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS, shutSaid, UNCLEAR_SAID } from "../engine/tell.js";
 import { couldInstead, tradeOf } from "../engine/effect.js";
 import { faultDue, foeNotices, marginFor, marginLine } from "../engine/margin.js";
-import { fellowSaid, handSaid, payoffsNow, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldTried, type Told } from "../engine/world.js";
+import { fellowSaid, handSaid, handStat, payoffsNow, worldFirstLine, worldArrive, worldBegin, worldClock, worldFellows, worldLine, worldPast, worldStopped, worldTried, type Told } from "../engine/world.js";
 import { gearFrom } from "../engine/kit.js";
-import type { Payoff } from "../engine/project.js";
+import { projectSaid, type Payoff, type Project } from "../engine/project.js";
 import { contentRules, playable } from "../engine/content.js";
 import { fellowBrief, handedTo, handOver } from "../engine/seats.js";
 import { checkedGrade, rulesRead } from "../meaning/read.js";
@@ -144,6 +145,8 @@ export interface DirectOptions {
   carry?: Loot[];
   /** What your finished projects pay off (project.ts), kept from story to story. */
   payoffs?: readonly Payoff[];
+  /** Goals of your own still under way (project.ts): carried into this story, to go on working at. */
+  projects?: readonly Project[];
 }
 
 export const abilityCard = (a: Ability): SideCard => ({ id: `ability:${a.id}`, card: a.card, name: a.name, side: "perk" });
@@ -162,19 +165,26 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
   };
   const begin = (a: Adventure): Trip => {
     const t = startTrip(yours(a), sheet, seed, opts.abilities ?? [], opts.level ?? 1);
-    return geared(worldBegin({ ...t, kept: [...t.kept, ...carry.map((l) => l.id)], ...(opts.storeName ? { storeName: opts.storeName } : {}), ...(opts.payoffs?.length ? { payoffs: [...opts.payoffs] } : {}) }));
+    return geared(worldBegin({ ...t, kept: [...t.kept, ...carry.map((l) => l.id)], ...(opts.storeName ? { storeName: opts.storeName } : {}), ...(opts.payoffs?.length ? { payoffs: [...opts.payoffs] } : {}), ...(opts.projects?.length ? { projects: opts.projects.map((p) => ({ ...p })) } : {}) }));
   };
-  /** The moment's stats are always yours, outside a try you handed to another player (docs/MOONSHOT.md, 4.3). */
+  /** The moment's stats are always yours, outside a try you handed to another player (docs/MOONSHOT.md, 4.3), and its hour the story's. */
   const synced = (t: Trip): Trip => {
     if (!t.facing) return t;
     const { powerName: _p, ...rest } = t.facing.moment.sheet;
-    const s = { ...rest, stats: { ...t.sheet.stats }, ...(t.sheet.powerName ? { powerName: t.sheet.powerName } : {}) };
+    const s = { ...rest, stats: { ...t.sheet.stats }, hour: t.sheet.hour, ...(t.sheet.powerName ? { powerName: t.sheet.powerName } : {}) };
     return { ...t, facing: { ...t.facing, moment: { ...t.facing.moment, sheet: s } } };
   };
   let trip = begin(adv);
   let stage: Stage = "start";
   // Whether the narrator has said yet that asking takes time.
   let pondered = false;
+  /** Time spent asking or doing something in the story, said: the first time with why, after that the hour. */
+  const timeSaid = (): string => {
+    const now = hourSaid(trip.sheet.hour);
+    const said = pondered ? `A quarter of an hour goes by: it is now ${now}.` : `${ASK_TIME_SAID} It is now ${now}.`;
+    pondered = true;
+    return said;
+  };
   /** The weather at a place, or on the road between places. */
   const sky = (at?: RoadStop | null): void => table.weather?.(at?.weather ?? trip.adv.weather ?? "clear");
   /** What the game allows, for the models (content.ts): only clear adults are ever in a scene with heat or dark themes. */
@@ -189,8 +199,11 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
   /** The candle's notches follow what you know of the other side's clock. */
   const notches = (): void => {
     const s = trip.schedule;
-    if (!s || !table.notch) return;
-    table.notch(s.appointments.filter((a) => s.known.includes(a.id) && !s.stopped.includes(a.id) && !s.happened.some((h) => h.id === a.id)).map((a) => a.at));
+    if (!table.notch) return;
+    // A story with no clock of its own leaves no notches from the last one standing.
+    if (!s) return void table.notch([]);
+    // The schedule's own notches (schedule.ts): a routine keeps its notch every day, at the next time it falls.
+    table.notch(scheduleNotches(s, trip.sheet.hour).map((n) => n.at));
   };
   /** What the world said: places inked, notches cut, and the lines. */
   const worldSaid = async (w: Told, extra: string[] = []): Promise<void> => {
@@ -221,7 +234,16 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
     }
   };
 
+  /**
+   * The models are told who you are, who walks with you, and what the game allows (content.ts): at the start of a
+   * story, at every place you come to, and after every try, so nothing they write runs on the last story's rules.
+   */
+  const knowNow = (): void => {
+    minds.know?.(trip.adv.who, withParty(trip).map((id) => companionOf(trip.adv, id)).filter((c) => !!c).map((c) => (c!.who.toLowerCase().startsWith(c!.name.toLowerCase()) ? c!.who : `${c!.name}, ${c!.who}`)), rules());
+  };
+
   const play = async (): Promise<Trip> => {
+    knowNow();
     if (opts.resume) return goOn(opts.resume);
     table.clock(trip.sheet.hour);
     void table.carry(null, trip.sheet, false);
@@ -230,8 +252,10 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
     if (end) void table.move("shadow", end.id);
     if (opts.build) {
       trip = begin(await table.wait("deal", opts.build));
+      knowNow();
     }
     sky();
+    notches();
     await table.deal(trip.adv.stops);
     for (const a of trip.abilities) await table.give(abilityCard(a));
     for (const id of trip.party) {
@@ -251,12 +275,15 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
     await table.page(firstPage(trip));
     // What your projects pay off comes with you into every story (docs/MOONSHOT.md, 7.5).
     if (trip.payoffs?.length) await worldSaid(payoffsNow(trip, trip.payoffs));
+    // A goal of your own goes on from the story before.
+    for (const p of trip.projects ?? []) await table.say([`Your goal goes on from before: ${projectSaid(p)}`]);
     return road(false);
   };
 
   /** Lay the table out again as a sitting left it, and go on from there. */
   const goOn = async (t: Trip): Promise<Trip> => {
     trip = withContest(tripNow(t));
+    knowNow();
     table.clock(trip.sheet.hour);
     void table.carry(null, trip.sheet, false);
     void table.move("you", trip.at);
@@ -264,6 +291,9 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
     sky(facing);
     // The cards still on the map: the places not reached, and the one in your way.
     await table.deal(trip.adv.stops.filter((s) => !trip.visited.includes(s.id) || s.id === facing?.id));
+    // What was inked on the map and notched in the candle before is there again.
+    for (const place of trip.book?.mapped ?? []) await table.ink?.(place);
+    notches();
     if (facing) {
       void table.move("shadow", facing.id);
       await table.turn(facing);
@@ -299,21 +329,21 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       else await table.say([ASK_NEXT]);
       await atStop(facing, ASK_NEXT);
       await camp();
-    } else if (trip.visited.length && trip.sheet.health < HEALTH_MAX) {
+    } else if (trip.visited.length && weary(trip)) {
       await table.page(firstPage(trip));
       await camp();
     } else await table.page(firstPage(trip));
     return road(true);
   };
 
-  /** If you are hurt, after a place: rest, or press on. */
+  /** If you are hurt or spent, after a place: rest, or press on. */
   const camp = async (): Promise<void> => {
-    if (trip.over || trip.sheet.health >= HEALTH_MAX) return;
+    if (trip.over || !weary(trip)) return;
     stage = "camp";
     await table.say([campAsk(trip)]);
     const w = await table.write();
     await w.given;
-    const rests = await pickBy(minds, "You are hurt. Do you rest here, or press on?", w.line, { rest: "rest, sleep or tend wounds here", on: "press on without resting" }, () => campRead(w.line), (p) => table.wait("read", p));
+    const rests = await pickBy(minds, "You are hurt or spent. Do you rest here, or press on?", w.line, { rest: "rest, sleep or tend wounds here", on: "press on without resting" }, () => campRead(w.line), (p) => table.wait("read", p));
     void table.aside();
     if (rests === "rest") {
       const before = trip.sheet;
@@ -338,7 +368,7 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       let pick = choices[0]!;
       if (choices.length > 1) {
         stage = "fork";
-        const comp = trip.party.map((id) => companionOf(trip.adv, id)!).find((c) => c && prefers(c, choices));
+        const comp = withParty(trip).map((id) => companionOf(trip.adv, id)!).find((c) => c && prefers(c, choices));
         const liked = comp ? prefers(comp, choices) : null;
         await table.say(forkSaid(trip, choices, choices.map((s) => hoursTo(trip, s.id)), comp && liked ? { name: comp.name, side: choices.indexOf(liked) } : null));
         const id = await table.fork(choices);
@@ -348,7 +378,12 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       const setOut = trip.sheet.hour;
       const a = arrive(trip, pick.id)!;
       trip = a.trip;
-      const here = worldArrive(trip, pick);
+      // What the other side did while you were on the road is said first; what is still going on here is not said twice.
+      const before = trip.dread ?? 0;
+      const ran = worldClock(trip, setOut, trip.sheet.hour);
+      trip = ran.trip;
+      const here = worldArrive(trip, pick, setOut);
+      knowNow();
       trip = here.trip;
       // A contest's names are asked for at once, while the card is turned and the place is told.
       const naming = trip.facing?.contest && minds.contest ? minds.contest(trip.facing.moment, trip.facing.contest.kind).catch(() => ({}) as ContestNames) : null;
@@ -360,7 +395,9 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       const standing = trip.facing ? table.ways?.(wayStates(trip.facing.moment)) : undefined;
       await table.say(arriveSaid(a));
       await standing;
-      await ranFrom(setOut);
+      await worldSaid({ trip, lines: ran.lines });
+      if ((trip.dread ?? 0) !== before) await table.dread?.(trip.dread ?? 0);
+      for (const place of here.inked ?? []) await table.ink?.(place);
       if (here.lines.length) await table.say(here.lines);
       if (trip.over) break;
       await table.page(stopPage(a));
@@ -400,7 +437,7 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
   /** A move of the narrator's has happened at the place in your way: show it, say what it does, and set the table to match. */
   const moved = async (before: Trip, mv: Move, lead: string[], why = ""): Promise<void> => {
     const m = trip.facing!.moment;
-    const told = minds.move ? await table.wait("tell", minds.move(m, `${moveNote(mv)}${why}`).catch(() => "")) : "";
+    const told = minds.move ? fit(await table.wait("tell", minds.move(m, `${moveNote(mv)}${why}`).catch(() => ""))) : "";
     if (mv.save) {
       // Something comes at you: you throw to keep it off before the rule is said.
       await table.say([...lead, ...(told ? [told] : []), saveAsk(mv.save, "it comes at you")]);
@@ -509,7 +546,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
         // What is coming at you this round, said before you write, so you can answer it.
         shownRound = c0.round;
         const foe = coming(c0);
-        const said = foe && minds.blow ? await table.wait("tell", minds.blow(trip.facing.moment, c0, foe).catch(() => "")) : "";
+        const said = foe && minds.blow ? fit(await table.wait("tell", minds.blow(trip.facing.moment, c0, foe).catch(() => ""))) : "";
         blow = said || blowLine(c0);
         await table.say([blow, ...(c0.round ? [ASK_ROUND] : [BLOW_RULE, ask])]);
       }
@@ -522,7 +559,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       const reading = minds.read(w.line, m);
       await w.given;
       if (trip.facing.contest && yieldRead(w.line)) {
-        const gives = await pickBy(minds, "Does the player give in, and stop the contest?", w.line, { yes: "yes: they give in, give up or yield", no: "no: they keep at it" }, () => "yes", (p) => table.wait("read", p));
+        const gives = await pickBy(minds, "Does the player give in, and stop the contest?", w.line, { yes: "yes: they give in, give up or yield", no: "no: they keep at it" }, () => (yieldSure(w.line) ? "yes" : "no"), (p) => table.wait("read", p));
         if (gives === "yes") {
           await giveUp(stop);
           return;
@@ -551,30 +588,33 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
         trip = u.trip;
         table.clock(trip.sheet.hour);
         const store = trip.storeName ?? "store";
-        const told = await table.wait("tell", minds.answer(w.line, trip.facing?.moment ?? m, `${abilityNote(u.ability, store)} ${usedSaid(u, store).join(" ")}`));
+        const told = fit(await table.wait("tell", minds.answer(w.line, trip.facing?.moment ?? m, `${abilityNote(u.ability, store)} ${usedSaid(u, store).join(" ")}`)));
         const carried = u.effect === "mend" || before.store !== trip.sheet.store ? table.carry(before, trip.sheet, false) : undefined;
         await table.say([...(told ? [told] : []), ...usedSaid(u, store)]);
         await carried;
         continue;
       }
-      if (said === "none") {
+      // Some lines are the world's before they are a try (world.ts, its rows that may take a try): a vote, a player sent
+      // off, pressing or reading the person here, asking what they need, a wait on its own. When the world has nothing
+      // to say, they are tries again.
+      const first = said !== "none" ? worldFirstLine(trip, w.line, m) : null;
+      if (said === "none" || first) {
         // The world reads it first (world.ts): a goal of your own, time spent, two slips laid together, words to the person here, a look round.
         const hourBefore = trip.sheet.hour;
-        const w2 = worldLine(trip, w.line, m);
+        const w2 = first ?? worldLine(trip, w.line, m);
         if (w2) {
           void table.aside();
           const answering = w2.note ? minds.answer(w.line, w2.trip.facing?.moment ?? m, w2.note) : null;
           trip = w2.trip;
-          if (!w2.hours) trip = ponder(trip) ?? trip;
+          // Talk at the table takes no time; anything done in the story takes a quarter of an hour, and you are told so.
+          const costs = !w2.hours && !w2.free;
+          if (costs) trip = ponder(trip) ?? trip;
           table.clock(trip.sheet.hour);
           const answer = answering ? fit(await table.wait("tell", answering)) : "";
-          await worldSaid({ ...w2, trip }, answer ? [answer] : []);
-          if (!w2.hours) await ranFrom(hourBefore);
-          if (trip.sheet.hour >= trip.adv.deadline.hour) {
-            // Time spent past the deadline: the job is lost, as it would be by any other way of spending it.
-            trip = { ...trip, facing: null, over: "deadline" };
-            break;
-          }
+          await worldSaid({ ...w2, trip, lines: [...w2.lines, ...(costs ? [timeSaid()] : [])] }, answer ? [answer] : []);
+          if (costs) await ranFrom(hourBefore);
+          // Time spent past the deadline loses the job (adventure.ts, clockTo), however it was spent.
+          if (trip.over) break;
           await fellowsSpeak(w.line, trip.facing?.moment ?? m);
           continue;
         }
@@ -589,11 +629,14 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
           const answering = minds.answer(w.line, trip.facing!.moment, luckNote(thrown.luck, fact));
           await table.say([luckAsk(fact)]);
           await table.luck?.(thrown.luck.natural);
-          const answer = await table.wait("tell", answering);
+          const answer = fit(await table.wait("tell", answering));
           const [verdict, ...rule] = luckSaid(thrown.luck, fact);
-          await table.say([verdict, ...(answer ? [answer] : []), ...rule, ...(pondered ? [] : [ASK_TIME_SAID])]);
+          await table.say([verdict, ...(answer ? [answer] : []), ...rule, timeSaid()]);
           pondered = true;
           if (thrown.luck.mark) await table.give(markCard(thrown.luck.mark));
+          await ranFrom(hourBefore);
+          if (trip.over) break;
+          await fellowsSpeak(w.line, trip.facing?.moment ?? m);
           continue;
         }
         // A question, or a look round: the narrator answers from what is here. No die, but the clock runs.
@@ -602,9 +645,10 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
         trip = ponder(trip)!;
         table.clock(trip.sheet.hour);
         const answer = fit(await table.wait("tell", answering));
-        await table.say([answer, ...(pondered ? [] : [ASK_TIME_SAID])]);
+        await table.say([answer, timeSaid()]);
         pondered = true;
         await ranFrom(hourBefore);
+        if (trip.over) break;
         await fellowsSpeak(w.line, m);
         continue;
       }
@@ -613,8 +657,9 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       // A try handed to another player is thrown on their stats (docs/MOONSHOT.md, 4.3).
       const hand = handedTo(w.line, (trip.fellows ?? []).filter((f) => !f.at));
       const mh: Moment = hand ? { ...m, sheet: { ...m.sheet, stats: { ...handOver(hand).stats }, ...(hand.powerName ? { powerName: hand.powerName } : {}) } } : m;
-      const read = said && withAbility(mh, { ...said, line: w.line, trade: tradeOf(w.line) ?? undefined, grade: checkedGrade(said.grade, w.line, mh, alsoReal()), ...(contest ? { target: foeNamed(w.line, contest) } : {}) });
-      const check = read && nameCheck(mh, read);
+      const read = said && withAbility(mh, { ...said, ...(hand ? { stat: handStat(hand, said.way, m.attack) } : {}), line: w.line, trade: tradeOf(w.line) ?? undefined, grade: checkedGrade(said.grade, w.line, mh, alsoReal()), ...(contest ? { target: foeNamed(w.line, contest) } : {}) });
+      const check0 = read && nameCheck(mh, read);
+      const check = check0 && hand ? { ...check0, by: hand.name } : check0;
       if (check && check.effect === "none") {
         // Too far outmatched for any throw to matter: no die, and what would change the gap (docs/MOONSHOT.md, 2.2).
         void table.aside();
@@ -630,7 +675,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       }
       stage = "check";
       void table.weigh(check);
-      await table.say([...(hand ? [handSaid(hand, read.way)] : []), ...checkSaid(check), ...(scaleSaid ? [] : [SCALE_SAYS]), DIE_SAYS]);
+      await table.say([...(hand ? [handSaid(hand, check.stat)] : []), ...checkSaid(check), ...(scaleSaid ? [] : [SCALE_SAYS]), DIE_SAYS]);
       scaleSaid = true;
       next = await table.dieOrLine();
       if (next) continue;
@@ -653,7 +698,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       stage = "told";
       table.clock(trip.sheet.hour);
       void table.weigh(null);
-      minds.know?.(trip.adv.who, trip.party.map((id) => companionOf(trip.adv, id)).filter((c) => !!c).map((c) => (c!.who.toLowerCase().startsWith(c!.name.toLowerCase()) ? c!.who : `${c!.name}, ${c!.who}`)), rules());
+      knowNow();
       // In a contest, a try that works but does not end it is "more"; the round's own facts go to the teller too.
       const more = turn.round ? o.past && !turn.cleared && !turn.taken : turn.more;
       const note = narratorNote(o, more) + (turn.round ? ` ${contestNote(turn.round, contestKind(stop), blow)}` : "");
@@ -690,7 +735,10 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
       trip = synced(trip);
       if (felt.lines.length) await table.say(felt.lines);
       await ranFrom(hourBefore);
-      if (away || o.past) await worldSaid(worldPast(trip, stop, true));
+      // What there is to find at a place is yours once you get past it: beaten, not taken out of the fight or turned back.
+      if (turn.cleared || (o.past && !turn.round && !more)) await worldSaid(worldPast(trip, stop, true));
+      // Beaten here before the other side came: what they meant to do here will not happen now.
+      if (turn.cleared) await worldSaid(worldStopped(trip, stop));
       if (!trip.over) await fellowsSpeak(w.line, m, check.way);
       if (away) {
         await table.clear(stop);

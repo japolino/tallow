@@ -43,6 +43,15 @@ export interface Campaign {
   threads: string[];
   /** Things the players said were so, kept and true. */
   facts: string[];
+  /**
+   * The next of its steps to come (a step taken, or stopped by you, moves it on). Older campaigns lack it: it is then
+   * the rings burned.
+   */
+  next?: number;
+  /** Its steps you stopped: they will not happen. */
+  stopped?: string[];
+  /** Each chapter so far, in a line: its trouble, and how it ended. */
+  past?: string[];
 }
 
 export function startCampaign(front: Front): Campaign {
@@ -61,20 +70,46 @@ export interface ChapterEnd {
   found: (0 | 1 | 2)[];
   friends?: string[];
   enemies?: string[];
+  /** What the chapter's trouble was, and how it ended, for the chapters after. */
+  trouble?: string;
+  how?: string;
 }
 
 /**
  * The end of a chapter (6.1): it takes one step after every story you do not set it back, and another when you failed
- * badly near it. Each step burns a ring of the black candle. Keys and people carry on.
+ * badly near it. Each step burns a ring of the black candle. Set back, the step it was about to take is stopped and
+ * never happens (the last, the end itself, cannot be stopped this way: only the finale ends it). Keys, people and what
+ * each chapter was carry on.
  */
-export function endChapter(c: Campaign, e: ChapterEnd): { campaign: Campaign; steps: string[]; over: boolean } {
+export function endChapter(c: Campaign, e: ChapterEnd): { campaign: Campaign; steps: string[]; stopped: string | null; over: boolean } {
+  let next = c.next ?? c.burned;
+  let stopped: string | null = null;
+  if (e.setBack && next < RINGS - 1) {
+    stopped = c.front.steps[next] ?? null;
+    next += 1;
+  }
   const n = (e.setBack ? 0 : 1) + (e.failedNear ? 1 : 0);
-  const burned = Math.min(RINGS, c.burned + n);
-  const steps = c.front.steps.slice(c.burned, burned);
+  const steps = c.front.steps.slice(next, next + n);
+  next = Math.min(RINGS, next + steps.length);
+  const burned = Math.min(RINGS, c.burned + steps.length);
   const keys = c.keys.map((k, i) => k || e.found.includes(i as 0 | 1 | 2));
-  const campaign = { ...c, burned, chapter: c.chapter + 1, keys, friends: [...new Set([...c.friends, ...(e.friends ?? [])])], enemies: [...new Set([...c.enemies, ...(e.enemies ?? [])])] };
-  return { campaign, steps, over: burned >= RINGS };
+  const past = e.trouble ? [...(c.past ?? []), `chapter ${c.chapter + 1}, ${e.trouble}: ${e.how ?? (e.setBack ? "won" : "lost")}`].slice(-8) : c.past;
+  const campaign: Campaign = {
+    ...c,
+    burned,
+    next,
+    chapter: c.chapter + 1,
+    keys,
+    friends: [...new Set([...c.friends, ...(e.friends ?? [])])].slice(-12),
+    enemies: [...new Set([...c.enemies, ...(e.enemies ?? [])])].slice(-12),
+    ...(stopped ? { stopped: [...(c.stopped ?? []), stopped] } : {}),
+    ...(past ? { past } : {}),
+  };
+  return { campaign, steps, stopped, over: burned >= RINGS || next >= RINGS };
 }
+
+/** The steps the big bad has taken so far, in order (those you stopped are not among them). */
+export const stepsTaken = (c: Campaign): string[] => c.front.steps.slice(0, c.next ?? c.burned).filter((s) => !(c.stopped ?? []).includes(s));
 
 /** The hand the big bad sends in this chapter. */
 export const handFor = (c: Campaign): string => c.front.hands[c.chapter % Math.max(1, c.front.hands.length)] ?? `the servants of ${c.front.name}`;
@@ -112,7 +147,10 @@ export const sayItsSo = (c: Campaign, fact: string): Campaign => ({ ...c, facts:
 
 /** What the narrator is told of the campaign each chapter: what it wants, where the candle stands, and what carries on. */
 export function campaignBrief(c: Campaign): string {
-  const parts = [`${c.front.name} wants ${c.front.wants}.`, `It has taken ${c.burned} of ${RINGS} steps${c.burned ? `: last, ${c.front.steps[c.burned - 1]}` : ""}.`, `Its hand in this chapter: ${handFor(c)}.`];
+  const taken = stepsTaken(c);
+  const parts = [`${c.front.name} wants ${c.front.wants}.`, `It has taken ${taken.length} of ${RINGS} steps${taken.length ? `: last, ${taken[taken.length - 1]}` : ""}.`, `Its hand in this chapter: ${handFor(c)}.`];
+  if (c.stopped?.length) parts.push(`The players stopped it before: ${c.stopped.join("; ")}. That will not happen now.`);
+  if (c.past?.length) parts.push(`The chapters so far (do not tell the same trouble again): ${c.past.join("; ")}.`);
   const held = c.front.keys.filter((_, i) => c.keys[i]);
   if (held.length) parts.push(`The players know: ${held.join("; ")}.`);
   if (c.friends.length) parts.push(`Friends: ${c.friends.join(", ")}.`);
@@ -154,8 +192,8 @@ export function stockFront(seed: number, modern: boolean): Front {
 }
 
 /** The black candle and what the big bad did, in plain lines, after a chapter. */
-export function chapterSaid(c: Campaign, steps: readonly string[], over: boolean): string[] {
-  const lines = steps.length ? [`The black candle at my right hand is lit. ${cap(c.front.name)} takes ${steps.length > 1 ? "two steps" : "a step"}: ${steps.join("; then ")}. ${RINGS - c.burned} ring${RINGS - c.burned === 1 ? "" : "s"} left on it.`] : [`The black candle stays dark. You set ${c.front.name} back this time.`];
+export function chapterSaid(c: Campaign, steps: readonly string[], over: boolean, stopped: string | null = null): string[] {
+  const lines = steps.length ? [`The black candle at my right hand is lit. ${cap(c.front.name)} takes ${steps.length > 1 ? "two steps" : "a step"}: ${steps.join("; then ")}. ${RINGS - c.burned} ring${RINGS - c.burned === 1 ? "" : "s"} left on it.`] : [`The black candle stays dark. You set ${c.front.name} back this time${stopped ? `: ${stopped} will not happen now` : ""}.`];
   const held = c.front.keys.filter((_, i) => c.keys[i]);
   if (held.length) lines.push(`You know ${held.join(", and ")}.`);
   if (over) lines.push(`The candle is out. It is ${c.front.steps[RINGS - 1]}: the last story is against ${c.front.name} itself.`);
@@ -166,7 +204,7 @@ const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 // ---- The finale, and a big bad written by a model ----
 
 /** Whether the last story is due: the candle is out, or you hold all three keys and can go after it. */
-export const finaleDue = (c: Campaign): boolean => c.burned >= RINGS || c.keys.every(Boolean);
+export const finaleDue = (c: Campaign): boolean => c.burned >= RINGS || (c.next ?? c.burned) >= RINGS || c.keys.every(Boolean);
 
 /**
  * The last story of a campaign (6.1): the road as laid, with the big bad itself waiting at its end, rated at the top of

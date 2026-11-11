@@ -153,7 +153,9 @@ export const spreadNow = (stats: Partial<Record<string, unknown>>): boolean => S
 export function makeHero(clsId: string, o: { name?: string; who?: string; stats?: Partial<Record<string, unknown>> | null; hour?: number; calling?: Calling; abilities?: Ability[]; power?: string } = {}): Hero {
   const cls = classOf(clsId) ?? CLASSES[0]!;
   // In a world with the seventh stat, the kind's own spread gets one point there (POWER_BUDGET is one more).
-  const stats = checkSpread(o.stats, !!o.power) ?? (o.power ? { ...cls.stats, power: 1 } : { ...cls.stats });
+  // A spread that misses the budget is put right to it (fitSpread), not thrown away for the kind's own: the player's
+  // shape is kept, a point at a time. Only no spread at all, or not six stats, falls back to the kind's.
+  const stats = checkSpread(o.stats, !!o.power) ?? (o.stats && spreadNow(o.stats) ? fitSpread(o.stats, !!o.power) : o.power ? { ...cls.stats, power: 1 } : { ...cls.stats });
   const name = clean(o.name, 40) || "the traveller";
   const who = clean(o.who, 240) || `You are a ${cls.name.toLowerCase()}: ${cls.is}.`;
   const stock = STOCK_CALLINGS[cls.id] ?? STOCK_CALLINGS.courier!;

@@ -39,7 +39,9 @@ describe("appointments", () => {
   });
 
   test("what is going on at a place now", () => {
-    expect(goingOn(newSchedule(night), "alley", 24.1).map((a) => a.id)).toEqual(["meet"]);
+    // Only what really happened is going on: the clock has to have run past it.
+    expect(goingOn(runClock(newSchedule(night), 23, 24.1).schedule, "alley", 24.1).map((a) => a.id)).toEqual(["meet"]);
+    expect(goingOn(newSchedule(night), "alley", 24.1)).toEqual([]);
     expect(goingOn(newSchedule(night), "alley", 23)).toEqual([]);
   });
 });

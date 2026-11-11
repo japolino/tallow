@@ -109,7 +109,20 @@ export function priceOf(a: Ability): number {
 /** The card an ability lies on, by what it does. */
 const VERB_CARD: Record<Verb, string> = { flourish: "lantern", learn: "key", ease: "token", mark: "purse", sway: "beloved", mend: "fire", aid: "companion", ward: "guardian", edge: "contest", open: "gate", slip: "climb", reach: "contest", bind: "guardian", sweep: "contest", drain: "beloved" };
 
-const clean = (s: unknown, max: number): string => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, max) : "");
+/** A string as given, its spaces tidied, cut at a word (never mid-word) to at most `max` letters. */
+const clean = (s: unknown, max: number): string => {
+  if (typeof s !== "string") return "";
+  const t = s.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max + 1).replace(/\s+\S*$/, "");
+  return (cut || t.slice(0, max)).replace(/[\s,;:-]+$/, "");
+};
+/** A tag, cut short at a word and with no small word left hanging at its end ("a crowd turning against" is "a crowd turning"). */
+const tagOf = (t: unknown): string => {
+  let s = clean(t, 24).toLowerCase();
+  while (/\s(for|against|of|to|with|at|on|the|a|an|and|or|about|from|in|into|by|you|your)$/.test(s)) s = s.replace(/\s\S+$/, "");
+  return s;
+};
 const words = (s: string): string[] => s.toLowerCase().split(/[^\p{L}']+/u).filter(Boolean);
 
 /**
@@ -138,7 +151,7 @@ export function readAbility(raw: unknown, id: string): Ability | null {
   if (!name || !looks) return null;
   const ways = Array.isArray(o.ways) ? [...new Set(o.ways.filter((w): w is Way => WAYS.includes(w as Way)))] : [];
   // A tag that would match nearly every line is no narrow situation.
-  const tags = Array.isArray(o.tags) ? [...new Set(o.tags.map((t) => clean(t, 24).toLowerCase()).filter((t) => t.length >= 3 && !/^(the|and|you|any|all|thing|things|people|someone|anyone|place|time)$/.test(t)))].slice(0, 6) : [];
+  const tags = Array.isArray(o.tags) ? [...new Set(o.tags.map((t) => tagOf(t)).filter((t) => t.length >= 3 && !/^(the|and|you|any|all|thing|things|people|someone|anyone|place|time)$/.test(t)))].slice(0, 6) : [];
   const often: Often = o.often === "story" ? "story" : o.often === "stop" ? "stop" : "always";
   const store = o.store === true && does !== "flourish";
   const much = does === "flourish" ? 0 : Math.max(1, Math.min(VERB_MAX[does], Math.round(Number(o.much) || 1)));

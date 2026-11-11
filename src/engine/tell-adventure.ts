@@ -6,7 +6,7 @@
 import { FALL_HOURS, HEALTH_MAX, placeName, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
 import { cardKind, FAMILY_SAYS } from "./cards.js";
 import { coming, contestKind, type Contest, type ContestKind, type Dial, type Round } from "./contest.js";
-import { shapeOf, type Ability } from "./abilities.js";
+import { shapeOf, storeAt, type Ability } from "./abilities.js";
 import { DELAY_HOURS, DREAD_SPEND, type Move } from "./dread.js";
 import type { Save } from "./save.js";
 import { LUCK_YES, type Luck } from "./luck.js";
@@ -374,7 +374,9 @@ export function backSaid(t: Trip): string[] {
 
 /** Asked after a stop, if you are hurt: rest, or press on. */
 export function campAsk(t: Trip): string {
-  return `You are past ${placeName(t.adv, t.at)}, with ${t.sheet.health} health of ${HEALTH_MAX}. Rest here, or press on? Resting heals ${REST_HEALS} and eats a supply, but takes ${span(REST_HOURS)}, and word of you goes ahead: the next place will be a step harder. Write which.`;
+  const full = storeAt(t.level);
+  const spent = (t.sheet.store ?? full) < full ? `, and ${t.sheet.store ?? 0} of ${full} left in your ${t.storeName ?? "store"}` : "";
+  return `You are past ${placeName(t.adv, t.at)}, with ${t.sheet.health} health of ${HEALTH_MAX}${spent}. Rest here, or press on? Resting heals ${REST_HEALS}${spent ? " and fills your " + (t.storeName ?? "store") + " again" : ""} and eats a supply, but takes ${span(REST_HOURS)}, and word of you goes ahead: the next place will be a step harder. Write which.`;
 }
 export const PRESS_ON = "You press on.";
 
@@ -428,9 +430,17 @@ const WAY_TRY: Record<Way, string> = { talk: "talks", sneak: "goes unseen", forc
 const orWords = (xs: string[]): string => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}`);
 const steps = (n: number): string => (n === 1 ? "a step" : `${n} steps`);
 
+/** A tag as said after "where": "a lock", but "an oath", "pressing someone", "the watch", "crowds" as they are. */
+function withArticle(tag: string): string {
+  const t = tag.trim();
+  const first = t.split(/\s+/)[0]!.toLowerCase();
+  if (/^(a|an|the|some|any|your|their|his|her)$/.test(first) || /ing$/.test(first) || (/s$/.test(first) && !/ss$/.test(first) && t.split(/\s+/).length === 1)) return t;
+  return `${/^[aeiou]/i.test(t) ? "an" : "a"} ${t}`;
+}
+
 /** When an ability applies, in words: "a try that talks", "when a lock or a gate comes into it", "any try". */
 function whenSaid(a: Ability): string {
-  if (a.tags.length) return `a try where ${orWords(a.tags.slice(0, 3).map((t) => `a ${t}`))} comes into it`;
+  if (a.tags.length) return `a try where ${orWords(a.tags.slice(0, 3).map(withArticle))} comes into it`;
   if (a.ways.length) return `a try that ${orWords(a.ways.map((w) => WAY_TRY[w]))}`;
   return "any try";
 }

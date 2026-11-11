@@ -12,6 +12,8 @@
 import { CITY_COURTSHIP, COURTSHIP, NIGHT_RESCUE, RESCUE } from "../content/adventures.js";
 import { partOf, type Adventure, type Companion, type RoadStop } from "../engine/adventure.js";
 import { cardKind } from "../engine/cards.js";
+import { KEYS } from "../engine/clues.js";
+import { readAgeBand } from "../engine/content.js";
 import { STATS, WAYS, type CoreStat, type Stat, type Way } from "../engine/moment.js";
 import { clock } from "../engine/tell.js";
 import { cardText, courtable, type CardInfo, type Trope } from "./card.js";
@@ -26,8 +28,8 @@ export const CITY: Record<Trope, Adventure> = { rescue: NIGHT_RESCUE, courtship:
  * Words an older world uses as well (a club, a band, a company, a city) are left out.
  */
 const MODERN = /\b(phones?|smartphones?|cell ?phones?|texts? (?:me|you|her|him|them)|texting|e-?mails?|internet|online|social media|instagram|laptops?|computers?|cars?|drives? a|taxi|uber|subway|highway|apartment|office|corporate|ceo|startup|high school|campus|nightclub|bartender|caf[eé]|coffee shop|downtown|mall|supermarket|police|cops?|hospital|nurse|guitar|concert|tv|television|video games?|gamer|youtube|streamer|influencer|guns?|pistol|neon|cyberpunk|modern|jeans|hoodie)\b/gi;
-/** Words that put a card in another age or world, which keep the old road even if a modern word turns up. */
-const OLDEN = /\b(swords?|knights?|kingdom|castle|dragons?|elf|elves|dwarf|orcs?|mage|magic|wizard|witch|sorcer\w*|tavern|inn|village|lord|prince|princess|king|queen|duke|noble|empire|medieval|steed|horse|bow and arrow|spell|realm|guild|temple|shrine|samurai|ninja|demon|vampire|spaceship|starship|planet|galaxy)\b/gi;
+/** Words that put a card in an older age, which keep the old road even if a modern word turns up. A ship among the stars is not of an older age. */
+const OLDEN = /\b(swords?|knights?|kingdom|castle|dragons?|elf|elves|dwarf|orcs?|mage|magic|wizard|witch|sorcer\w*|tavern|inn|village|lord|prince|princess|king|queen|duke|noble|empire|medieval|steed|horse|bow and arrow|spell|realm|guild|temple|shrine|samurai|ninja|demon|vampire)\b/gi;
 
 /** Whether a card is set in our own times, from the words it uses. */
 export function modernCard(card: CardInfo): boolean {
@@ -61,9 +63,15 @@ export interface Words {
   companions: Record<string, { name: string; who: string }>;
   loot: Record<string, string>;
   /** In a rescue: the card's character, who comes with you. */
-  friend?: { who: string; good_at: Stat; likes: Way; dislikes: Way };
+  friend?: { name?: string; who: string; good_at: Stat; likes: Way; dislikes: Way };
   courted?: { who: string };
   rival?: { name: string; who: string; lost: string };
+  /** The person at a stop (engine/furnish.ts), by the stop's id: their name, who they are, what they want now. */
+  people?: Record<string, { name: string; who: string; wants: string }>;
+  /** What there is to find out (engine/furnish.ts): each clue's fact, a line long, by its id. */
+  clues?: Record<string, string>;
+  /** What the other side does, by its clock (engine/furnish.ts): a line each, by id. */
+  moves?: Record<string, string>;
 }
 
 /** The made-up adventure's own words, in the shape a model is asked to fill. */
@@ -80,10 +88,30 @@ export function wordsOf(adv: Adventure): Words {
     companions: Object.fromEntries(adv.companions.map((c) => [c.id, { name: c.name, who: c.who }])),
     loot: Object.fromEntries(adv.loot.map((l) => [l.id, l.name])),
   };
-  if (partOf(adv) === "friend") w.friend = { who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force" };
+  if (partOf(adv) === "friend") w.friend = { name: "their name", who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force" };
   if (adv.courted) w.courted = { who: adv.courted.who };
   if (adv.rival) w.rival = { name: adv.rival.name, who: adv.rival.who, lost: adv.rival.lost };
+  const people = adv.stops.filter((s) => s.person);
+  if (people.length) w.people = Object.fromEntries(people.map((s) => [s.id, { name: s.person!.name, who: "who they are, in a line", wants: s.person!.wants ?? "" }]));
+  if (adv.clues?.length) w.clues = Object.fromEntries(adv.clues.map((c) => [c.id, c.text]));
+  if (adv.appointments?.length) w.moves = Object.fromEntries(adv.appointments.map((a) => [a.id, a.what]));
   return w;
+}
+
+/** What is fixed about the people, the clues and the other side's clock, for the words to fit. */
+function worldFacts(adv: Adventure): string {
+  const out: string[] = [];
+  const stopName = (id: string): string => adv.places.find((p) => p.id === id)?.name ?? id;
+  const who = (pid: string): string => adv.stops.find((s) => s.person?.id === pid)?.id ?? pid;
+  const keys = adv.kind ? KEYS[adv.kind] : null;
+  for (const s of adv.stops.filter((x) => x.person)) out.push(`- people.${s.id}: the person in the way at ${s.id}. "wants" is one thing they want now, a few words, that the player could do for them.${s.person!.lie ? " They lie about one thing (a clue below)." : ""}`);
+  for (const c of adv.clues ?? []) {
+    const src = c.from?.person ? `told by the person at ${who(c.from.person)}` : `seen at ${c.from?.place ?? "a place"}, once the player is past it`;
+    const about = keys && c.key !== undefined ? `about "${keys[c.key]}"` : "a fact";
+    out.push(`- clues.${c.id}: ${about}, ${src}.${c.false ? ` A LIE: a believable one, which clues.${c.truth} proves false.` : ""}${c.points ? ` It names ${c.points} as where it ends.` : ""}${c.tells ? ` It tells of moves.${c.tells}, and when.` : ""}`);
+  }
+  for (const a of adv.appointments ?? []) out.push(`- moves.${a.id}: what the other side does at ${stopName(a.where)} at ${clock(a.at)}, whether the player is there or not.${a.needs?.length ? ` It follows moves.${a.needs.join(", ")}.` : ""}`);
+  return out.join("\n");
 }
 
 const DIFF = ["easy", "fair", "hard", "very hard"];
@@ -107,7 +135,15 @@ function factsOf(adv: Adventure): string {
     .join("\n");
 }
 
-export function buildMessages(card: CardInfo, of: Trope | Adventure): Message[] {
+/** What the table said that the story should take in: what the player asked for, and a campaign so far. */
+export interface TableAsks {
+  /** The player's own words when they chose the story ("a heist, to steal his heart-locket"). */
+  asked?: string;
+  /** A campaign under way (campaign.ts), in a few lines: its big bad, the steps it has taken, what the players know. */
+  campaign?: string;
+}
+
+export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: TableAsks = {}): Message[] {
   const adv = skeleton(of);
   const part = partOf(adv);
   const story = adv.brief ?? (part === "friend" ? "a rescue: someone has been taken, and is held at the end of the road" : "a courtship: tonight the player tries to win someone's heart");
@@ -133,9 +169,12 @@ export function buildMessages(card: CardInfo, of: Trope | Adventure): Message[] 
   const user = [
     `THE CARD\n${cardText(card)}`,
     `THE STORY: ${story} ${role}`,
+    ...(asks.asked ? [`WHAT THE PLAYER ASKED FOR, in their words (fit the story to it as far as the fixed shape allows): "${asks.asked.slice(0, 300)}"`] : []),
+    ...(asks.campaign ? [`THE CAMPAIGN SO FAR (this story is one chapter of it: tie it in, by its hand or what it is after; do not repeat a trouble the players already ended): ${asks.campaign}`] : []),
     `THE CLOCK: it starts at ${clock(adv.startHour)} and is lost at ${clock(adv.deadline.hour)} (${adv.deadline.name}). Write the times of day to fit.`,
     ...(!card.world && foreignName(card.name) ? [`The card writes the name "${card.name}" in another script. Add a key "called": the name in English letters, and use it everywhere.`] : []),
     `WHAT IS FIXED AT EACH STOP (do not change it, write words that fit it):\n${factsOf(adv)}`,
+    ...(adv.clues?.length || adv.appointments?.length ? [`THE PEOPLE, WHAT THERE IS TO FIND OUT, AND THE OTHER SIDE'S CLOCK (each clue is one plain fact, a line long, true unless it says it is a lie; the facts must fit together into one story the player can piece out):\n${worldFacts(adv)}`] : []),
     `THE ADVENTURE TO REWRITE (keep the keys):\n${JSON.stringify(wordsOf(adv), null, 1)}`,
   ].join("\n\n");
   return [
@@ -184,7 +223,7 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
   const said = obj(part === "friend" ? w0.friend : w0.courted);
   const named = base0.courted && !base0.courted.name.includes("{") ? base0.courted.name : null;
   const name = card.world
-    ? plain(said.name, 30) ?? (part === "courted" && named ? named : standIn(seed))
+    ? plain(said.name, 30) ?? nameIn(said.who) ?? (part === "courted" && named ? named : standIn(seed))
     : foreignName(card.name) ? plain(w0.called, 30) ?? card.name : card.name;
   // "{friend}" in a laid-out road's words (and in a model's, if it kept them) is that name.
   const fillName = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v).split("{friend}").join(JSON.stringify(name).slice(1, -1))) as T));
@@ -243,7 +282,30 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
     const r = obj(w.rival);
     adv.rival = { ...base.rival, name: take(r.name, 30, base.rival.name), who: take(r.who, 200, base.rival.who), lost: take(r.lost, 400, base.rival.lost) };
   }
+  // The people, the clues and the other side's clock, in the card's world's words. Who someone is, read by code from
+  // their own words: only a clear adult is ever in a scene with heat or dark themes.
+  const ppl = obj(w.people);
+  adv.stops = adv.stops.map((s) => {
+    if (!s.person) return s;
+    const wp = obj(ppl[s.id]);
+    const name = take(wp.name, 40, s.person.name);
+    const who = plain(wp.who, 200) ?? "";
+    return { ...s, person: { ...s.person, name, wants: take(wp.wants, 120, s.person.wants ?? ""), ...(who ? { look: who } : {}), age: readAgeBand(name, who) } };
+  });
+  const cw = obj(w.clues);
+  // A clue that names a place inks it on the map by the name the place has now.
+  const renamed = new Map(base.places.map((p) => [p.name.toLowerCase(), names.get(p.id)!]));
+  if (adv.clues) adv.clues = adv.clues.map((c) => ({ ...c, text: take(cw[c.id], 220, c.text), ...(c.points ? { points: renamed.get(c.points.toLowerCase()) ?? c.points } : {}) }));
+  const mw = obj(w.moves);
+  if (adv.appointments) adv.appointments = adv.appointments.map((a) => ({ ...a, what: take(mw[a.id], 200, a.what) }));
   return { adv, used, of };
+}
+
+/** A name at the start of a line about someone ("Tobiah Fenn, a miller's son"): the words before the first comma or dash, if they look like a name. */
+function nameIn(who: unknown): string | null {
+  const s = plain(who, 200);
+  const m = s && /^([A-Z][\p{L}'’-]+(?:\s+(?:[A-Z][\p{L}'’-]+|of|the|de|van|von)){0,3})\s*[,–—(-]/u.exec(s);
+  return m && m[1]!.length <= 30 && !/^(The|A|An|She|He|They|Her|His|Their)$/.test(m[1]!) ? m[1]! : null;
 }
 
 /** A companion's name when a world card's companion was not named: plain names that fit most worlds. */
@@ -272,13 +334,13 @@ export function fallbackAdventure(of: Trope | Adventure, card: CardInfo, seed: s
 const ENOUGH = 0.6;
 
 /** Build the adventure for a card: ask the model (twice at most), check its words, and fall back if they will not do. */
-export async function buildAdventure(ask: Ask | null, card: CardInfo, of: Trope | Adventure, seed: string, modern?: boolean): Promise<Adventure> {
+export async function buildAdventure(ask: Ask | null, card: CardInfo, of: Trope | Adventure, seed: string, modern?: boolean, asks: TableAsks = {}): Promise<Adventure> {
   const t: Trope | null = typeof of === "string" ? (of === "courtship" && !courtable(card) ? "rescue" : of) : null;
   const base = t ? skeletonFor(card, t, modern) : (of as Adventure);
   if (ask) {
     for (let i = 0; i < 2; i++) {
       try {
-        const text = await ask(buildMessages(card, base), "builder");
+        const text = await ask(buildMessages(card, base, asks), "builder");
         const built = applyWords(base, card, firstJson(text), seed);
         if (built.used / built.of >= ENOUGH) return built.adv;
       } catch {

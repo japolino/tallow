@@ -18,6 +18,7 @@ import { ADVENTURES, COURIER } from "../src/content/adventures.js";
 import { RECIPES, recipeOf } from "../src/content/tropes.js";
 import { lootOf, type Adventure, type RoadStop, type Trip } from "../src/engine/adventure.js";
 import { layRoad } from "../src/engine/road.js";
+import { furnish } from "../src/engine/furnish.js";
 import { fallbackAdventure } from "../src/game/build.js";
 import { cardKind } from "../src/engine/cards.js";
 import { randomSeed } from "../src/engine/dice.js";
@@ -35,7 +36,7 @@ const advFor = (seed: string, recipe = GEN): Adventure => {
   if (!recipe) return ADVENTURES[ADV]!;
   const r = recipeOf(recipe);
   if (!r) throw new Error(`No story "${recipe}". There are: ${RECIPES.map((x) => x.id).join(", ")}`);
-  return fallbackAdventure(layRoad(r, seed), CARD, seed);
+  return fallbackAdventure(furnish(layRoad(r, seed)), CARD, seed);
 };
 if (!GEN && !ADVENTURES[ADV]) throw new Error(`No adventure "${ADV}". There are: ${Object.keys(ADVENTURES).join(", ")}, or gen:<story>`);
 const quiet = !!process.env.RUNS;

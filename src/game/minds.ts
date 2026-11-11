@@ -114,6 +114,8 @@ const LINES: Record<Said, Record<string, string>> = {
 /** The plain-words reading of a line: a question is a question even when it has a verb of talking in it. */
 export function plainReading(line: string, m: Moment): Reading {
   const l = line.trim();
+  // "Can I slip past while he looks away?" asks to try it: read as the try it names, if it names one.
+  if (/\?\s*$/.test(l) && /^(can|could|may|should|shall)\s+(i|we)\b/i.test(l)) return rulesReading(line, m) ?? "none";
   if (/\?\s*$/.test(l) && !/^(i|i'll|i'm|we)\b/i.test(l)) return "none";
   return rulesReading(line, m) ?? (askLike(line) ? "none" : null);
 }

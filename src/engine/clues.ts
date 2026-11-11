@@ -87,7 +87,8 @@ export function getClue(book: Casebook, clue: Clue, how: "heard" | "seen", hunch
   const had = book.slips.find((s) => s.clue === clue.id);
   const state: SlipState = how === "seen" ? "seen" : hunch ? "doubted" : "heard";
   if (had) {
-    const better = had.state === "heard" && state === "seen" ? "seen" : had.state;
+    // Seen with your own eyes, a slip you only heard is better; a hunch later on still marks one you only heard.
+    const better = had.state === "heard" && (state === "seen" || state === "doubted") ? state : had.state;
     const slip = { ...had, state: better };
     return { book: { ...book, slips: book.slips.map((s) => (s.clue === clue.id ? slip : s)) }, slip, again: true };
   }

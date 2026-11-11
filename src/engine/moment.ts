@@ -253,6 +253,8 @@ export function shut(m: Moment, way: Way): null | Shut {
 export interface Check {
   way: Way;
   stat: Stat;
+  /** The player at the table the try was handed to (docs/MOONSHOT.md, 4.3): thrown on their stat, not yours. */
+  by?: string;
   /** The stat's number: what is added to the die. */
   add: number;
   /** The lever the line uses, when it has not been used before. */
@@ -341,9 +343,9 @@ export function nameCheck(m: Moment, read: Read): Check | null {
   const start = positionOf(gap, m.stop.position, !!m.ambush);
   const t = traded(effectOf(gap), start, read.trade);
   const sure = sureHands(statOf(m.sheet, stat));
-  // With sure hands only a 1 still fails; every other failure works at a cost.
+  // With sure hands, or a slip in hand, only a 1 still fails; every other failure works at a cost.
   const ones = edge && !bane ? 1 / 400 : bane && !edge ? 39 / 400 : 1 / 20;
-  const partial = sure ? Math.max(o.partial, 1 - o.success - ones) : o.partial;
+  const partial = sure || ability?.does === "slip" ? Math.max(o.partial, 1 - o.success - ones) : o.partial;
   return {
     way: read.way,
     stat,
@@ -436,12 +438,16 @@ export function resolve(m: Moment, read: Read): Outcome | null {
   const second = two ? rollD20(seededRng(`${m.seed}:${m.stop.id}:try:${m.tries}:edge`)) : 0;
   const natural = !two ? first : check.edge ? Math.max(first, second) : Math.min(first, second);
   const thrown = d20Tier(natural, check.add, check.target, PARTIAL);
-  const slipped = check.slip && (thrown === "fail" || thrown === "crit_fail");
-  // Sure hands: what you are good at, you do not flub. Only a 1 still fails.
+  // A slip, or sure hands (what you are good at, you do not flub), turns a failure into working at a cost. A 1 always
+  // fails, whatever you hold: the narrator says so, and so does the die.
+  const slipped = check.slip && thrown === "fail";
   const steady = !slipped && check.sure && thrown === "fail";
   const tier: Tier = slipped || steady ? "partial" : thrown;
   const past = tier === "crit_success" || tier === "success" || tier === "partial";
-  const asked = costByPosition(costOf(tier, check.price), tier, check.position);
+  // Saved from failing, a try costs what it asks (the price, and never less than failing would have): never the
+  // dearer price of a try that only half works, or being good at it would cost more than failing.
+  const base = slipped || steady ? Math.max(costOf(thrown, check.price), check.price) : costOf(tier, check.price);
+  const asked = costByPosition(base, tier, check.position);
   const warded = Math.min(asked, check.ward);
   const amount = asked - warded;
 

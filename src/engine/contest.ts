@@ -246,5 +246,15 @@ export function playRound(c: Contest, tier: Tier, grade: Grade | undefined, targ
 export function yieldRead(line: string): boolean {
   const l = ` ${line.toLowerCase().replace(/[’]/g, "'")} `;
   if (/\b(won't|will not|never|don't|do not|refuse to|not)\s+(give in|give up|yield|surrender|back down)\b/.test(l)) return false;
-  return /\b(i|we)\s+(give in|give up|yield|surrender|concede|submit|back down|stand down|throw in the towel)\b/.test(l) || /^\s*(give in|give up|yield|surrender|i'm done|enough|i quit)\b/.test(l);
+  // "Give up the key" and "I give up my sword to him" hand something over; "Enough talk, I swing" is a blow.
+  if (/\b(i|we)\s+(give in|give up|yield|surrender|concede|submit|back down|stand down|throw in the towel)\b(?!\s+(the|my|our|a|an|his|her|their|your|its|it|this|that|these|those|to|on)\b)/.test(l)) return true;
+  return /^\s*(i\s+|we\s+)?(give in|give up|yield|surrender|concede|i'm done|i am done|we're done|enough|i quit|you win)\s*[.!]*\s*$/.test(l);
+}
+
+/**
+ * Whether a line gives in past any doubt, for when there is no model to ask: a yield, with no blow, run or threat in
+ * the same breath ("I yield!", "Enough. I give in."). Anything less keeps the contest going.
+ */
+export function yieldSure(line: string): boolean {
+  return yieldRead(line) && !/\b(swing|strike|attack|hit|stab|shoot|charge|run|flee|kill|die|or else|but|unless|then)\b/i.test(line);
 }

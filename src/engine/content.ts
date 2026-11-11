@@ -72,7 +72,8 @@ export function allowedTakenOut(list: readonly TakenOut[], s: ContentSettings): 
   return list.filter((t) => t !== "claimed" || s.heat || s.dark);
 }
 
-const has = (text: string, word: string): boolean => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i").test(text);
+/** A word or phrase as a whole word (and its plural): a line on "cat" is not crossed by "category". */
+const has = (text: string, word: string): boolean => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:e?s)?\\b`, "i").test(text);
 /** Whether a text crosses one of the chat's lines (which must never appear). */
 export const crossesLine = (text: string, s: ContentSettings): boolean => s.lines.some((l) => has(text, l));
 /** Whether a text touches a veil (which happens off-screen). */
@@ -112,7 +113,20 @@ export function contentRules(s: ContentSettings, bands: readonly (AgeBand | unde
 
 const ON = /\b(on|yes|allowed|welcome|please|enable|enabled|fine|ok|okay)\b/i;
 const OFF = /\b(off|no|none|not|never|disable|disabled|stop|without)\b/i;
-const switchOf = (line: string): boolean | null => (OFF.test(line) ? false : ON.test(line) ? true : null);
+/**
+ * On or off, for one setting in a line: read in the part of the line that names it ("heat on, no limits" is heat on).
+ * A plain "on" or "off" there decides; then a "no" or "not" before the name; then the other words.
+ */
+const switchOf = (line: string, key: RegExp): boolean | null => {
+  const part = line.split(/[,;.!?]|\b(?:but|and|then|also)\b/i).find((c) => key.test(c)) ?? line;
+  if (/\boff\b/i.test(part)) return false;
+  if (/\bon\b/i.test(part)) return true;
+  const at = part.search(key);
+  if (at > 0 && OFF.test(part.slice(0, at))) return false;
+  return OFF.test(part) ? false : ON.test(part) ? true : null;
+};
+const DARK = /\bdark (themes?|content|stuff)\b|\bdub(ious)?[- ]?con\b|\bnon[- ]?con\b/i;
+const HEAT = /\b(heat|nsfw|explicit|spicy|lewd|smut)\b/i;
 const clip = (x: string): string => x.trim().toLowerCase().replace(/[.!?"']+$/g, "").slice(0, 40);
 
 /**
@@ -136,15 +150,18 @@ export function contentFromLine(line: string, s: ContentSettings): ContentSettin
   }
   if (/\b(dice|die) decides?\b|\blet the dice\b/i.test(t)) return { ...s, diceDecide: !/\b(don'?t|do not|never|no|not|stop)\b/i.test(t) };
   if (/\b(my choice|i choose|i decide)\b.*\b(caught|lose|scene)\b/i.test(t)) return { ...s, diceDecide: false };
-  if (/\bdark (themes?|content|stuff)\b|\bdub(ious)?[- ]?con\b|\bnon[- ]?con\b/i.test(t)) {
-    const v = switchOf(t.replace(/\bdark\b/i, ""));
-    return v === null ? null : { ...s, dark: v };
+  // Dark themes and heat, either or both in one line ("heat on, no dark stuff").
+  let out: ContentSettings | null = null;
+  if (DARK.test(t)) {
+    const v = switchOf(t, DARK);
+    if (v !== null) out = { ...(out ?? s), dark: v };
   }
-  if (/\b(heat|nsfw|explicit|spicy|lewd|smut)\b/i.test(t) && t.split(/\s+/).length <= 8) {
-    const v = /^(heat|nsfw|explicit|spicy|lewd|smut)\s*[.!]?$/i.test(t) ? true : switchOf(t);
-    return v === null ? null : { ...s, heat: v };
+  // Heat in a short line, or said plainly as on or off in a longer one ("heat on, and let's do a heist in the docks").
+  if (HEAT.test(t) && (t.split(/\s+/).length <= 8 || /\b(heat|nsfw)\s+(?:is\s+)?(on|off)\b|\bno (heat|nsfw)\b/i.test(t))) {
+    const v = /^(heat|nsfw|explicit|spicy|lewd|smut)\s*[.!]?$/i.test(t) ? true : switchOf(t, HEAT);
+    if (v !== null) out = { ...(out ?? s), heat: v };
   }
-  return null;
+  return out;
 }
 
 /** What the narrator says back when content was set at the table: the settings as they now stand, plainly. */

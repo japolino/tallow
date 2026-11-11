@@ -296,10 +296,13 @@ export function hoursTo(t: Trip, stopId: string): number {
   return t.adv.roads.find(([a, b]) => a === t.at && b === stopId)?.[2] ?? 0;
 }
 
-/** The sheet a moment is played with: your own, with each companion's help added. */
+/** The companions at your side: those in the party who have not gone off on their own (docs/MOONSHOT.md, 4.3). */
+export const withParty = (t: Pick<Trip, "party" | "fellows">): string[] => t.party.filter((id) => !(t.fellows ?? []).some((f) => f.id === id && f.at));
+
+/** The sheet a moment is played with: your own, with each companion at your side's help added. */
 function helped(t: Trip, sheet: Sheet): Sheet {
   const s = copySheet(sheet);
-  for (const id of t.party) {
+  for (const id of withParty(t)) {
     const c = companionOf(t.adv, id);
     if (c) s.stats[c.stat] = Math.min(STAT_MAX, (s.stats[c.stat] ?? 0) + 1);
   }
@@ -328,6 +331,30 @@ function overClock(t: Trip): Trip {
   return !t.over && t.sheet.hour >= t.adv.deadline.hour ? { ...t, over: "deadline" } : t;
 }
 
+/**
+ * The trip's sheet is the one that counts: the moment in your way takes everything from it but the stats it throws with
+ * (yours, or another player's when the try was handed to them), so health, supplies, goodwill, the store, gear and the
+ * hour changed on the trip while you stood there (a payoff's income, a wait) are not lost to the next try.
+ */
+export function sheetKept(t: Trip): Trip {
+  const f = t.facing;
+  if (!f) return t;
+  const { powerName: _yours, ...rest } = t.sheet;
+  const ms = f.moment.sheet;
+  const sheet: Sheet = { ...rest, stats: ms.stats, ...(ms.powerName ? { powerName: ms.powerName } : {}) };
+  return { ...t, facing: { ...f, moment: { ...f.moment, sheet } } };
+}
+
+/**
+ * The one way the story's clock is set outside the road and a try: the trip's hour and the hour of the moment in your
+ * way move together, and time past the deadline loses the job, however it was spent.
+ */
+export function clockTo(t: Trip, hour: number): Trip {
+  const f = t.facing;
+  const trip: Trip = { ...t, sheet: { ...t.sheet, hour }, ...(f ? { facing: { ...f, moment: { ...f.moment, sheet: { ...f.moment.sheet, hour } } } } : {}) };
+  return overClock(trip);
+}
+
 export interface Arrival {
   trip: Trip;
   stop: RoadStop;
@@ -348,7 +375,7 @@ export function arrive(t: Trip, stopId: string): Arrival | null {
     abilities: t.abilities.filter((a) => !t.storyUsed.includes(a.id)),
     used: [],
     against: t.against ?? [],
-    company: t.party.length,
+    company: withParty(t).length,
   };
   const facing = { stop, moment, holds: Math.max(1, stop.holds ?? 1), ...(isContest(stop) ? { contest: startContest(stop) } : {}) };
   const trip = overClock({ ...t, sheet, visited: [...t.visited, stop.id], facing, warned: 0 });
@@ -386,6 +413,9 @@ export interface Rested {
 }
 
 /** Rest before going on. It heals you, but it takes hours, and word of you goes ahead. Not with something in your way. */
+/** Whether a rest would do you good: you are hurt, or your store is not full. */
+export const weary = (t: Trip): boolean => t.sheet.health < HEALTH_MAX || (t.sheet.store ?? storeAt(t.level)) < storeAt(t.level);
+
 export function rest(t: Trip): Rested | null {
   if (t.over || t.facing) return null;
   const sheet = copySheet(t.sheet);
@@ -476,7 +506,8 @@ export function markLeft(o: Outcome, grade: Grade | undefined, words: string | u
 }
 
 /** Throw the die at the stop in your way, for a reading of the line the player wrote. Null when that way cannot be tried. */
-export function attempt(t: Trip, read: Read): Turn | null {
+export function attempt(t0: Trip, read: Read): Turn | null {
+  const t = sheetKept(t0);
   const f = t.facing;
   if (t.over || !f) return null;
   const o = resolve(f.moment, withAbility(f.moment, read));
@@ -550,7 +581,7 @@ export function attempt(t: Trip, read: Read): Turn | null {
     trip.facing = null;
     trip.at = f.stop.id;
     trip.passed = t.passed + 1;
-    for (const id of t.party) {
+    for (const id of withParty(t)) {
       const c = companionOf(adv, id)!;
       const liked = o.check.way === c.likes ? true : o.check.way === c.dislikes ? false : null;
       if (liked === null) continue;

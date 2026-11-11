@@ -13,10 +13,11 @@ import { offerRoom, shapeOf, stockOffer, type Ability } from "../engine/abilitie
 import { lootOf, takeAbility, type Adventure, type Loot, type Trip } from "../engine/adventure.js";
 import { fitSpread, heroNow, spreadNow, START, type Hero } from "../engine/hero.js";
 import { layRoad } from "../engine/road.js";
-import { campaignBrief, chapterSaid, checkFront, endChapter, finaleDue, finaleRoad, finaleSaid, keyFor, startCampaign, stockFront, type Campaign, type Front } from "../engine/campaign.js";
-import type { Payoff } from "../engine/project.js";
-import { contentFromLine, contentSaid, DEFAULT_CONTENT, type ContentSettings } from "../engine/content.js";
-import { kitFromWords, stockKit, type KitId, type WorldKit } from "../engine/kit.js";
+import { furnish } from "../engine/furnish.js";
+import { campaignBrief, chapterSaid, checkFront, endChapter, finaleDue, finaleRoad, finaleSaid, keyFor, RINGS, startCampaign, stockFront, type Campaign, type Front } from "../engine/campaign.js";
+import type { Payoff, Project } from "../engine/project.js";
+import { contentFromLine, contentSaid, DEFAULT_CONTENT, playable, type ContentSettings } from "../engine/content.js";
+import { checkKit, INFERNAL_KIT, infernalWords, kitFromWords, stockKit, type KitId, type WorldKit } from "../engine/kit.js";
 import type { Sheet } from "../engine/moment.js";
 import { abilityRule, levelTaken } from "../engine/tell-adventure.js";
 import { drawRecipe, familiesFor, familiesSaid, FAMILY_SAID, storyRead, type Family, type Recipe, type StoryAnswer } from "../content/tropes.js";
@@ -39,16 +40,18 @@ export interface Kept {
   campaign?: Campaign;
   /** What your finished projects pay off (project.ts): income, a place, people, a weapon, a name. */
   payoffs?: Payoff[];
+  /** Goals of your own still under way (project.ts), to go on with in the next story. A favour stays with its story. */
+  projects?: Project[];
 }
 
 /** How long a model is given to write a big bad before the stock one is used. */
 const FRONT_MS = 30000;
 
 /** A big bad for a campaign: written by a model from the card's world and checked by code, or the stock one. */
-export async function writeFront(ask: Ask | null, world: string, stock: Front): Promise<Front> {
+export async function writeFront(ask: Ask | null, world: string, stock: Front, asked = ""): Promise<Front> {
   if (!ask) return stock;
   try {
-    const text = await Promise.race([ask(frontMessages(world), "builder"), new Promise<string>((_, no) => setTimeout(() => no(new Error("slow")), FRONT_MS))]);
+    const text = await Promise.race([ask(frontMessages(world, asked), "builder"), new Promise<string>((_, no) => setTimeout(() => no(new Error("slow")), FRONT_MS))]);
     return checkFront(firstJson(text), stock);
   } catch {
     return stock;
@@ -56,7 +59,7 @@ export async function writeFront(ask: Ask | null, world: string, stock: Front): 
 }
 
 /** Whether a line asks for a campaign: one long threat across many stories. */
-export const wantsCampaign = (line: string): boolean => /\b(campaign|long game|many stories|big bad)\b/i.test(line);
+export const wantsCampaign = (line: string): boolean => /\b(campaign|long game|many stories|big bad)\b/i.test(line) && !/\b(no|not|without|don'?t want|rather not)\b[^.,;]{0,24}\b(campaign|long game|many stories|big bad)\b/i.test(line);
 
 /**
  * Your sheet in a world's kit (kit.ts): a seventh strength only in a world with that kind of power, named as it is
@@ -71,10 +74,14 @@ export function inKit(sheet: Sheet, kit: WorldKit): Sheet {
 
 /** The kit for a card: by its words, held to our own day when the card is of our own day. */
 export function kitFor(card: CardInfo, modern: boolean | undefined, content: ContentSettings | undefined): WorldKit {
-  let id: KitId = kitFromWords(cardText(card, 4000));
+  const text = cardText(card, 4000);
+  let id: KitId = kitFromWords(text);
   if (modern === true && (id === "medieval" || id === "high-fantasy")) id = "modern";
   if (modern === false && id === "modern") id = "medieval";
-  return stockKit(id, content ?? { heat: false, dark: false, diceDecide: false, lines: [], veils: [] });
+  const settings = content ?? { heat: false, dark: false, diceDecide: false, lines: [], veils: [] };
+  // Hell is an old world of its own: its era, fears and foes, not the generic kingdoms and towers.
+  if ((id === "medieval" || id === "high-fantasy") && infernalWords(text)) return checkKit(INFERNAL_KIT, "high-fantasy", settings);
+  return stockKit(id, settings);
 }
 
 export interface SittingOptions {
@@ -185,7 +192,9 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
 
   /** When a story is over: what became of everyone, an ability and a thing or two if it was won, and the table cleared. */
   const after = async (t0: Trip, hero: Hero, kept0: Kept | null): Promise<Kept> => {
-    const epilogue = o.minds.epilogue ? await table.wait("tell", o.minds.epilogue(t0).catch(() => null)) : null;
+    const written = o.minds.epilogue ? await table.wait("tell", o.minds.epilogue(t0).catch(() => null)) : null;
+    // The epilogue keeps to what the game allows, like every other line a model writes.
+    const epilogue = written && t0.adv.content ? playable(written, t0.adv.content) : written;
     if (epilogue) await table.say([epilogue]);
     // What you learned in the story stays yours: the abilities taken at its level-ups, and the level.
     let t = t0;
@@ -211,20 +220,25 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       await table.say(finaleSaid(campaign, t.over === "won"));
       table.blackCandle?.(null);
       campaign = undefined;
-    } else if (campaign && campaign.burned < 6) {
+    } else if (campaign && campaign.burned < RINGS) {
       const won = t.over === "won";
       const key = keyFor(campaign);
-      const e = endChapter(campaign, { setBack: won, failedNear: !won && (t.over === "taken" || t.over === "deadline"), found: won && key !== null ? [key] : [] });
+      // Who you won over and who you made an enemy of carry on, and what this chapter was, so the next is not the same.
+      const people = Object.values(t.people ?? {});
+      const friends = people.filter((p) => p.attitude === "close" || p.attitude === "friendly").map((p) => p.name);
+      const enemies = people.filter((p) => p.attitude === "hostile").map((p) => p.name);
+      const e = endChapter(campaign, { setBack: won, failedNear: !won && (t.over === "taken" || t.over === "deadline"), found: won && key !== null ? [key] : [], friends, enemies, trouble: `${t.adv.title}, ${t.adv.goal}`, how: t.over ?? "unfinished" });
       campaign = e.campaign;
       table.blackCandle?.({ burned: campaign.burned, lit: e.steps.length > 0 });
-      await table.say(chapterSaid(campaign, e.steps, e.over));
+      await table.say(chapterSaid(campaign, e.steps, e.over, e.stopped));
       if (!e.over && finaleDue(campaign)) await table.say([`You hold all three keys to ${campaign.front.name}. The next story can be the last: against it, itself.`]);
     }
     // What your projects pay off is yours in the stories after; a weapon brought to a fight is spent.
     const payoffs = (t.payoffs ?? []).filter((p) => !(p === "weapon" && t.armed));
     await table.sweep?.();
     const grown: Hero = { ...hero, abilities: t.abilities.map((a) => ({ ...a })), level: t.level };
-    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}) };
+    const projects = (t.projects ?? []).filter((p) => !p.id.startsWith("favour:") && p.filled < p.segments);
+    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}), ...(projects.length ? { projects } : {}) };
     o.keep?.(next);
     return next;
   };
@@ -239,6 +253,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       // A story kept from before the six stats has its sheet read into them.
       const t = spreadNow(o.saved.sheet.stats) ? o.saved : { ...o.saved, sheet: { ...o.saved.sheet, stats: fitSpread(o.saved.sheet.stats, typeof o.saved.sheet.stats.power === "number") } };
       o.built?.(t.adv);
+      // The black candle stands where it stood when you got up from the table.
+      if (kept?.campaign) table.blackCandle?.({ burned: kept.campaign.burned, lit: false });
       const d = direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
       o.started?.(d);
       last = await d.done;
@@ -261,6 +277,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     let answer: StoryAnswer | null = null;
     let someoneNew = false;
     let longGame = false;
+    let askedFor = "";
     for (;;) {
       const w = await table.write();
       await w.given;
@@ -271,10 +288,19 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
         o.keepContent?.(set);
         void table.aside();
         await table.say([contentSaid(set)]);
-        continue;
+        // A story asked for in the same line is still asked for ("heat on, and something with a heist"); a line that
+        // only sets content waits for the story.
+        const named = storyRead(w.line, offered, false);
+        if (!named) continue;
+        someoneNew = !!kept && wantsSomeoneNew(w.line);
+        longGame = longGame || wantsCampaign(w.line);
+        askedFor = w.line;
+        answer = named;
+        break;
       }
       someoneNew = !!kept && wantsSomeoneNew(w.line);
       longGame = longGame || wantsCampaign(w.line);
+      askedFor = w.line;
       answer = await pickBy(o.minds, first ? "What kind of story is it to be?" : "Another story, and what kind? Or done for tonight?", w.line, options, () => storyRead(w.line, offered, !first) ?? (someoneNew ? "any" : null), reading);
       void table.aside();
       if (answer) break;
@@ -294,11 +320,15 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     // The world's kit (kit.ts) and what the game allows (content.ts) go with the story, whoever builds it.
     const kit = kitFor(card, modern ?? modernCard(card), content);
     const fitted = (adv: Adventure): Adventure => ({ ...adv, kit, ...(content ? { content } : {}) });
-    const base = fitted(layRoad(recipe, seed, { modern: modern ?? modernCard(card) }));
-    const build = buildAdventure(o.ask, card, base, seed, modern).then((adv) => fitted(adv)).then((adv) => (o.built?.(adv), adv));
-    // A campaign asked for, and none under way: a big bad for this world (written by a model while you write who you
-    // are, checked by code), and a black candle of six rings.
-    const frontAsked = longGame && !kept?.campaign ? writeFront(o.ask, card.world ? cardText(card, 1200) : cardText(card, 700), stockFront(base.seed, modern ?? modernCard(card))) : null;
+    // The living world on it (furnish.ts): people with minds of their own, what there is to find out, the other side's clock.
+    const base = fitted(furnish(layRoad(recipe, seed, { modern: modern ?? modernCard(card) })));
+    // A campaign asked for, and none under way: a big bad for this world and for what the player asked (written by a
+    // model while you write who you are, checked by code), and a black candle of six rings.
+    const frontAsked = longGame && !kept?.campaign ? writeFront(o.ask, card.world ? cardText(card, 1200) : cardText(card, 700), stockFront(base.seed, (modern ?? modernCard(card)) || kit.id === "space"), askedFor).then(startCampaign) : null;
+    // What the player asked for, and the campaign so far, go to the builder so the story is theirs and one chapter of
+    // it: the first chapter of a campaign begun now waits for its big bad, so it is built as part of it.
+    const briefed: Promise<string | undefined> = frontAsked ? frontAsked.then(campaignBrief) : Promise.resolve(kept?.campaign ? campaignBrief(kept.campaign) : undefined);
+    const build = briefed.then((brief) => buildAdventure(o.ask, card, base, seed, modern, { asked: askedFor, ...(brief ? { campaign: brief } : {}) })).then((adv) => fitted(adv)).then((adv) => (o.built?.(adv), adv));
     let hero: Hero;
     if (kept && !someoneNew) hero = heroNow(kept.hero);
     else {
@@ -311,7 +341,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     }
     const carry = kept && !someoneNew ? kept.carry : [];
     if (frontAsked) {
-      const started = startCampaign(await table.wait("deal", frontAsked));
+      const started = await table.wait("deal", frontAsked);
       kept = kept ? { ...kept, campaign: started } : { hero, played: [], carry: [], campaign: started };
     }
     const campaign = kept?.campaign;
@@ -334,6 +364,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       save: o.save,
       carry,
       ...(kept?.payoffs?.length && !someoneNew ? { payoffs: kept.payoffs } : {}),
+      ...(kept?.projects?.length && !someoneNew ? { projects: kept.projects } : {}),
     });
     o.started?.(d);
     last = await d.done;
