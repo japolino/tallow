@@ -37,6 +37,10 @@ import { calledRead } from "./free.js";
 import { asksForRoll } from "../engine/project.js";
 import { foeBy, handedToBy, objectsBy, waitBy } from "./meaning.js";
 import type { Fellow } from "../engine/seats.js";
+import { battleEnd, namesWanted, onTheMat, openBattle, planBattle, withBattle, heroPiece } from "../engine/battletrip.js";
+import { theirTurn, yourTurn, type Battle, type BattleEvent } from "../engine/battle.js";
+import { battleLedger, battleOpenSaid, battleOverSaid, boardWords, chalkLines, chalkSaid, eventLines, rollAsk, youSaid } from "../engine/tell-battle.js";
+import { battleContext, battleRouteWords, ordersFrom, type BattleRouted } from "./battleroute.js";
 
 /** What the table is waiting for, so it can show the right thing meanwhile. */
 export type Beat = "read" | "tell" | "deal";
@@ -101,6 +105,11 @@ export interface Table {
   ways?(states: ReturnType<typeof wayStates> | null): Promise<void>;
   /** The leather of a contest (engine/contest.ts): unrolled with its dials, the dials set to match, or rolled up (null). */
   board?(c: Contest | null): Promise<void>;
+  /**
+   * The battle mat (docs/COMBAT.md, 7): unrolled with its pieces, what just happened on it played out (`events`), or
+   * rolled up (null).
+   */
+  battle?(b: Battle | null, events?: readonly BattleEvent[]): Promise<void>;
   /** The narrator throws its own die, for a question only luck can settle (engine/luck.ts); it shows `natural`. */
   luck?(natural: number): Promise<void>;
   /** The narrator's slips against you (dread.ts, "brand"), laid out on its side to match this list. */
@@ -164,6 +173,8 @@ export interface DirectOptions {
   payoffs?: readonly Payoff[];
   /** Goals of your own still under way (project.ts): carried into this story, to go on working at. */
   projects?: readonly Project[];
+  /** Fights on the battle mat (docs/COMBAT.md): on unless set false, and then a fight is a dial contest as before. */
+  battles?: boolean;
 }
 
 export const abilityCard = (a: Ability): SideCard => ({ id: `ability:${a.id}`, card: a.card, name: a.name, side: "perk" });
@@ -349,7 +360,9 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       const standing = table.ways?.(wayStates(trip.facing.moment));
       await table.page({ heading: `${facing.name}: ${cardKind(facing.card).title}`, his: [facing.situation, ...firstPage(trip).his.slice(1)] });
       await standing;
-      if (trip.facing.contest) await table.board?.(trip.facing.contest);
+      if (matHere()) {
+        // The mat is laid out again as it stood (atBattle).
+      } else if (trip.facing.contest) await table.board?.(trip.facing.contest);
       else await table.say([ASK_NEXT]);
       await atStop(facing, ASK_NEXT);
       await camp();
@@ -425,7 +438,8 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       knowNow();
       trip = here.trip;
       // A contest's names are asked for at once, while the card is turned and the place is told.
-      const naming = trip.facing?.contest && minds.contest ? minds.contest(trip.facing.moment, trip.facing.contest.kind).catch(() => ({}) as ContestNames) : null;
+      const mat = matHere();
+      const naming = !mat && trip.facing?.contest && minds.contest ? minds.contest(trip.facing.moment, trip.facing.contest.kind).catch(() => ({}) as ContestNames) : null;
       table.clock(trip.sheet.hour);
       await table.move("shadow", pick.id);
       await table.turn(pick);
@@ -448,7 +462,9 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table,
       const ask = asked ? ASK_NEXT : ASK_SAID;
       asked = true;
       // In a contest the question comes after what is coming at you, so that is what you answer.
-      if (trip.facing?.contest) await openContest(naming);
+      if (mat) {
+        // The mat is unrolled when the fight starts (atBattle).
+      } else if (trip.facing?.contest) await openContest(naming);
       else await table.say([ask]);
       await atStop(pick, ask);
       if (trip.over) break;
@@ -592,8 +608,139 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
     };
   };
 
+  /** Whether the stop in your way is fought on the battle mat: a fight, unless a dial contest was already under way there. */
+  const matHere = (): boolean => {
+    const f = trip.facing;
+    if (!f || opts.battles === false || !onTheMat(f.stop)) return false;
+    return !!f.battle || !((f.contest?.round ?? 0) > 0);
+  };
+
+  /**
+   * A fight on the battle mat (docs/COMBAT.md, 6): every foe chalks what it is about to do; one line is your whole
+   * side's turn, read by a model (game/battleroute.ts) or by the words; your die is thrown for your own piece; then
+   * their blows land, and the narrator tells the round. Played until the fight is over, and the end is the trip's.
+   */
+  const atBattle = async (stop: RoadStop): Promise<void> => {
+    const place = { name: stop.name, situation: stop.situation };
+    if (!trip.facing?.battle) {
+      const plan = planBattle(trip);
+      const want = namesWanted(plan);
+      const names = minds.battleNames ? await table.wait("deal", minds.battleNames(place, want.foes, want.props).catch(() => ({ foes: {}, props: {} }))) : {};
+      const opened = openBattle(trip, plan, names);
+      trip = opened.trip;
+      await table.board?.(null);
+      await table.battle?.(trip.facing!.battle!.battle, opened.events);
+      await table.say(battleOpenSaid(trip.facing!.battle!.battle, !!stop.climax));
+    } else await table.battle?.(trip.facing.battle.battle, []);
+    let shown = -1;
+    let next: Written | null = null;
+    while (trip.facing?.battle && !trip.over) {
+      const seat = trip.facing.battle;
+      const b = seat.battle;
+      if (b.over) break;
+      if (!next) opts.save?.(trip);
+      if (b.round !== shown) {
+        shown = b.round;
+        await table.say(chalkSaid(b));
+      }
+      stage = "write";
+      const w = next ?? (await table.write());
+      next = null;
+      stage = "given";
+      const ctx = battleContext(b, { hero: seat.hero, abilities: seat.abilities, styles: seat.styles, ...(seat.last ? { last: seat.last } : {}), charm: true });
+      const routing = minds.battleRoute ? minds.battleRoute(w.line, ctx).catch(() => null) : Promise.resolve(null);
+      await w.given;
+      let routed: BattleRouted = (await table.wait("read", routing)) ?? battleRouteWords(w.line, ctx);
+      if (routed.route === "stop") {
+        void table.aside();
+        opts.save?.(trip);
+        await table.say(LEFT_SAID);
+        throw new LeftOff();
+      }
+      if (routed.route === "yield") {
+        // Giving in ends the fight for good: asked again plainly before it is taken.
+        const gives = await pickBy(minds, "Does the player give in, and stop the fight?", w.line, { yes: "yes: they give in, give up or yield", no: "no: they keep fighting" }, () => (yieldRead(w.line) && yieldSure(w.line) ? "yes" : "no"), (p) => table.wait("read", p));
+        if (gives === "yes") {
+          const given = yourTurn(b, [{ piece: seat.hero, act: { act: "giveIn" } }], seat.abilities);
+          trip = withBattle(trip, given.battle);
+          await table.battle?.(given.battle, given.events);
+          break;
+        }
+        routed = battleRouteWords(w.line, ctx);
+        if (routed.route !== "act") routed = { route: "act", hero: { act: "wait" } };
+      }
+      if (routed.route === "ask") {
+        const told = fit(await table.wait("tell", minds.answer(w.line, trip.facing.moment, `The battle mat, as it stands:\n${boardWords(b, false)}\n${battleLedger(b)}`)));
+        void table.aside();
+        await table.say([told || battleLedger(b)]);
+        continue;
+      }
+      const { orders, notes } = ordersFrom(b, routed, { hero: seat.hero, styles: seat.styles, abilities: seat.abilities });
+      const aimed = routed.hero?.target && b.pieces.some((p) => p.id === routed.hero!.target && p.side === "them") ? routed.hero.target : undefined;
+      if (notes.length) await table.say(notes.map((n) => youSaid(`${n}.`)));
+      // Your side's turn is decided now; your die only shows it.
+      const mine = yourTurn(b, orders, seat.abilities);
+      const roll = mine.events.find((e): e is Extract<BattleEvent, { e: "roll" }> => e.e === "roll" && e.by === seat.hero);
+      if (roll) {
+        stage = "check";
+        await table.say([rollAsk(b, roll), DIE_SAYS]);
+        next = await table.dieOrLine();
+        if (next) continue;
+        stage = "throw";
+        await table.throwDie(roll.natural);
+      }
+      const theirs = mine.battle.over ? { battle: mine.battle, events: [] as BattleEvent[] } : theirTurn(mine.battle);
+      const events = [...mine.events, ...theirs.events];
+      trip = withBattle(trip, theirs.battle, aimed);
+      opts.save?.(trip);
+      stage = "told";
+      const onMat = table.battle?.(theirs.battle, events);
+      const lines = eventLines(theirs.battle, events);
+      const chalk = theirs.battle.over ? [] : chalkLines(theirs.battle);
+      const me = heroPiece(trip.facing!.battle!);
+      const out = me && (me.down || me.overcome || me.carried) ? [`The player is ${me.overcome ? "overcome" : "down"} and does nothing.`] : [];
+      const note = [...lines, ...out, ...(chalk.length ? ["What they are about to do now:", ...chalk] : [])].join("\n");
+      const told = minds.battleTell ? fit(await table.wait("tell", minds.battleTell(place, note).catch(() => ""))) : "";
+      await onMat;
+      await table.say(told ? [told] : lines);
+      // Out of it, with friends still standing: said every round, since the line can now only move them.
+      if (told && out.length && !theirs.battle.over) await table.say([chalkSaid(theirs.battle).at(-1)!]);
+      await table.page({ heading: `${stop.name}: round ${b.round}`, his: [...(told ? [told] : []), ...lines, battleLedger(theirs.battle)] });
+      // The chalk was told with the round; it is said again only when the teller had nothing.
+      if (told && !theirs.battle.over) shown = theirs.battle.round;
+    }
+    const end = battleEnd(trip);
+    if (!end) return;
+    const b = trip.facing!.battle!.battle;
+    trip = end.trip;
+    table.clock(trip.sheet.hour);
+    opts.save?.(trip.over ? null : trip);
+    void table.carry(null, trip.sheet, false);
+    await table.say(battleOverSaid(b, { ...end, climax: !!stop.climax }));
+    await table.battle?.(null);
+    await table.ways?.(null);
+    trip = synced(trip);
+    if (end.cleared) {
+      await worldSaid(worldPast(trip, stop, true));
+      await worldSaid(worldStopped(trip, stop));
+    }
+    if (trip.over) return;
+    await table.clear(stop);
+    void table.move("you", stop.id);
+    if (end.cleared) {
+      const r = end.reward;
+      const loot = r?.loot ? lootOf(trip.adv, r.loot) : undefined;
+      if (loot) await table.give({ id: loot.id, card: loot.card, name: loot.name, side: "loot" });
+      trip = geared(trip);
+      const c = r?.joins ? companionOf(trip.adv, r.joins) : undefined;
+      if (c) await table.give({ id: c.id, card: c.card, name: c.name, side: "companion" });
+      if (end.levelUp) await levelUp();
+    }
+  };
+
   /** The stop in your way, played try by try until you are past it, round it, or the adventure is over. */
   const atStop = async (stop: RoadStop, ask = ASK_NEXT): Promise<void> => {
+    if (matHere()) return atBattle(stop);
     let scaleSaid = false;
     let next: Written | null = null;
     // In a contest: the round whose blow has been shown, and what it was.

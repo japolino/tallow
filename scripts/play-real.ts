@@ -18,6 +18,8 @@ import type { Message, Role } from "../src/game/prompts.js";
 import { sit } from "../src/game/session.js";
 import type { RoadStop } from "../src/engine/adventure.js";
 import { forkRead } from "../src/engine/tell-adventure.js";
+import { boardText } from "../src/engine/battle.js";
+import { battleLedger } from "../src/engine/tell-battle.js";
 
 const env = process.env;
 const arg = (k: string): string | undefined => {
@@ -73,6 +75,11 @@ const table = {
     return p;
   },
   async weigh() {},
+  async battle(b: import("../src/engine/battle.js").Battle | null) {
+    if (!b) return void out("[the mat is rolled up]");
+    out(boardText(b));
+    out(`[${battleLedger(b)}]`);
+  },
   async dieOrLine() {
     return null;
   },

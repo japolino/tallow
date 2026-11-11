@@ -190,7 +190,7 @@ export interface Trip {
   /** How often your fault has spoken in the margin this story. */
   faults?: number;
   /** The stop in your way, how many good tries it still takes, and, when it is a contest (contest.ts), the dials. */
-  facing: { stop: RoadStop; moment: Moment; holds: number; contest?: Contest } | null;
+  facing: { stop: RoadStop; moment: Moment; holds: number; contest?: Contest; battle?: import("./battletrip.js").BattleSeat } | null;
   party: string[];
   kept: string[];
   /** Your abilities (abilities.ts). */
@@ -255,7 +255,7 @@ export const placeOf = (adv: Adventure, id: string): Place | undefined => adv.pl
 export const companionOf = (adv: Adventure, id: string): Companion | undefined => adv.companions.find((c) => c.id === id);
 export const lootOf = (adv: Adventure, id: string): Loot | undefined => adv.loot.find((l) => l.id === id);
 
-const copySheet = (s: Sheet): Sheet => ({ ...s, stats: { ...s.stats } });
+export const copySheet = (s: Sheet): Sheet => ({ ...s, stats: { ...s.stats } });
 
 export function startTrip(adv: Adventure, sheet: Sheet, seed: string, abilities: readonly Ability[] = [], level = 1): Trip {
   const party = (adv.party ?? []).filter((id) => companionOf(adv, id));
@@ -355,7 +355,7 @@ export function withAbility(m: Moment, read: Read): Read {
   return { ...r, ability: auto?.id ?? null };
 }
 
-function overClock(t: Trip): Trip {
+export function overClock(t: Trip): Trip {
   return !t.over && t.sheet.hour >= t.adv.deadline.hour ? { ...t, over: "deadline" } : t;
 }
 

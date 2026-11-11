@@ -26,6 +26,10 @@ import { nameCheck, WAYS, type Check, type Stat, type Way } from "../src/engine/
 import { forkRead, FORK_AGAIN, LEVEL_AGAIN, pickRead } from "../src/engine/tell-adventure.js";
 import { weigh, fairChance } from "../src/engine/weigh.js";
 import { direct, type Director, type Table } from "../src/game/director.js";
+import { boardText } from "../src/engine/battle.js";
+import { battleLedger } from "../src/engine/tell-battle.js";
+import { readOrder } from "../src/engine/tactics.js";
+import { lineFor as battleLine } from "../src/game/battleroute.js";
 import { standIns } from "../src/game/minds.js";
 
 const ADV = process.env.ADV ?? "rescue";
@@ -79,6 +83,7 @@ const PHRASE: Record<Way, Partial<Record<Stat, string>>> = {
 /** The simple player's line at a stop: the way and strength with the best chance, using a thing there if there is one. */
 function lineFor(d: Director): string {
   const f = d.trip.facing!;
+  if (f.battle) return battleLine(f.battle.battle, readOrder(f.battle.battle, f.battle.hero));
   const m = f.moment;
   let best: { c: Check; words?: string } | null = null;
   for (const way of WAYS) {
@@ -140,6 +145,11 @@ function textTable(d: () => Director): Table {
       if (!check) return;
       const w = weigh(check);
       out(`[The balance: ${w.his} dark weights in the narrator's pan, ${w.yours} pale ${w.yours === 1 ? "one" : "ones"} in yours${w.lever ? " and a brass one" : ""}. It leans ${w.lean > 0.05 ? "your way" : w.lean < -0.05 ? "its way" : "about level"}.]\n`);
+    },
+    async battle(b) {
+      if (!b) return void out("[The narrator rolls up the leather.]\n");
+      out(boardText(b));
+      out(`[${battleLedger(b)}]\n`);
     },
     async dieOrLine() {
       out("[You take a die from the box.]");

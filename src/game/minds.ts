@@ -6,6 +6,7 @@
  */
 import type { RouteContext, Routed } from "./route.js";
 import type { StoryContext, StoryRouted } from "./storyroute.js";
+import type { BattleContext, BattleRouted } from "./battleroute.js";
 import type { Ability } from "../engine/abilities.js";
 import type { RoadStop, Trip, Use } from "../engine/adventure.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
@@ -84,6 +85,15 @@ export interface Minds {
    * Decision model, else the reader model; null when neither is there or sure, and the word rows decide.
    */
   storyRoute?(line: string, ctx: StoryContext): Promise<StoryRouted | null>;
+  /**
+   * On the battle mat (game/battleroute.ts): what a line means each of your pieces does this round, or that it asks,
+   * gives in or stops. The Decision model, else the reader model; null when neither can say, and the words decide.
+   */
+  battleRoute?(line: string, ctx: BattleContext): Promise<BattleRouted | null>;
+  /** Names for the foes and the things on the mat, fitted to the world. Empty when no model can say. */
+  battleNames?(place: { name: string; situation: string }, foes: readonly { id: string; kind: string; rank: string; says: string }[], props: readonly { key: string; template: string; name: string }[]): Promise<{ foes: Record<string, string>; props: Record<string, string> }>;
+  /** Tell a round of the fight from the note of what happened. Empty when no model can, and the event lines stand. */
+  battleTell?(place: { name: string; situation: string }, note: string): Promise<string>;
   /**
    * How a line said to a person lands (game/hear.ts): its kind, the likes it touches, whether it touches what they
    * want. Null when no model can tell, and the words decide (people.ts, rulesLine).

@@ -9,6 +9,7 @@
  */
 import { hearFromAnswers, hearMessages, hearQuestions, parseHear } from "./hear.js";
 import { parseRoute, routeFromAnswers, routeMessages, routeQuestions } from "./route.js";
+import { battleNamesMessages, battleRouteFromAnswers, battleRouteMessages, battleRouteQuestions, battleTellMessages, parseBattleNames, parseBattleRoute } from "./battleroute.js";
 import { parseStoryRoute, storyRouteFromAnswers, storyRouteMessages, storyRouteQuestions } from "./storyroute.js";
 import type { Ability } from "../engine/abilities.js";
 import { rulesHero, type Hero } from "../engine/hero.js";
@@ -157,6 +158,39 @@ ${line}`), note), "teller"), ms), ROAM_TELL);
         fell("story route", e);
       }
       return null;
+    },
+    async battleRoute(line, ctx) {
+      if (o.decide) {
+        const got = battleRouteFromAnswers(await decided("battle route", battleRouteQuestions(line, ctx)), line, ctx);
+        if (got) return got;
+      }
+      try {
+        const r = parseBattleRoute(await within(ask(battleRouteMessages(line, ctx), "reader"), ms), ctx);
+        if (r) return r;
+        fell("battle route", "answer did not check");
+      } catch (e) {
+        fell("battle route", e);
+      }
+      return null;
+    },
+    async battleNames(place, foes, props) {
+      try {
+        return parseBattleNames(await within(ask(battleNamesMessages(place, foes, props, await scene(place.situation)), "teller"), ms));
+      } catch (e) {
+        fell("battle names", e);
+      }
+      return { foes: {}, props: {} };
+    },
+    async battleTell(place, note) {
+      try {
+        const s = parseTell(await within(ask(battleTellMessages(place, note, await scene(`${place.situation}
+${note}`)), "teller"), ms));
+        if (s) return s;
+        fell("battle tell", "empty answer");
+      } catch (e) {
+        fell("battle tell", e);
+      }
+      return "";
     },
     async content(line, s) {
       try {

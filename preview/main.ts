@@ -40,6 +40,10 @@ import { sound } from "../src/room/sound.js";
 import { SOUND_FILES } from "../src/room/soundfiles.js";
 import { MAP, PATROL, PIECES, ROAD, YOU } from "./mock.js";
 import { startPlay } from "./play.js";
+import { buildArena } from "../src/engine/arena.js";
+import { encounter } from "../src/engine/encounter.js";
+import { playRound, startBattle } from "../src/engine/battle.js";
+import { readOrder } from "../src/engine/tactics.js";
 
 const q = new URLSearchParams(location.search);
 const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(sel)!;
@@ -220,3 +224,23 @@ setInterval(() => {
   const s = room.stats();
   $("#stats").textContent = room.kind === "flat" ? "flat room (no WebGL)" : `${s.fps} fps, ${s.buffer[0]}x${s.buffer[1]}, quality step ${s.quality}`;
 }, 500);
+
+// ?mat=1 (with play=0): the battle mat on its own, a sample fight played by the board-reader, a round every few seconds.
+if (q.get("mat") === "1" && room.desk) {
+  const desk = room.desk;
+  void room.ready.then(async () => {
+    const arena = buildArena((q.get("arena") as Parameters<typeof buildArena>[0]) ?? "tavern", seed);
+    const stats = { brawn: 2, grace: 2, charm: 1, guile: 1, wits: 1, sense: 1 };
+    const spec = encounter({ seed, difficulty: 1, side: [{ id: "you", name: "you", stats, hero: true }, { id: "vy", name: "Vypra", stats: { ...stats, charm: 3 } }], mat: arena.mat, props: arena.props, zones: arena.zones, ground: arena.ground });
+    let { battle } = startBattle(spec);
+    await desk.mat.show(battle, []);
+    Object.assign(window, { matState: () => desk.mat.state, battleNow: () => battle });
+    for (let r = 0; r < 12 && !battle.over; r++) {
+      await new Promise((ok) => setTimeout(ok, 2500));
+      const orders = battle.pieces.filter((p) => p.side === "you" && !p.down && !p.out).map((p) => readOrder(battle, p.id));
+      const played = playRound(battle, orders);
+      battle = played.battle;
+      await desk.mat.show(battle, played.events);
+    }
+  });
+}

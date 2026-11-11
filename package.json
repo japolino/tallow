@@ -11,6 +11,7 @@
     "preview": "bun run scripts/preview.ts",
     "moment": "bun run scripts/moment.ts",
     "adventure": "bun run scripts/adventure.ts",
+    "battle": "bun run scripts/battle.ts",
     "shots": "bun run scripts/shots.ts",
     "pointer": "bun run scripts/pointer.ts",
     "table": "bun run scripts/table.ts",

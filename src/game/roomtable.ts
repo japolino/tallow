@@ -224,6 +224,11 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       mood();
       return desk.board.show(c);
     },
+    battle: (b, events) => {
+      contest = !!b;
+      mood();
+      return desk.mat.show(b, events);
+    },
     luck: async (natural) => {
       desk.voice.hush();
       await desk.luck.throw(natural);
@@ -234,6 +239,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       at = "road";
       music.set("end");
       await desk.board.show(null);
+      await desk.mat.show(null);
       await desk.cards.sweep();
       await desk.dread.show(0);
       await desk.against.show([]);

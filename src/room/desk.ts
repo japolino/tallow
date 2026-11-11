@@ -20,6 +20,7 @@ import { Counters } from "./counters.js";
 import { WayBlocks } from "./ways.js";
 import { DreadBowl } from "./dread.js";
 import { Board } from "./board.js";
+import { BattleMat } from "./battlemat.js";
 import { LuckTray } from "./luck.js";
 import { AgainstSlips } from "./against.js";
 import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
@@ -120,6 +121,8 @@ export class Desk {
   readonly dread: DreadBowl;
   /** The leather the narrator unrolls for a contest, and its dials (board.ts). */
   readonly board: Board;
+  /** The leather the narrator unrolls for a fight, with its squares, pieces and chalk (battlemat.ts). */
+  readonly mat: BattleMat;
   /** The narrator's own die, in its tray (luck.ts). */
   readonly luck: LuckTray;
   /** The narrator's slips against you (against.ts). */
@@ -203,6 +206,8 @@ export class Desk {
     this.group.add(this.dread.group);
     this.board = new Board(h.narrator, this.tracks, h.reduced);
     this.group.add(this.board.group);
+    this.mat = new BattleMat(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.mat.group);
     this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
     this.group.add(this.luck.group);
     this.against = new AgainstSlips(h.narrator, this.tracks, h.reduced);
@@ -995,6 +1000,7 @@ export class Desk {
     this.ways.dispose();
     this.dread.dispose();
     this.board.dispose();
+    this.mat.dispose();
     this.luck.dispose();
     this.against.dispose();
     this.cards.dispose();
