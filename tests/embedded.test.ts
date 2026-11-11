@@ -7,7 +7,8 @@ import { readFileSync } from "node:fs";
 import { EMBEDDED } from "../scripts/embed.js";
 
 test("the embedded models and sounds match the assets (run `bun run embed` if not)", () => {
-  for (const [path, make] of Object.entries(EMBEDDED)) expect(readFileSync(path, "utf8") === make()).toBe(true);
+  // A checkout may have turned the line endings to CRLF; the base64 is the same either way.
+  for (const [path, make] of Object.entries(EMBEDDED)) expect(readFileSync(path, "utf8").replace(/\r\n/g, "\n") === make()).toBe(true);
 });
 
 test("the frontend imports them as plain modules, so a plain bun build needs nothing of ours", () => {
