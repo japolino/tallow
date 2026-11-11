@@ -9,15 +9,40 @@
  * companion, docs/DESIGN.md, 5); in a courtship they are the one you court, which is never offered for anyone the card
  * reads as a child (7).
  */
-import { COURTSHIP, RESCUE } from "../content/adventures.js";
-import type { Adventure, Companion, RoadStop } from "../engine/adventure.js";
+import { CITY_COURTSHIP, COURTSHIP, NIGHT_RESCUE, RESCUE } from "../content/adventures.js";
+import { partOf, type Adventure, type Companion, type RoadStop } from "../engine/adventure.js";
 import { cardKind } from "../engine/cards.js";
-import { STATS, WAYS, type Stat, type Way } from "../engine/moment.js";
+import { STATS, WAYS, type CoreStat, type Stat, type Way } from "../engine/moment.js";
 import { clock } from "../engine/tell.js";
 import { cardText, courtable, type CardInfo, type Trope } from "./card.js";
 import { firstJson, type Ask, type Message } from "./prompts.js";
 
 export const SKELETONS: Record<Trope, Adventure> = { rescue: RESCUE, courtship: COURTSHIP };
+/** The same tropes in a modern city, with their own maps: for cards set in our own times. */
+export const CITY: Record<Trope, Adventure> = { rescue: NIGHT_RESCUE, courtship: CITY_COURTSHIP };
+
+/**
+ * Words that put a card in our own times. A few different ones, and the city skeleton fits it better than the old road.
+ * Words an older world uses as well (a club, a band, a company, a city) are left out.
+ */
+const MODERN = /\b(phones?|smartphones?|cell ?phones?|texts? (?:me|you|her|him|them)|texting|e-?mails?|internet|online|social media|instagram|laptops?|computers?|cars?|drives? a|taxi|uber|subway|highway|apartment|office|corporate|ceo|startup|high school|campus|nightclub|bartender|caf[eé]|coffee shop|downtown|mall|supermarket|police|cops?|hospital|nurse|guitar|concert|tv|television|video games?|gamer|youtube|streamer|influencer|guns?|pistol|neon|cyberpunk|modern|jeans|hoodie)\b/gi;
+/** Words that put a card in another age or world, which keep the old road even if a modern word turns up. */
+const OLDEN = /\b(swords?|knights?|kingdom|castle|dragons?|elf|elves|dwarf|orcs?|mage|magic|wizard|witch|sorcer\w*|tavern|inn|village|lord|prince|princess|king|queen|duke|noble|empire|medieval|steed|horse|bow and arrow|spell|realm|guild|temple|shrine|samurai|ninja|demon|vampire|spaceship|starship|planet|galaxy)\b/gi;
+
+/** Whether a card is set in our own times, from the words it uses. */
+export function modernCard(card: CardInfo): boolean {
+  const text = cardText(card, 7000);
+  // Each word once, whether it is said once or ten times, and "phone" and "phones" as one.
+  const count = (re: RegExp) => new Set((text.match(re) ?? []).map((w) => w.toLowerCase().replace(/s$/, ""))).size;
+  const now = count(MODERN), then = count(OLDEN);
+  return (now >= 3 || (now >= 2 && then === 0)) && now > then * 1.5;
+}
+
+/** The skeleton for a card and a trope: the city one for a modern card, the old road for anything else. */
+/** The skeleton for a card: the city one for a card of our own day. `modern` is a reading of the card already made (a Decision model), else the card is read by its words. */
+export const skeletonFor = (card: CardInfo, trope: Trope, modern?: boolean): Adventure => ((modern ?? modernCard(card)) ? CITY : SKELETONS)[trope];
+
+const skeleton = (s: Trope | Adventure): Adventure => (typeof s === "string" ? SKELETONS[s] : s);
 
 /** The id the card's own character has in a rescue, as a companion. */
 export const FRIEND = "friend";
@@ -55,7 +80,7 @@ export function wordsOf(adv: Adventure): Words {
     companions: Object.fromEntries(adv.companions.map((c) => [c.id, { name: c.name, who: c.who }])),
     loot: Object.fromEntries(adv.loot.map((l) => [l.id, l.name])),
   };
-  if (adv.trope === "rescue") w.friend = { who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force" };
+  if (partOf(adv) === "friend") w.friend = { who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force" };
   if (adv.courted) w.courted = { who: adv.courted.who };
   if (adv.rival) w.rival = { name: adv.rival.name, who: adv.rival.who, lost: adv.rival.lost };
   return w;
@@ -76,33 +101,40 @@ function factsOf(adv: Adventure): string {
         .join(", ");
       const levers = s.levers.map((l) => `"${l.id}" helps ${WAY_WORD[l.way]}`).join("; ");
       const reward = s.reward?.loot ? ` Getting past gives the thing "${s.reward.loot}".` : s.reward?.joins ? ` Getting past, "${s.reward.joins}" joins you.` : "";
-      const here = adv.courted && s.card === adv.courted.card ? " The one being courted is here, and is the person in the way." : "";
+      const here = adv.courted && (s.card === adv.courted.card || (s.climax && partOf(adv) === "courted")) ? " The one being courted is here, and is the person in the way." : "";
       return `- ${s.id}: ${s.kind === "fight" ? "a fight" : s.kind === "person" ? "a person in the way" : "an obstacle"}${s.climax ? ", THE LAST STOP" : ""}. Its card is "${cardKind(s.card).title}": what stands here should fit that card.${here} Ways: ${ways}. Things there: ${levers || "none"}.${reward}`;
     })
     .join("\n");
 }
 
-export function buildMessages(card: CardInfo, trope: Trope): Message[] {
-  const adv = SKELETONS[trope];
-  const role =
-    trope === "rescue"
-      ? `${card.name} is the card's character. In this rescue someone ${card.name} loves, needs or owes has been taken, and ${card.name} walks the road with the player from the start, as a companion. Invent the one who was taken, from the card's world. Write "friend" for ${card.name}: "who" is one line about them; "good_at" is the one of brawn, cunning, charm, wits they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
-      : `${card.name} is the card's character, and the one the player is courting tonight. Write "courted" for them: "who" is one line about them. The rival is someone else who wants ${card.name}'s heart: invent them.`;
+export function buildMessages(card: CardInfo, of: Trope | Adventure): Message[] {
+  const adv = skeleton(of);
+  const part = partOf(adv);
+  const story = adv.brief ?? (part === "friend" ? "a rescue: someone has been taken, and is held at the end of the road" : "a courtship: tonight the player tries to win someone's heart");
+  const role = card.world
+    ? part === "friend"
+      ? `"${card.name}" is not one person: it is the world (or the scenario) the story is set in, so nobody in the story is called "${card.name}". A person of this world walks the road with the player from the start, as a companion: the one the story is about, or who needs this done. Take the companion from the people the card names, or invent one who belongs there, and invent anyone else the story needs. Write "friend" for the companion: "name" is their name (a few words at most); "who" is one line about them; "good_at" is the one of brawn, grace, charm, guile, wits, sense they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
+      : `"${card.name}" is not one person: it is the world (or the scenario) the story is set in, so nobody in the story is called "${card.name}". The player is courting someone of this world tonight: take them from the people the card names (never one the card says is a child), or invent one who belongs there. Write "courted" for them: "name" is their name (a few words at most); "who" is one line about them. ${adv.rival ? " Whoever stands against the player is in the rival: invent them." : ""}`
+    : part === "friend"
+      ? `${card.name} is the card's character, and walks the road with the player from the start, as a companion: the one the story is about, or who needs this done. Invent anyone else the story needs, from the card's world. Write "friend" for ${card.name}: "who" is one line about them; "good_at" is the one of brawn, grace, charm, guile, wits, sense they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
+      : `${card.name} is the card's character, and the one the player is courting tonight. Write "courted" for them: "who" is one line about them. ${adv.rival ? " Whoever stands against the player is in the rival: invent them." : ""}`;
   const system = [
-    "You write the words of a short tabletop adventure. The rules and every number are fixed already; you only write the words, in the world of a character card.",
+    `You write the words of a short tabletop adventure. The rules and every number are fixed already; you only write the words, in the world of a ${card.world ? "card that describes a world or scenario" : "character card"}.`,
     "You are given the adventure as it is written for a made-up world, as JSON. Rewrite every value for the card's world and people, and keep every key exactly as it is. Do not add or remove keys.",
     "Every name must be new and belong to the card's world. Keep the same shape of story: the same kinds of stops in the same places, the same things to use at each, the same rewards. Move it all into the card's own setting: a modern card gets a modern road, a strange world its own kind of trouble.",
     'A "reward" is said after the player gets past, however they did it (kind words, a bribe, a theft, a fight): say how the thing comes to them in words that fit any of those, such as finding it, being left with it, or taking it, never only a kind handing-over.',
     "The keys are only labels. A thing keyed \"furnace\" or \"fiddle\" can become anything in the card's world that helps the same way; only its value, what it is called, is shown.",
     'Each "situation" is 2 to 4 short sentences, in the second person ("you"), saying what stands in the way and naming every thing there to use (its value under "levers" is what it is called, in a few words). If paying is a way at that stop, the situation says what is paid for and how much, in supplies.',
     "The stops in your way are about the job, never about the player's own feelings. Nobody in them is a child unless the card says so, and no romance involves anyone the card says is a child. Nothing sexual or explicit, and nothing hateful, whatever the card has: leave all of that out. A courtship is about winning a heart, told as a fairy tale would tell it.",
+    "Use the card's own world as fully as you can. Put the stops at places the card (or its lore) names, or places that plainly belong there. Make the people in the way the card's own people, factions and kinds of folk. Let the job grow out of the card's own troubles, scenario and history. Make the things to use and to win things of that world: its magic or machines, its customs, its money, its beasts. Never a plain village or a plain road when the card has places and people of its own.",
+    '"{friend}" in the words stands for the companion (or the one courted): write their name in its place.',
     "Write plainly, as a narrator would say it aloud. No markdown. Answer with the JSON only.",
   ].join("\n");
   const user = [
     `THE CARD\n${cardText(card)}`,
-    `THE TROPE: ${trope}. ${role}`,
+    `THE STORY: ${story} ${role}`,
     `THE CLOCK: it starts at ${clock(adv.startHour)} and is lost at ${clock(adv.deadline.hour)} (${adv.deadline.name}). Write the times of day to fit.`,
-    ...(foreignName(card.name) ? [`The card writes the name "${card.name}" in another script. Add a key "called": the name in English letters, and use it everywhere.`] : []),
+    ...(!card.world && foreignName(card.name) ? [`The card writes the name "${card.name}" in another script. Add a key "called": the name in English letters, and use it everywhere.`] : []),
     `WHAT IS FIXED AT EACH STOP (do not change it, write words that fit it):\n${factsOf(adv)}`,
     `THE ADVENTURE TO REWRITE (keep the keys):\n${JSON.stringify(wordsOf(adv), null, 1)}`,
   ].join("\n\n");
@@ -134,9 +166,11 @@ export interface Built {
 }
 
 /** Put a model's words on the skeleton, field by field, keeping the skeleton's words for anything that does not check. */
-export function applyWords(trope: Trope, card: CardInfo, raw: unknown, seed: string): Built {
-  const base = SKELETONS[trope];
-  const w = obj(raw);
+export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown, seed: string): Built {
+  const base0 = skeleton(from);
+  const trope = base0.trope;
+  const part = partOf(base0);
+  const w0 = obj(raw);
   let used = 0, of = 0;
   const take = (v: unknown, max: number, fallback: string): string => {
     of++;
@@ -145,13 +179,22 @@ export function applyWords(trope: Trope, card: CardInfo, raw: unknown, seed: str
     return s ?? fallback;
   };
 
+  // The card's character, by the name the words will use. A world card has none: the model names a person of that
+  // world, or the made-up one stands in.
+  const said = obj(part === "friend" ? w0.friend : w0.courted);
+  const named = base0.courted && !base0.courted.name.includes("{") ? base0.courted.name : null;
+  const name = card.world
+    ? plain(said.name, 30) ?? (part === "courted" && named ? named : standIn(seed))
+    : foreignName(card.name) ? plain(w0.called, 30) ?? card.name : card.name;
+  // "{friend}" in a laid-out road's words (and in a model's, if it kept them) is that name.
+  const fillName = <T>(v: T): T => (v === undefined ? v : (JSON.parse(JSON.stringify(v).split("{friend}").join(JSON.stringify(name).slice(1, -1))) as T));
+  const base = fillName(base0);
+  const w = obj(fillName(w0));
   const places = obj(w.places);
   const stops = obj(w.stops);
   const comps = obj(w.companions);
   const loot = obj(w.loot);
   const placeName = (id: string, fallback: string) => take(places[id], 36, fallback);
-  // The card's character, by the name the words will use.
-  const name = foreignName(card.name) ? plain(w.called, 30) ?? card.name : card.name;
   const names = new Map(base.places.map((p) => [p.id, placeName(p.id, p.name)]));
 
   const adv: Adventure = {
@@ -186,16 +229,16 @@ export function applyWords(trope: Trope, card: CardInfo, raw: unknown, seed: str
     }),
   };
 
-  if (trope === "rescue") {
+  if (part === "friend") {
     const f = obj(w.friend);
-    const stat = STATS.includes(f.good_at as Stat) ? (f.good_at as Stat) : "charm";
+    const stat = STATS.includes(f.good_at as CoreStat) ? (f.good_at as CoreStat) : "charm";
     const likes = WAYS.includes(f.likes as Way) ? (f.likes as Way) : "talk";
     const dislikes = WAYS.includes(f.dislikes as Way) && f.dislikes !== likes ? (f.dislikes as Way) : likes === "force" ? "sneak" : "force";
     const friend: Companion = { id: FRIEND, name, card: "companion", who: take(f.who, 200, `${name}, who asked for your help`), stat, likes, dislikes };
     adv.companions = [...adv.companions, friend];
     adv.party = [FRIEND];
   }
-  if (trope === "courtship" && base.courted) adv.courted = { ...base.courted, name, who: take(obj(w.courted).who, 240, "the one you have come for") };
+  if (part === "courted" && base.courted) adv.courted = { ...base.courted, name, who: take(obj(w.courted).who, 240, "the one you have come for") };
   if (base.rival) {
     const r = obj(w.rival);
     adv.rival = { ...base.rival, name: take(r.name, 30, base.rival.name), who: take(r.who, 200, base.rival.who), lost: take(r.lost, 400, base.rival.lost) };
@@ -203,39 +246,47 @@ export function applyWords(trope: Trope, card: CardInfo, raw: unknown, seed: str
   return { adv, used, of };
 }
 
+/** A companion's name when a world card's companion was not named: plain names that fit most worlds. */
+const STAND_INS = ["Wren", "Tamsin", "Corin", "Ilse", "Bram", "Odile"];
+const standIn = (seed: string): string => STAND_INS[hashSeed(`${seed}:friend`) % STAND_INS.length]!;
+
 /** Who you are when nobody has said: the skeleton's own hero belongs to its made-up world. */
 const GUEST = "You are a traveller who has come this way tonight.";
 
 /** With no model, or nothing usable from one: the made-up adventure, with the card's character in their part. */
-export function fallbackAdventure(trope: Trope, card: CardInfo, seed: string): Adventure {
-  const base = SKELETONS[trope];
-  if (trope === "courtship" && base.courted) {
+export function fallbackAdventure(of: Trope | Adventure, card: CardInfo, seed: string): Adventure {
+  const base = skeleton(of);
+  const trope = base.trope;
+  // On a world card the made-up beloved keeps their own name: nobody is called by the card's. (A laid-out road has no
+  // made-up beloved: "{friend}" stands in its words, and is filled in like any other.)
+  if (!base.family && partOf(base) === "courted" && base.courted && !card.world) {
     // The made-up beloved's name is the card character's throughout.
     const swap = (s: string): string => s.split(base.courted!.name).join(card.name);
     const json = JSON.parse(swap(JSON.stringify(base))) as Adventure;
     return { ...json, id: `${trope}-card`, seed: hashSeed(seed), who: GUEST, courted: { ...base.courted, name: card.name, who: "the one you have come for" } };
   }
-  return applyWords("rescue", card, {}, seed).adv;
+  return applyWords(base, card, {}, seed).adv;
 }
 
 /** Below this share of fields usable, the answer is thrown away and the made-up adventure is played instead. */
 const ENOUGH = 0.6;
 
 /** Build the adventure for a card: ask the model (twice at most), check its words, and fall back if they will not do. */
-export async function buildAdventure(ask: Ask | null, card: CardInfo, trope: Trope, seed: string): Promise<Adventure> {
-  const t: Trope = trope === "courtship" && !courtable(card) ? "rescue" : trope;
+export async function buildAdventure(ask: Ask | null, card: CardInfo, of: Trope | Adventure, seed: string, modern?: boolean): Promise<Adventure> {
+  const t: Trope | null = typeof of === "string" ? (of === "courtship" && !courtable(card) ? "rescue" : of) : null;
+  const base = t ? skeletonFor(card, t, modern) : (of as Adventure);
   if (ask) {
     for (let i = 0; i < 2; i++) {
       try {
-        const text = await ask(buildMessages(card, t), "builder");
-        const built = applyWords(t, card, firstJson(text), seed);
+        const text = await ask(buildMessages(card, base), "builder");
+        const built = applyWords(base, card, firstJson(text), seed);
         if (built.used / built.of >= ENOUGH) return built.adv;
       } catch {
         // Try again, then fall back.
       }
     }
   }
-  return fallbackAdventure(t, card, seed);
+  return fallbackAdventure(base, card, seed);
 }
 
 export function hashSeed(s: string): number {

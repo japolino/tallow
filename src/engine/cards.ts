@@ -3,7 +3,7 @@
  * own tarot-style frame, and used by every adventure: a stop's card shows what stands in the way, a card on your side
  * shows who is with you or what you have won.
  *
- * The names and pictures are our own. None is taken from an existing deck. This is a first set (open question 16):
+ * The names and pictures are our own. None is taken from an existing deck. This is the set decided on (docs/DESIGN.md, section 11, item 16):
  * enough for the rescue and the courtship, and for the kinds of stop the other tropes will need.
  */
 

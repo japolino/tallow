@@ -163,6 +163,30 @@ export function d20Odds(add: number, target: number, partial: number): { success
   return { success: ok / 20, partial: part / 20 };
 }
 
+/** The exact odds of a check thrown with two d20, keeping the better face: counted over all 400 pairs. */
+export function d20OddsBest(add: number, target: number, partial: number): { success: number; partial: number } {
+  let ok = 0, part = 0;
+  for (let a = 1; a <= 20; a++)
+    for (let b = 1; b <= 20; b++) {
+      const t = d20Tier(Math.max(a, b), add, target, partial);
+      if (t === "success" || t === "crit_success") ok++;
+      else if (t === "partial") part++;
+    }
+  return { success: ok / 400, partial: part / 400 };
+}
+
+/** The exact odds of a check thrown with two d20, keeping the worse face: counted over all 400 pairs. */
+export function d20OddsWorst(add: number, target: number, partial: number): { success: number; partial: number } {
+  let ok = 0, part = 0;
+  for (let a = 1; a <= 20; a++)
+    for (let b = 1; b <= 20; b++) {
+      const t = d20Tier(Math.min(a, b), add, target, partial);
+      if (t === "success" || t === "crit_success") ok++;
+      else if (t === "partial") part++;
+    }
+  return { success: ok / 400, partial: part / 400 };
+}
+
 /** One d20 face from a seeded generator. */
 export function rollD20(rng: Rng): number {
   return 1 + Math.floor(rng() * 20);

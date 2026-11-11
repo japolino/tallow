@@ -98,7 +98,7 @@ describe("the narrator says the check aloud", () => {
     const c = nameCheck(fresh(), { way: "sneak", lever: "ropewalk" })!;
     const said = checkSaid(c).join(" ");
     expect(said).toContain("get by unnoticed");
-    expect(said).toContain("Cunning");
+    expect(said).toContain("Grace");
     expect(said).toContain("the rope walk under the bridge");
     expect(said).not.toMatch(/\d+ in 100|out of 100|must reach/i);
   });

@@ -10,19 +10,34 @@
  *   ADV=courtship bun run adventure      the courtship
  *   SEED=moss FORK=right bun run adventure
  *   RUNS=500 bun run adventure           play it 500 times with no printing, and say how often it is won and why it is lost
+ *   ADV=gen:heist bun run adventure      a road laid out for a story (content/tropes.ts), a new one for every seed
+ *   ADV=gen:all RUNS=300 bun run adventure   every story, 300 roads each, and how often each is won
  */
+import { STOCK_CALLINGS } from "../src/engine/abilities.js";
 import { ADVENTURES, COURIER } from "../src/content/adventures.js";
-import { lootOf, type RoadStop, type Trip } from "../src/engine/adventure.js";
+import { RECIPES, recipeOf } from "../src/content/tropes.js";
+import { lootOf, type Adventure, type RoadStop, type Trip } from "../src/engine/adventure.js";
+import { layRoad } from "../src/engine/road.js";
+import { fallbackAdventure } from "../src/game/build.js";
 import { cardKind } from "../src/engine/cards.js";
 import { randomSeed } from "../src/engine/dice.js";
-import { nameCheck, WAYS, type Check, type Way } from "../src/engine/moment.js";
+import { nameCheck, WAYS, type Check, type Stat, type Way } from "../src/engine/moment.js";
 import { forkRead, FORK_AGAIN, LEVEL_AGAIN, pickRead } from "../src/engine/tell-adventure.js";
 import { weigh, fairChance } from "../src/engine/weigh.js";
 import { direct, type Director, type Table } from "../src/game/director.js";
 import { standIns } from "../src/game/minds.js";
 
-const adv = ADVENTURES[process.env.ADV ?? "rescue"];
-if (!adv) throw new Error(`No adventure "${process.env.ADV}". There are: ${Object.keys(ADVENTURES).join(", ")}`);
+const ADV = process.env.ADV ?? "rescue";
+const GEN = ADV.startsWith("gen:") ? ADV.slice(4) : null;
+/** A made-up card, for roads laid out from a story. */
+const CARD = { name: "Maren Vell", description: "Maren Vell is a lamplighter in a river town, thirty-one, quick-tongued and stubborn." };
+const advFor = (seed: string, recipe = GEN): Adventure => {
+  if (!recipe) return ADVENTURES[ADV]!;
+  const r = recipeOf(recipe);
+  if (!r) throw new Error(`No story "${recipe}". There are: ${RECIPES.map((x) => x.id).join(", ")}`);
+  return fallbackAdventure(layRoad(r, seed), CARD, seed);
+};
+if (!GEN && !ADVENTURES[ADV]) throw new Error(`No adventure "${ADV}". There are: ${Object.keys(ADVENTURES).join(", ")}, or gen:<story>`);
 const quiet = !!process.env.RUNS;
 const out = (s: string): void => {
   if (!quiet) console.log(s);
@@ -48,20 +63,36 @@ const PLAIN: Record<Way, string> = {
   pay: "I pay what they ask",
 };
 
-/** The simple player's line at a stop: the way with the best chance, using a thing there if there is one. */
+const EFFECT_WORTH = { none: 0, limited: 0.6, standard: 1, great: 1.3, overwhelming: 1.6 } as const;
+/** A try's worth to the simple player: its chance, weighed by what it can do. */
+const worth = (c: Check): number => fairChance(c) * EFFECT_WORTH[c.effect ?? "standard"];
+
+/** How the simple player words a try by each way, leaning on each strength: a person plays to what they are good at. */
+const PHRASE: Record<Way, Partial<Record<Stat, string>>> = {
+  talk: { charm: PLAIN.talk, guile: "I bluff my way past them", wits: "I reason with them", brawn: "I threaten them until they let me by" },
+  sneak: { grace: PLAIN.sneak, guile: "I blend in and walk past", sense: "I wait for the moment they look away and go", wits: "I look for a way round" },
+  force: { brawn: PLAIN.force, grace: "I dodge and dart through nimbly" },
+  pay: { wits: PLAIN.pay, charm: "I sweeten the deal with a little extra" },
+};
+
+/** The simple player's line at a stop: the way and strength with the best chance, using a thing there if there is one. */
 function lineFor(d: Director): string {
   const f = d.trip.facing!;
   const m = f.moment;
   let best: { c: Check; words?: string } | null = null;
   for (const way of WAYS) {
     const levers = m.stop.levers.filter((l) => l.way === way && !m.spent.includes(l.id));
-    for (const l of [undefined, ...levers]) {
-      const c = nameCheck(m, { way, lever: l?.id ?? null });
-      if (c && (!best || fairChance(c) > fairChance(best.c))) best = { c, words: l?.words?.[0] };
+    for (const stat of Object.keys(PHRASE[way]) as Stat[]) {
+      for (const l of [undefined, ...levers]) {
+        const c = nameCheck(m, { way, stat, lever: l?.id ?? null });
+        if (!c || c.effect === "none" || c.stat !== stat) continue;
+        if (!best || worth(c) > worth(best.c)) best = { c, words: l?.words?.[0] };
+      }
     }
   }
   if (!best) return "I wait";
-  return best.words ? `${PLAIN[best.c.way]}, using the ${best.words}` : PLAIN[best.c.way];
+  const said = PHRASE[best.c.way][best.c.stat] ?? PLAIN[best.c.way];
+  return best.words ? `${said}, using the ${best.words}` : said;
 }
 
 function textTable(d: () => Director): Table {
@@ -78,6 +109,17 @@ function textTable(d: () => Director): Table {
       out(`YOU WRITE "${line}"`);
       out("[You tear off the page and hand it across.]\n");
       return { line, given: Promise.resolve() };
+    },
+    async margin(notes) {
+      out("[In the margin of your notebook, in pencil:]");
+      for (const n of notes) out(wrap(n, "    "));
+      out("");
+    },
+    async ink(place) {
+      out(`[The narrator dips a pen and inks ${place} onto the map.]`);
+    },
+    notch(hours) {
+      if (hours.length) out(`[Notches in the burning candle at ${hours.map((h) => `${String(Math.floor(h % 24)).padStart(2, "0")}:${String(Math.round((h % 1) * 60)).padStart(2, "0")}`).join(", ")}.]`);
     },
     async page(w) {
       out("[You are handed a page:]");
@@ -152,7 +194,7 @@ function textTable(d: () => Director): Table {
       out(`[A card is dealt to your side, face up: ${cardKind(card.card).title}, "${card.name}".]\n`);
     },
     async take(id) {
-      out(`[The narrator takes back the card of ${lootOf(adv!, id)?.name ?? id}.]\n`);
+      out(`[The narrator takes back the card of ${lootOf(d().trip.adv, id)?.name ?? id}.]\n`);
     },
     async rival(n, max) {
       if (n) out(`[A dark seal goes on the rival's card: ${n} of ${max}.]\n`);
@@ -161,25 +203,33 @@ function textTable(d: () => Director): Table {
   };
 }
 
-async function once(seed: string): Promise<Trip> {
+async function once(adv: Adventure, seed: string): Promise<Trip> {
   let d!: Director;
-  d = direct(adv!, COURIER, seed, textTable(() => d), standIns(0), { perks: ["light"] });
+  d = direct(adv, COURIER, seed, textTable(() => d), standIns(0), { abilities: STOCK_CALLINGS.courier!.hand });
   return d.done;
+}
+
+async function many(recipe: string | null, runs: number): Promise<void> {
+  const ends: Record<string, number> = {};
+  let hours = 0, health = 0, title = "";
+  for (let i = 0; i < runs; i++) {
+    const adv = advFor(`run-${i}`, recipe);
+    title = recipe ?? adv.title;
+    const t = await once(adv, `run-${i}`);
+    ends[t.over ?? "none"] = (ends[t.over ?? "none"] ?? 0) + 1;
+    hours += t.sheet.hour - adv.startHour;
+    health += t.sheet.health;
+  }
+  console.log(`${title.padEnd(14)} fork ${process.env.FORK ?? "left"}, ${runs} runs:`, Object.entries(ends).sort().map(([k, n]) => `${k} ${Math.round((n / runs) * 100)}%`).join(", "), `| ${(hours / runs).toFixed(1)}h taken, health ${(health / runs).toFixed(1)}`);
 }
 
 if (quiet) {
   const runs = Number(process.env.RUNS);
-  const ends: Record<string, number> = {};
-  let hours = 0, health = 0;
-  for (let i = 0; i < runs; i++) {
-    const t = await once(`run-${i}`);
-    ends[t.over ?? "none"] = (ends[t.over ?? "none"] ?? 0) + 1;
-    hours += t.sheet.hour;
-    health += t.sheet.health;
-  }
-  console.log(`${adv.title}, fork ${process.env.FORK ?? "left"}, ${runs} runs:`, Object.entries(ends).map(([k, n]) => `${k} ${Math.round((n / runs) * 100)}%`).join(", "), `| ends at ${(hours / runs).toFixed(1)}h, health ${(health / runs).toFixed(1)}`);
+  if (GEN === "all") for (const r of RECIPES) await many(r.id, runs);
+  else await many(GEN, runs);
 } else {
   const seed = process.env.SEED ?? randomSeed();
+  const adv = advFor(seed, GEN === "all" ? RECIPES[0]!.id : GEN);
   out(`=== ${adv.title} (seed ${seed}) ===\n`);
-  await once(seed);
+  await once(adv, seed);
 }

@@ -24,6 +24,8 @@ export interface MapSheet {
   stops: MapStop[];
   /** Paths between stops, by id. */
   paths: [string, string][];
+  /** Places the narrator has inked on since: a clue pointed there (engine/clues.ts). Written down the margin in a fresh hand. */
+  inked?: string[];
 }
 
 export const MAP_PX = { w: 2048, h: 1380 };
@@ -237,6 +239,25 @@ export function drawMapSheet(sheet: MapSheet): Canvas {
   g.moveTo(150, 138);
   g.lineTo(150 + tw, 138);
   g.stroke();
+
+  // Places inked on since, down the right-hand margin in a fresher, darker hand, each with a small cross.
+  if (sheet.inked?.length) {
+    g.textAlign = "right";
+    g.font = `italic 46px ${SERIF}`;
+    g.fillStyle = "rgba(20,10,4,.95)";
+    sheet.inked.slice(-8).forEach((name, i) => {
+      const y = 230 + i * 70;
+      g.fillText(name, w - 130, y);
+      g.lineWidth = 3;
+      g.strokeStyle = "rgba(20,10,4,.95)";
+      g.beginPath();
+      g.moveTo(w - 112, y - 26);
+      g.lineTo(w - 92, y - 6);
+      g.moveTo(w - 92, y - 26);
+      g.lineTo(w - 112, y - 6);
+      g.stroke();
+    });
+  }
 
   // A compass, out in the sea at the bottom right.
   const cx = w - 200, cy = h - 210;

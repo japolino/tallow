@@ -100,22 +100,22 @@ export const SUNSET = 20;
 const NIGHT: Omit<Key, "h"> = {
   sun: hex(0x8ea8e0), sunI: 0.5,
   top: hex(0x04060d), hor: hex(0x0c1322),
-  amb: hex(0x1c2640), ground: hex(0x0a0706), ambI: 0.2,
-  candle: 1, shaft: 0.3, exp: 1.05,
+  amb: hex(0x1c2640), ground: hex(0x0a0706), ambI: 0.27,
+  candle: 1, shaft: 0.3, exp: 1.12,
 };
 
 const KEYS: Key[] = [
   { h: 0, ...NIGHT },
   { h: 4.9, ...NIGHT },
   // The moon fades out and the sun takes over at zero strength, so the swap is never seen.
-  { h: SUNRISE, sun: hex(0xff9a70), sunI: 0, top: hex(0x18213c), hor: hex(0x5c4250), amb: hex(0x38405c), ground: hex(0x0c0908), ambI: 0.24, candle: 1, shaft: 0, exp: 1.05 },
+  { h: SUNRISE, sun: hex(0xff9a70), sunI: 0, top: hex(0x18213c), hor: hex(0x5c4250), amb: hex(0x38405c), ground: hex(0x0c0908), ambI: 0.29, candle: 1, shaft: 0, exp: 1.1 },
   { h: 6.7, sun: hex(0xffb080), sunI: 1.6, top: hex(0x3b5788), hor: hex(0xf2a878), amb: hex(0x7684a4), ground: hex(0x241a14), ambI: 0.42, candle: 0.45, shaft: 0.8, exp: 1 },
   { h: 8.5, sun: hex(0xfff0d6), sunI: 3.4, top: hex(0x4c8cd6), hor: hex(0xc6dbf0), amb: hex(0xa6bedc), ground: hex(0x3a3028), ambI: 0.72, candle: 0, shaft: 0.7, exp: 1 },
   { h: 12.5, sun: hex(0xfffaf0), sunI: 5, top: hex(0x3d84e0), hor: hex(0xbcd8f4), amb: hex(0xc4ccd8), ground: hex(0x4a4036), ambI: 0.78, candle: 0, shaft: 0.55, exp: 1 },
   { h: 16, sun: hex(0xffe4b4), sunI: 3.8, top: hex(0x4a84cc), hor: hex(0xdcd6c8), amb: hex(0xb4bccc), ground: hex(0x44362a), ambI: 0.8, candle: 0, shaft: 0.65, exp: 1 },
   { h: 18.3, sun: hex(0xff9838), sunI: 3.6, top: hex(0x586ca6), hor: hex(0xffb060), amb: hex(0xb8845c), ground: hex(0x2a1810), ambI: 0.46, candle: 0.2, shaft: 1, exp: 1 },
   { h: 19.4, sun: hex(0xff5626), sunI: 0.9, top: hex(0x292e58), hor: hex(0xd25c38), amb: hex(0x6c5064), ground: hex(0x140c0a), ambI: 0.3, candle: 0.85, shaft: 0.5, exp: 1.03 },
-  { h: SUNSET, sun: hex(0xff5626), sunI: 0, top: hex(0x111730), hor: hex(0x382a48), amb: hex(0x2c3050), ground: hex(0x0c0908), ambI: 0.23, candle: 1, shaft: 0, exp: 1.05 },
+  { h: SUNSET, sun: hex(0xff5626), sunI: 0, top: hex(0x111730), hor: hex(0x382a48), amb: hex(0x2c3050), ground: hex(0x0c0908), ambI: 0.28, candle: 1, shaft: 0, exp: 1.1 },
   { h: 21, ...NIGHT },
   { h: 24, ...NIGHT },
 ];

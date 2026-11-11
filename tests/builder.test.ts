@@ -5,9 +5,11 @@
 import { describe, expect, test } from "bun:test";
 import { isChild } from "../src/engine/card/child.js";
 import { startMoment } from "../src/engine/moment.js";
-import { CLASSES, checkSpread, makeHero, perkOffer, PERKS, rulesHero, STAT_BUDGET } from "../src/engine/hero.js";
+import { CLASSES, checkSpread, makeHero, rulesHero, STAT_BUDGET } from "../src/engine/hero.js";
+import { handPrice, budgetAt, stockOffer, STOCK_CALLINGS } from "../src/engine/abilities.js";
 import { applyWords, buildAdventure, buildMessages, fallbackAdventure, foreignName, FRIEND, SKELETONS, wordsOf } from "../src/game/build.js";
-import { cardText, courtable, tropeRead, tropesFor, unmacro, type CardInfo } from "../src/game/card.js";
+import { cardText, courtable, looksLikeWorld, tropeRead, tropesFor, unmacro, type CardInfo } from "../src/game/card.js";
+import { greeting } from "../src/game/session.js";
 import { firstJson, heroMessages, parseHero, parseRead, parseTell, readMessages, tellMessages } from "../src/game/prompts.js";
 import { BRIDGE, YOU } from "../preview/mock.js";
 
@@ -58,14 +60,21 @@ describe("a card", () => {
 
 describe("a hero from your own words", () => {
   test("the points always add up, whatever a model says", () => {
-    expect(checkSpread({ brawn: 3, cunning: 1, charm: 1, wits: 1 })).toEqual({ brawn: 3, cunning: 1, charm: 1, wits: 1 });
-    expect(checkSpread({ brawn: 4, cunning: 4, charm: 0, wits: 0 })).toBeNull();
-    expect(checkSpread({ brawn: 5, cunning: 1, charm: 0, wits: 0 })).toBeNull();
-    expect(checkSpread({ brawn: 1.5, cunning: 1.5, charm: 1, wits: 2 })).toBeNull();
+    const six = { brawn: 3, grace: 2, charm: 1, guile: 0, wits: 1, sense: 1 };
+    expect(checkSpread(six)).toEqual(six);
+    expect(checkSpread({ brawn: 4, grace: 4, charm: 0, guile: 0, wits: 0, sense: 1 })).toBeNull();
+    expect(checkSpread({ brawn: 5, grace: 1, charm: 0, guile: 0, wits: 1, sense: 1 })).toBeNull();
+    expect(checkSpread({ brawn: 1.5, grace: 1.5, charm: 1, guile: 1, wits: 2, sense: 1 })).toBeNull();
+    // The seventh only where the world has it, and then the seven add up to one more.
+    expect(checkSpread({ ...six, power: 1 })).toBeNull();
+    expect(checkSpread({ ...six, power: 1 }, true)).toEqual({ ...six, power: 1 });
+    expect(checkSpread(six, true)).toBeNull();
     for (const c of CLASSES) expect(Object.values(c.stats).reduce((a, b) => a + b, 0)).toBe(STAT_BUDGET);
     const h = makeHero("sellsword", { stats: { brawn: 9 } });
     expect(h.sheet.stats).toEqual(CLASSES.find((c) => c.id === "sellsword")!.stats);
-    expect(h.perks.length).toBe(1);
+    expect(h.abilities.length).toBe(3);
+    expect(h.abilities.filter((a) => a.does === "flourish").length).toBe(1);
+    expect(h.calling.name.length).toBeGreaterThan(0);
   });
 
   test("without a model, the kind of person is read from the words", () => {
@@ -76,19 +85,21 @@ describe("a hero from your own words", () => {
   });
 
   test("a model's hero is checked", () => {
-    const h = parseHero('{"class":"scholar","name":"Wim","stats":{"brawn":0,"cunning":2,"charm":1,"wits":3},"who":"You are Wim, who reads too much."}');
+    const h = parseHero('{"class":"scholar","name":"Wim","stats":{"brawn":0,"grace":1,"charm":1,"guile":1,"wits":3,"sense":2},"who":"You are Wim, who reads too much."}');
     expect(h?.cls).toBe("scholar");
     expect(h?.name).toBe("Wim");
     expect(parseHero("no json")).toBeNull();
-    expect(heroMessages("I am Wim")[1]!.content).toBe("I am Wim");
+    expect(heroMessages("I am Wim")[1]!.content).toContain("I am Wim");
+    // With no calling or abilities written, the stock ones of its kind are dealt.
+    expect(h!.abilities.map((a) => a.name)).toEqual(STOCK_CALLINGS.scholar!.hand.map((a) => a.name));
   });
 
-  test("a level-up offers two knacks you do not have, for different ways when it can", () => {
-    const two = perkOffer(["silver"], "seed");
+  test("a level-up offers two abilities you do not have, within the next level's budget", () => {
+    const have = STOCK_CALLINGS.courier!.hand;
+    const two = stockOffer(have, 1, "seed");
     expect(two.length).toBe(2);
-    expect(two.some((p) => p.id === "silver")).toBe(false);
-    expect(two[0]!.way).not.toBe(two[1]!.way);
-    expect(perkOffer(PERKS.map((p) => p.id), "seed")).toEqual([]);
+    expect(two.some((a) => have.some((h) => h.name === a.name))).toBe(false);
+    for (const a of two) expect(handPrice([...have, a])).toBeLessThanOrEqual(budgetAt(2) + 1);
   });
 });
 
@@ -120,7 +131,7 @@ describe("an adventure built for a card", () => {
       places: { mill: "Wick Street", abbey: "The Chapel of Quiet Forms" },
       stops: { mill: { situation: "A lamp is out and the street is <b>dark</b>.", teaser: "a dark street" } },
       deadline: { name: "teatime", lost: "The lamps go out for good." },
-      friend: { who: "Maren, the lamplighter", good_at: "cunning", likes: "sneak", dislikes: "sneak" },
+      friend: { who: "Maren, the lamplighter", good_at: "grace", likes: "sneak", dislikes: "sneak" },
     };
     const { adv, used, of } = applyWords("rescue", MAREN, raw, "s");
     expect(adv.title).toBe("The Lamps of Coldharbour");
@@ -151,6 +162,40 @@ describe("an adventure built for a card", () => {
     expect(kid.courted).toBeUndefined();
   });
 
+  test("a world card is told from a person, and nobody in its story is called by its name", () => {
+    const VALE: CardInfo = {
+      name: "Thornvale",
+      description: "{{char}} is the narrator of Thornvale, a valley kingdom of river towns and old forests. {{char}} plays all the other characters.\nNPCs:\n- Edda, a ferrywoman\n- Lord Asher, who keeps the bridge\nFactions: the Guild, the Wardens",
+    };
+    expect(looksLikeWorld(VALE)).toBe(true);
+    expect(looksLikeWorld(MAREN)).toBe(false);
+    expect(looksLikeWorld(HANA)).toBe(false);
+    const world: CardInfo = { ...VALE, world: true };
+    const [sys, user] = buildMessages(world, "rescue");
+    expect(sys!.content).toContain("describes a world or scenario");
+    expect(user!.content).toContain('nobody in the story is called "Thornvale"');
+    expect(user!.content).toContain('"name" is their name');
+    // The companion is the person the model names from that world, never the card.
+    const named = applyWords("rescue", world, { friend: { name: "Edda", who: "a ferrywoman", good_at: "wits", likes: "talk", dislikes: "force" } }, "s").adv;
+    expect(named.companions.find((c) => c.id === FRIEND)!.name).toBe("Edda");
+    const blank = applyWords("rescue", world, {}, "s").adv.companions.find((c) => c.id === FRIEND)!;
+    expect(blank.name).not.toBe("Thornvale");
+    expect(blank.who).not.toContain("Thornvale");
+    // A courtship's beloved: the model's choice, else the made-up one keeps their own name.
+    expect(applyWords("courtship", world, { courted: { name: "Lord Asher", who: "keeper of the bridge" } }, "s").adv.courted!.name).toBe("Lord Asher");
+    expect(fallbackAdventure("courtship", world, "s").courted!.name).toBe(SKELETONS.courtship.courted!.name);
+    expect(JSON.stringify(fallbackAdventure("rescue", world, "s"))).not.toContain("Thornvale");
+  });
+
+  test("a world card's greeting sets the story there", () => {
+    const world: CardInfo = { name: "Thornvale", description: "a valley kingdom", world: true };
+    const said = greeting(world, ["rescue", "romance"]).join(" ");
+    expect(said).toContain("set in Thornvale");
+    expect(said).not.toContain("Thornvale cares");
+    expect(said).not.toContain("Thornvale's heart");
+    expect(greeting(MAREN, ["rescue"]).join(" ")).toContain("Maren Vell is in it");
+  });
+
   test("a model that answers badly twice gets the made-up adventure, not a broken one", async () => {
     let asked = 0;
     const adv = await buildAdventure(async () => (asked++, "I cannot help with that."), MAREN, "rescue", "s");
@@ -165,7 +210,7 @@ describe("the reader and the teller", () => {
     const user = readMessages("I ask nicely", m)[1]!.content;
     expect(user).not.toMatch(/Ways there: [^\n]*talk/);
     expect(parseRead('{"way":"none"}', m)).toBe("none");
-    expect(parseRead('```json\n{"way":"sneak","stat":"cunning","lever":null,"attempt":"you creep by"}\n```', m)).toEqual({ way: "sneak", stat: "cunning", lever: null, attempt: "you creep by" });
+    expect(parseRead('```json\n{"way":"sneak","stat":"grace","lever":null,"attempt":"you creep by"}\n```', m)).toEqual({ way: "sneak", stat: "grace", lever: null, attempt: "you creep by" });
     expect(firstJson('Sure! {"a": {"b": 1}} trailing')).toEqual({ a: { b: 1 } });
   });
 

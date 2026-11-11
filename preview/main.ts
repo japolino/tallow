@@ -7,6 +7,7 @@
  *
  * Address-bar switches, for looking at one state at a time:
  *   ?adventure=courtship   which made-up adventure: rescue (the default) or courtship
+ *   ?adventure=gen:vault   a road laid out for one of the stories in content/tropes.ts (a new one for each seed)
  *   ?slow=3000     the stand-ins for the models take this many milliseconds, so the waits can be seen
  *   ?moment=1      the single moment of milestone 2 instead of an adventure
  *   ?play=0        the room alone, with its own controls
@@ -24,6 +25,9 @@
  *   ?models=0      use only shapes built in code (what shows if a model file fails to load)
  */
 import { ADVENTURES, COURIER } from "../src/content/adventures.js";
+import { recipeOf } from "../src/content/tropes.js";
+import { layRoad } from "../src/engine/road.js";
+import { fallbackAdventure } from "../src/game/build.js";
 import { mapOf } from "../src/engine/adventure.js";
 import { randomSeed, rollD20, seededRng } from "../src/engine/dice.js";
 import { direct } from "../src/game/director.js";
@@ -31,6 +35,9 @@ import { standIns } from "../src/game/minds.js";
 import { PLAYER, roomTable } from "../src/game/roomtable.js";
 import { clockLabel, daylight, WEATHER_NAMES } from "../src/room/daylight.js";
 import { mountRoom, type Weather } from "../src/room/room.js";
+import { music } from "../src/room/music.js";
+import { sound } from "../src/room/sound.js";
+import { SOUND_FILES } from "../src/room/soundfiles.js";
 import { MAP, PATROL, PIECES, ROAD, YOU } from "./mock.js";
 import { startPlay } from "./play.js";
 
@@ -40,13 +47,25 @@ const $ = <T extends HTMLElement>(sel: string): T => document.querySelector<T>(s
 /** Playing the moment, or only looking at the room. */
 const playing = q.get("play") !== "0" && q.get("hud") !== "0";
 /** A whole adventure (the default), or the single moment of milestone 2. */
-const adventure = playing && q.get("moment") !== "1" ? ADVENTURES[q.get("adventure") ?? "rescue"] ?? ADVENTURES.rescue! : null;
+const seed = q.get("seed") ?? randomSeed();
+const wanted = q.get("adventure") ?? "rescue";
+const story = wanted.startsWith("gen:") ? recipeOf(wanted.slice(4)) : undefined;
+const adventure =
+  playing && q.get("moment") !== "1"
+    ? story
+      ? fallbackAdventure(layRoad(story, seed), { name: "Maren Vell", description: "Maren Vell is a lamplighter in a river town, quick-tongued and stubborn." }, seed)
+      : ADVENTURES[wanted] ?? ADVENTURES.rescue!
+    : null;
 const climax = adventure?.stops.find((s) => s.climax)?.id;
 
 let hour = Number(q.get("t") ?? (adventure ? adventure.startHour : playing ? YOU.hour : 18.3));
 let weather: Weather = WEATHER_NAMES.find((w) => w === q.get("weather")) ?? "clear";
 const reduced = q.get("reduced") === "1" ? true : undefined;
 
+// Sound starts with the first click or key press, as in Lumiverse.
+sound.arm();
+sound.loadRecordings(SOUND_FILES, async (f) => (await fetch(`/assets/sounds/${f}`)).arrayBuffer());
+Object.assign(window, { sound, music });
 const room = mountRoom($("#host"), {
   map: adventure ? mapOf(adventure) : MAP,
   // In an adventure your piece starts where the road does, and the narrator's stands on the end of it. In the moment,
@@ -160,7 +179,7 @@ const director =
         const minds = standIns(slow);
         let d: ReturnType<typeof direct> | null = null;
         void room.ready.then(() => {
-          d = direct(adventure, COURIER, q.get("seed") ?? randomSeed(), table, minds);
+          d = direct(adventure, COURIER, seed, table, minds);
           Object.assign(window, { director: d });
         });
         return () => d;

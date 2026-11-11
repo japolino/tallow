@@ -49,7 +49,7 @@ export const ROAD = { from: "mill", stop: "bridge", next: "rest", nextName: "Mar
 export const WHO = "You are a courier with a sealed letter for Hollowmere Keep: light on your feet, easy to like, no great fighter, and hopeless with sums.";
 
 export const YOU: Sheet = {
-  stats: { brawn: 1, cunning: 3, charm: 2, wits: 0 },
+  stats: { brawn: 1, grace: 3, charm: 1, guile: 2, wits: 0, sense: 1 },
   health: 5,
   supplies: 3,
   goodwill: 2,

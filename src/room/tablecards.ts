@@ -6,10 +6,11 @@
  * Every card moves in the narrator's fingers: the hand reaches it, closes, carries it, lets go. With motion reduced
  * the moves take no time.
  */
+import { sound } from "./sound.js";
 import { BoxGeometry, CanvasTexture, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, SRGBColorSpace, Vector3, type Material } from "three";
 import { cardKind, type CardFamily } from "../engine/cards.js";
 import { cardBack, cardFace } from "./cardart.js";
-import { ease, type Reacher, type Step, type Tracks } from "./track.js";
+import { ease, Held, type Reacher, type Step, type Tracks } from "./track.js";
 
 /** Size of a card in the room, in metres: a little over two inches by three and a half. */
 export const CARD_W = 0.052;
@@ -161,22 +162,36 @@ export class TableCards {
 
   /* ----------------------------------- moves ---------------------------------- */
 
-  private fly(obj: Mesh | Group, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void): Step {
+  /** @param arm the narrator's hand that has it, if one does: the card then goes where those fingers go (track.ts, Held). */
+  private fly(obj: Mesh | Group, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void, arm?: number): Step {
     const p0 = V(0, 0, 0), q0 = new Quaternion();
     let dst: Pose;
+    let landed = false;
+    const held = arm === undefined ? null : new Held(this.h.narrator, arm, obj, () => this.h.tracks.now);
     return {
       dur,
+      until: held ? () => held.there : undefined,
+      patience: 0.9,
       begin: () => {
         p0.copy(obj.position);
         q0.copy(obj.quaternion);
         dst = to();
+        landed = false;
+        held?.take();
+        sound.play("deal", { x: (p0.x + dst.p.x) / 2, gain: 0.6 + Math.min(0.6, p0.distanceTo(dst.p)) });
       },
       tick: (u) => {
         const e = ease(u);
         obj.position.lerpVectors(p0, dst.p, e);
         obj.position.y += Math.sin(Math.PI * u) * lift;
         obj.quaternion.slerpQuaternions(q0, dst.q, e);
+        held?.follow();
         also?.(u);
+        if (u >= 1 && !landed && (held?.there ?? true)) {
+          landed = true;
+          // Held up to be looked at is not laid down.
+          if (dst.p.y < 0.05) sound.play("pat", { x: dst.p.x });
+        }
       },
     };
   }
@@ -188,7 +203,7 @@ export class TableCards {
     return [
       { dur: 0.15, tick: () => n.reach(arm, at()), until: () => n.reached(arm) > 0.8 && n.fingertips(arm).distanceTo(at()) < 0.06, patience: 1.4 },
       { dur: 0.16, begin: () => n.close?.(arm, "pinch") },
-      this.fly(card, to, dur, lift, () => n.reach(arm, card.position)),
+      this.fly(card, to, dur, lift, undefined, arm),
       { dur: 0.14, begin: () => n.release?.(arm) },
     ];
   }
@@ -197,6 +212,9 @@ export class TableCards {
   async deal(stops: { id: string; kind: string }[]): Promise<void> {
     const n = this.h.narrator;
     const queues: Step[][] = [[], []];
+    // Which hands this deal has taken up. A hand that is still setting a piece down finishes that first: it does not
+    // deal with a piece in it.
+    const mine = [false, false];
     for (const s of stops) {
       const to = this.onMap(s.id);
       if (!to || this.road.has(s.id)) continue;
@@ -208,9 +226,15 @@ export class TableCards {
       card.mesh.quaternion.copy(DOWN(this.deck.rotation.y));
       this.group.add(card.mesh);
       queues[arm]!.push(
-        // Wait for the other hand to be clear of the deck.
-        { dur: 0, until: () => !this.atDeck, patience: 6 },
-        { dur: 0, begin: () => (this.atDeck = true) },
+        // Wait for the other hand to be clear of the deck, and for this one to be free.
+        { dur: 0, until: () => !this.atDeck && (mine[arm]! || !n.busy?.(arm)), patience: 8 },
+        {
+          dur: 0,
+          begin: () => {
+            this.atDeck = true;
+            mine[arm] = true;
+          },
+        },
         { dur: 0.12, tick: () => n.reach(arm, this.deckTop()), until: () => n.reached(arm) > 0.8 && n.fingertips(arm).distanceTo(this.deckTop()) < 0.06, patience: 1.4 },
         { dur: 0.14, begin: () => n.close?.(arm, "pinch") },
         {
@@ -221,9 +245,8 @@ export class TableCards {
           },
         },
         this.fly(card.mesh, () => to, 0.5, 0.06, (u) => {
-          n.reach(arm, card.mesh.position);
           if (u > 0.25) this.atDeck = false;
-        }),
+        }, arm),
         { dur: 0.1, begin: () => n.release?.(arm) },
       );
     }
@@ -288,7 +311,7 @@ export class TableCards {
         ...this.carry(card.mesh, arm, () => shown, 0.7, 0.04).slice(0, 3),
         // Held up a moment for you to see the colour of its back.
         { dur: 0.9, tick: () => n.reach(arm, card.mesh.position) },
-        this.fly(card.mesh, () => down, 0.55, 0.02, () => n.reach(arm, card.mesh.position)),
+        this.fly(card.mesh, () => down, 0.55, 0.02, undefined, arm),
         { dur: 0.12, begin: () => n.release?.(arm) },
         { dur: 0, begin: () => n.reach(arm, null) },
       ]);
@@ -341,7 +364,7 @@ export class TableCards {
         { dur: 0.14, begin: () => n.close?.(i, "pinch") },
         { dur: 0, begin: () => (card.mesh.visible = true) },
         // Turned face up in the air on the way down.
-        this.fly(card.mesh, () => down, 0.6, 0.07, () => n.reach(i, card.mesh.position)),
+        this.fly(card.mesh, () => down, 0.6, 0.07, undefined, i),
         { dur: 0.1, begin: () => n.release?.(i) },
         { dur: 0, begin: () => n.reach(i, null) },
       ]);
@@ -490,6 +513,41 @@ export class TableCards {
   }
 
   /**
+   * A story is over: the narrator gathers every card on the table back into the deck, the map's, yours and the rival's
+   * with its seals, one after another, so the table is bare for the next story.
+   */
+  async sweep(): Promise<void> {
+    const cards = [...this.road.values(), ...this.side, ...(this.rivalCard ? [this.rivalCard] : [])];
+    const seals = this.seals;
+    this.road.clear();
+    this.side = [];
+    this.rivalCard = null;
+    this.seals = [];
+    const n = this.h.narrator;
+    // The seals come off first, into the narrator's hand.
+    for (const s of seals) this.group.remove(s);
+    await Promise.all(
+      cards.map((card, i) =>
+        this.h.tracks.run([
+          { dur: i * 0.12 },
+          { dur: 0, begin: () => n.reach(i % 2, card.mesh.position) },
+          this.fly(card.mesh, () => ({ p: this.deckTop(), q: DOWN(this.deck.rotation.y) }), 0.55, 0.05, () => n.reach(i % 2, card.mesh.position)),
+          {
+            dur: 0,
+            begin: () => {
+              this.group.remove(card.mesh);
+              card.dispose();
+              if (i >= cards.length - 2) n.reach(i % 2, null);
+            },
+          },
+        ]),
+      ),
+    );
+    n.reach(0, null);
+    n.reach(1, null);
+  }
+
+  /**
    * While something is being worked out before the road can be dealt: the narrator shuffles the deck, cutting it
    * and riffling the halves together, for as long as it takes. A cut always finishes before it stops.
    */
@@ -522,6 +580,7 @@ export class TableCards {
         this.fly(this.deck, () => ({ p: left(), q: UP(0.15) }), 0.3, 0.01, () => n.reach(0, this.deck.position.clone().add(V(-0.02, 0.01, 0)))),
         {
           dur: 0.7,
+          begin: () => sound.play("riffle", { x: DECK.x }),
           tick: (u) => {
             // The halves slide into each other.
             this.deck.position.x = left().x + (DECK.x - left().x) * ease(u);

@@ -5,40 +5,112 @@
  * or a slow echo of canned answers is not attempted: this page only checks that the bundle mounts, reads a card and
  * plays through the opening at the table.
  *
- * Served by scripts/preview.ts at /host.
+ * Served by scripts/preview.ts at /host. ?card=hangul gives a card whose name is in Hangul, ?card=modern one set in our
+ * own times, ?card=world one that is a world rather than a person. ?decide=1 grants the extras and gives a pretend Decision model: it picks the answer that shares the most
+ * words with what was written (sure of it when one does), and is never sure how a line tries to get past, so the
+ * line goes on to the reader and the rules as it would with a real one that cannot tell.
  */
 import type { CardInfo } from "../src/game/card.js";
-import type { ToBackend, ToFrontend } from "../src/shared/protocol.js";
+import type { ModelsState, ToBackend, ToFrontend } from "../src/shared/protocol.js";
 
-/** A made-up card. */
-const CARD: CardInfo = {
-  name: "Maren Vell",
-  description: "Maren Vell is a lamplighter in the river town of Coldharbour, thirty-one, quick-tongued and stubborn, who knows every alley and roofline in the old quarter. She keeps a ledger of favours owed to her.",
-  personality: "Wry, loyal, impatient with cowards.",
-  scenario: "Coldharbour at dusk, when the lamps are lit.",
-  firstMessage: "Maren swings down from her ladder and looks you over. \"You're late. The lamps don't wait, and neither do I.\"",
+/** Made-up cards. */
+const CARDS: Record<string, CardInfo> = {
+  maren: {
+    name: "Maren Vell",
+    description: "Maren Vell is a lamplighter in the river town of Coldharbour, thirty-one, quick-tongued and stubborn, who knows every alley and roofline in the old quarter. She keeps a ledger of favours owed to her.",
+    personality: "Wry, loyal, impatient with cowards.",
+    scenario: "Coldharbour at dusk, when the lamps are lit.",
+    firstMessage: "Maren swings down from her ladder and looks you over. \"You're late. The lamps don't wait, and neither do I.\"",
+  },
+  hangul: {
+    name: "하나",
+    description: "하나 is a potter of twenty-eight who keeps a small shop of bowls and cups by the sea, in a fishing town of steep lanes. She is patient, dry and kind, and she never forgets a debt.",
+    personality: "Patient, dry, kind.",
+  },
+  modern: {
+    name: "Ines Park",
+    description: "Ines Park is a nurse on the night shift at a city hospital, thirty, sharp and tired. She lives in a small apartment downtown, drives a battered car, and texts you too late at night. She plays guitar in a band on weekends.",
+    personality: "Sharp, warm under it, never sleeps.",
+  },
+  world: {
+    name: "Thornvale",
+    description: "{{char}} is the narrator of Thornvale, a valley kingdom of river towns, toll bridges and old forests, where the Guild and the Wardens quarrel over every road. {{char}} plays all the other characters.\nNPCs:\n- Edda, a ferrywoman who hears everything\n- Lord Asher, who keeps the high bridge\nFactions: the Guild, the Wardens",
+    scenario: "You arrive in Thornvale on the last ferry of the day.",
+  },
 };
+const WHICH = new URLSearchParams(location.search).get("card") ?? "maren";
+const CARD = CARDS[WHICH] ?? CARDS.maren!;
+const DECIDE = new URLSearchParams(location.search).get("decide") === "1";
+const decided: string[] = [];
+/** Permissions this pretend user has granted; ?decide=1 grants the extras up front. */
+const granted = new Set(["characters", "generation", "app_manipulation", ...(DECIDE ? ["decisions", "embeddings", "world_books"] : [])]);
+/** Pretend connections and choices for the drawer. */
+const PRETEND_LLM = [
+  { id: "c1", name: "Main", model: "big-model-1", isDefault: true },
+  { id: "c2", name: "Fast", model: "small-model-1", isDefault: false },
+];
+const settings: Omit<ModelsState, "llm" | "decisions" | "embeddings"> = {
+  roles: { builder: { connectionId: null, reasoning: "auto" }, teller: { connectionId: null, reasoning: "auto" }, reader: { connectionId: null, reasoning: "auto" }, hero: { connectionId: null, reasoning: "auto" } },
+  decision: "auto",
+  embedding: "auto",
+};
+
+/** The pretend Decision model (?decide=1). */
+function pretendDecide(m: Extract<ToBackend, { type: "decide" }>): Record<string, unknown> | null {
+  const line = String((m.state as { line?: unknown }).line ?? "").toLowerCase();
+  const q = m.questions.pick;
+  decided.push(m.what);
+  if (!line || !q || q.type !== "choice") return null;
+  const words = (s: string) => s.toLowerCase().split(/[^a-z']+/).filter((w) => w.length > 3);
+  const said = new Set(words(line));
+  const score = Object.entries(q.criteria).map(([k, d]) => [k, words(`${k} ${typeof d === "string" ? d : ""}`).filter((w) => said.has(w)).length] as const);
+  const best = Math.max(...score.map(([, n]) => n));
+  const top = score.filter(([, n]) => n === best);
+  const choice = best > 0 && top.length === 1 ? top[0]![0] : "unclear";
+  return { pick: { type: "choice", choice, confidence: 0.9, probabilities: { [choice]: 0.9 } } };
+}
 
 const listeners: ((m: unknown) => void)[] = [];
 const reply = (m: ToFrontend): void => void setTimeout(() => listeners.forEach((f) => f(m)), 30);
 const actions: { label: string; click: () => void }[] = [];
 
 const ctx = {
-  getActiveChat: () => ({ chatId: "chat-1", characterId: "card-1" }),
+  getActiveChat: () => ({ chatId: `chat-${WHICH}`, characterId: `card-${WHICH}` }),
   permissions: {
-    getGranted: async () => ["characters", "generation", "app_manipulation"],
-    request: async (p: string[]) => p,
+    getGranted: async () => [...granted],
+    // As Lumiverse does: everything granted after the ask, not only what was asked for.
+    request: async (p: string[]) => (p.forEach((x) => granted.add(x)), [...granted]),
   },
   sendToBackend(raw: unknown) {
     const m = raw as ToBackend;
     if (m.type === "card") reply({ type: "card", id: m.id, card: CARD });
+    else if (m.type === "models") {
+      if (m.patch) Object.assign(settings, m.patch.role ? { roles: { ...settings.roles, [m.patch.role]: { ...settings.roles[m.patch.role], ...("connectionId" in m.patch ? { connectionId: m.patch.connectionId ?? null } : {}), ...(m.patch.reasoning ? { reasoning: m.patch.reasoning } : {}) } } } : {}, "decision" in m.patch ? { decision: m.patch.decision || "auto" } : {}, "embedding" in m.patch ? { embedding: m.patch.embedding || "auto" } : {});
+      reply({ type: "models", id: m.id, state: { ...settings, llm: PRETEND_LLM, decisions: DECIDE ? [{ id: "d1", name: "Quick reads", model: "jev-small", isDefault: true }] : null, embeddings: DECIDE ? [{ id: "e1", name: "Local embedder", model: "embed-small", isDefault: true }] : [] } });
+    } else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
     else reply({ type: "error", id: m.id, error: "no model in the pretend host" });
   },
   onBackendMessage(f: (m: unknown) => void) {
     listeners.push(f);
     return () => listeners.splice(listeners.indexOf(f), 1);
   },
+  dom: {
+    addStyle(css: string) {
+      const el = document.createElement("style");
+      el.textContent = css;
+      document.head.appendChild(el);
+      return () => el.remove();
+    },
+  },
   ui: {
+    /** The drawer tab, shown on the right of the page (?drawer=1) so it can be looked at. */
+    registerDrawerTab() {
+      const root = document.createElement("div");
+      root.id = "drawer";
+      Object.assign(root.style, { position: "fixed", top: "0", right: "0", width: "360px", height: "100%", overflow: "auto", background: "#1d1a17", color: "#e8e0d4", zIndex: "2", display: new URLSearchParams(location.search).get("drawer") === "1" ? "" : "none" });
+      document.body.appendChild(root);
+      return { root, tabId: "tallow", setTitle() {}, setShortName() {}, setBadge() {}, activate() {}, destroy: () => root.remove(), onActivate: () => () => {} };
+    },
     registerInputBarAction(o: { label: string }) {
       let click = (): void => {};
       const a = { label: o.label, click: () => click() };
@@ -63,7 +135,8 @@ const ctx = {
 };
 
 window.addEventListener("tallow:room", (e) => Object.assign(window, { room: (e as CustomEvent).detail }));
+window.addEventListener("tallow:director", (e) => Object.assign(window, { director: (e as CustomEvent).detail }));
 const bundle = "/dist/frontend.js";
 const mod = (await import(/* the built file, served as it is */ bundle)) as { setup(ctx: unknown): () => void };
 mod.setup(ctx);
-Object.assign(window, { hostReady: true });
+Object.assign(window, { hostReady: true, decided });

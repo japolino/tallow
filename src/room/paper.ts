@@ -64,6 +64,8 @@ export interface PageWriting {
   heading?: string;
   /** The narrator's writing: one entry a paragraph. */
   his: string[];
+  /** Pencil notes in the margin, in your hero's hand (docs/MOONSHOT.md, 3.2): "SENSE — ...". */
+  margin?: string[];
 }
 
 export class Page {
@@ -246,7 +248,43 @@ export class Page {
         y += size * 1.3;
       }
     }
+    if (w.margin?.length) this.drawMargin(w.margin, r);
     this.tex.needsUpdate = true;
+  }
+
+  /** The margin: small pencil notes up from the foot of the page, the stat in capitals before each, a little askew. */
+  private drawMargin(notes: string[], r: () => number): void {
+    const g = this.g;
+    const width = PX_W - SIDE * 2;
+    let size = 24, laid: string[][] = [];
+    for (size of [24, 21, 19, 17]) {
+      g.font = `${size}px ${MINE_FONT}`;
+      laid = notes.map((n) => wrapText((s) => g.measureText(s).width, n, width - 16));
+      if (laid.flat().length * size * 1.2 <= BOTTOM + 120) break;
+    }
+    const lh = size * 1.2;
+    let y = PX_H - 18 - laid.flat().length * lh;
+    // A pencil rule across, the way a margin is marked off.
+    g.strokeStyle = PENCIL;
+    g.globalAlpha = 0.35;
+    g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(SIDE, y - 6);
+    g.lineTo(SIDE + width * 0.4, y - 7);
+    g.stroke();
+    g.globalAlpha = 0.85;
+    g.fillStyle = PENCIL;
+    for (const lines of laid) {
+      lines.forEach((line, i) => {
+        g.save();
+        g.translate(SIDE + 8 + (i ? 18 : 0) + (r() - 0.5) * 4, y + size);
+        g.rotate((r() - 0.5) * 0.02);
+        g.fillText(line, 0, 0);
+        g.restore();
+        y += lh;
+      });
+    }
+    g.globalAlpha = 1;
   }
 
   dispose(): void {

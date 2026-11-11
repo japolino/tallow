@@ -12,6 +12,7 @@ import {
   BackSide,
   CanvasTexture,
   CapsuleGeometry,
+  Color,
   CylinderGeometry,
   DoubleSide,
   Group,
@@ -121,6 +122,9 @@ interface Rig {
   shoulderAt: Vector3;
 }
 
+/** The colour of the narrator's cloth. */
+const CLOTH = 0x1c1a20;
+
 /** One arm: a sleeve from the elbow, hidden in the mantle, to the hand, which can leave its place on the table to move a piece. */
 interface Arm {
   side: number;
@@ -137,6 +141,8 @@ interface Arm {
   joints: [Mesh, Mesh];
   /** Where the fingertips are wanted (in the narrator's space), or null to lie at rest. */
   want: Vector3 | null;
+  /** The hand has the thing it is going with (track.ts, Held): it keeps close to where it is sent. */
+  holding: boolean;
   at: Vector3;
   k: number;
   /** How fast `at` and `k` are changing, so they can be eased. */
@@ -195,13 +201,31 @@ export class Narrator {
   private leanVel = { pitch: { v: 0 }, roll: { v: 0 }, yaw: { v: 0 }, nod: { v: 0 } };
   /** How brightly the eyes show, 0..1 (set from the room's light: brighter in the dark). */
   glow = 0.8;
+  /**
+   * The light of the room where it catches the edge of the cloth (set from the room's light). The cloth is nearly
+   * black and half the figure sits against a wall as dark as it is: without this, the side away from the window
+   * cannot be told from the wall, and it looks as if only half of it were there.
+   */
+  readonly rim = new Color(0.03, 0.03, 0.035);
 
   /**
    * @param models where the sculpted parts are served from (models/*.py make them): the draped mantle and the
    *   hand. Without it, or for any part that fails to load, the figure keeps the simpler shape built here in code.
    */
   constructor(private reduced: boolean, models?: string) {
-    const cloth = (this.cloth = new MeshStandardMaterial({ color: 0x060507, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide }));
+    // Dark, but not so dark that candlelight and daylight have nothing to show its folds by.
+    const cloth = (this.cloth = new MeshStandardMaterial({ color: CLOTH, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide }));
+    const rim = { value: this.rim };
+    cloth.onBeforeCompile = (shader) => {
+      shader.uniforms.uRim = rim;
+      shader.fragmentShader =
+        "uniform vec3 uRim;\n" +
+        shader.fragmentShader.replace(
+          "#include <emissivemap_fragment>",
+          "#include <emissivemap_fragment>\n  { float rimF = 1.0 - abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance += uRim * rimF * rimF; }",
+        );
+    };
+    cloth.customProgramCacheKey = () => "narrator-cloth-rim";
     const voidMat = new MeshBasicMaterial({ color: 0x000000, fog: false });
     this.mats.push(cloth, voidMat);
 
@@ -239,7 +263,7 @@ export class Narrator {
       hp.setXYZ(i, x * 0.92 * fall, y * 1.22 + droop, z);
     }
     hoodGeo.computeVertexNormals();
-    const hood = new Mesh(hoodGeo, new MeshStandardMaterial({ color: 0x060507, roughness: 1, envMapIntensity: 0 }));
+    const hood = new Mesh(hoodGeo, new MeshStandardMaterial({ color: CLOTH, roughness: 1, envMapIntensity: 0 }));
     this.mats.push(hood.material as Material);
     hood.castShadow = true;
     this.head.add(hood);
@@ -500,7 +524,7 @@ export class Narrator {
       hand.rotation.order = "YXZ";
       this.group.add(hand);
       this.codeHands.push(hand);
-      this.arms.push({ side, elbow, hand, rest: hand.position.clone(), restYaw: hand.rotation.y, tip: new Vector3(0, 0, 0.15), cuff: 0.03, sleeve, joints, want: null, at: new Vector3(), k: 0,
+      this.arms.push({ side, elbow, hand, rest: hand.position.clone(), restYaw: hand.rotation.y, tip: new Vector3(0, 0, 0.15), cuff: 0.03, sleeve, joints, want: null, holding: false, at: new Vector3(), k: 0,
         vel: [{ v: 0 }, { v: 0 }, { v: 0 }], kVel: { v: 0 }, hold: null, closed: 0, tips: new Vector3(), carried: null,
       });
     }
@@ -515,10 +539,13 @@ export class Narrator {
   /**
    * Send a hand to a point in the room: the point between its fingertips goes there (the point its fingers close
    * on). Null sends it back to rest on the table, empty: whatever it held is let go of where it is.
+   * @param holding the hand has the thing it is going with, and the place it is sent is already a smooth way from
+   *   one spot to the next: it keeps close to it, so the thing is not left waiting for the hand to catch up.
    */
-  reach(arm: number, world: Vector3 | null): void {
+  reach(arm: number, world: Vector3 | null, holding = false): void {
     const a = this.arms[arm];
     if (!a) return;
+    a.holding = holding && !!world;
     const r = a.rig;
     if (!world) {
       if (!a.want && !a.hold && !a.carried) return;
@@ -628,6 +655,12 @@ export class Narrator {
     return this.arms[arm]!.tips.clone();
   }
 
+  /** Whether a hand is away on some errand: sent somewhere, or with something in it. Whoever wants it next waits. */
+  busy(arm: number): boolean {
+    const a = this.arms[arm];
+    return !!a && (!!a.want || !!a.carried);
+  }
+
   /** How far a hand has come from its place on the table, 0 (at rest) to 1 (fully reached out). */
   reached(arm: number): number {
     return this.arms[arm]?.k ?? 0;
@@ -669,7 +702,7 @@ export class Narrator {
         if (!a.want && a.k < 1e-4) a.k = 0;
         if (a.want) {
           // A long way takes longer: the hand crosses the table at a walk, not a snatch.
-          const time = Math.min(0.75, 0.3 + 0.5 * a.at.distanceTo(a.want));
+          const time = a.holding ? 0.16 : Math.min(0.75, 0.3 + 0.5 * a.at.distanceTo(a.want));
           a.at.set(settle(a.at.x, a.want.x, a.vel[0], time, dt), settle(a.at.y, a.want.y, a.vel[1], time, dt), settle(a.at.z, a.want.z, a.vel[2], time, dt));
         }
       }

@@ -7,14 +7,17 @@
  *   ADV=courtship bun run table            the courtship
  *   SLOW=2500 bun run table                the stand-ins take 2.5 seconds, so the narrator's waits are seen
  *   TALLOW_PORT=4186 bun run table         serve the preview on another port
+ *   PHONE=1 bun run table                  on a phone held upright (390 by 844)
+ *   ADV=night-rescue bun run table         any adventure in content/adventures.ts
  */
 import { withPage } from "./browser.js";
 
-const W = 1280, H = 800;
+const PHONE = !!process.env.PHONE;
+const W = PHONE ? 390 : 1280, H = PHONE ? 844 : 800;
 const ADV = process.env.ADV ?? "rescue";
 const SLOW = Number(process.env.SLOW ?? 0);
 const SEED = process.env.SEED ?? "lantern";
-const OUT = `.artifacts/table/${ADV}${SLOW ? "-slow" : ""}`;
+const OUT = `.artifacts/table/${ADV}${SLOW ? "-slow" : ""}${PHONE ? "-phone" : ""}`;
 let failed = 0;
 const check = (what: string, ok: boolean, detail = ""): void => {
   if (!ok) failed++;
@@ -31,6 +34,7 @@ const LINES: Record<string, string> = {
 
 await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height: H }, async (page) => {
   await page.open(`adventure=${ADV}&seed=${SEED}${SLOW ? `&slow=${SLOW}` : ""}`);
+  if (PHONE) await page.size(W, H);
   await page.run("room.paused = false");
   await page.mouse("move", W / 2, H / 2);
   const dir = <T>(expr: string): Promise<T> => page.run<T>(`(() => { const d = getDirector(); return d ? (${expr}) : null; })()`);
@@ -70,6 +74,7 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
     await once("03-fork-laid", "!!room.desk.cards.choosing", 900);
     await once("05-turned", "getDirector()?.stage === 'road' && room.desk.glance.k > 0.85");
     await once("07-side-card", "room.desk.cards.side.length > 0 && room.desk.mode === 'idle'", 800);
+    await once("06-ways", "getDirector()?.stage === 'write' && Object.values(room.desk.ways.states).includes('open') && room.desk.mode === 'idle' && room.desk.glance.k < 0.02 && room.desk.focus.k < 0.02", 500);
     await once("08-balance", "room.desk.glance.k > 0.9 && !!room.desk.onDie");
     if (SLOW) {
       await once("04-reading", "getDirector()?.stage === 'given' && room.desk.his && room.desk.his.group.position.y > 0.3", 300);

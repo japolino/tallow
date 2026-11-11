@@ -6,9 +6,20 @@
  * Code decides every number here, from seeded dice. Nothing a model says changes any of it. A trip is never changed
  * in place: every step returns the next one.
  */
+import { DANGER_SAVE, isContest, playRound, startContest, type Contest, type Moves, type Round } from "./contest.js";
+import { throwSave } from "./save.js";
+import { DREAD_MAX, dreadFrom } from "./dread.js";
 import type { MapSheet } from "../room/mapsheet.js";
-import { isPerkLever, LEVEL_EVERY, perkLever, perkOf } from "./hero.js";
-import { GOODWILL_MAX, resolve, STAT_MAX, startMoment, type Lever, type Moment, type Outcome, type Read, type Sheet, type Stat, type Stop, type Way } from "./moment.js";
+import { fromOldKnack, passive, storeAt, type Ability } from "./abilities.js";
+import type { Casebook, Clue, StoryKind } from "./clues.js";
+import type { ContentSettings } from "./content.js";
+import type { WorldKit } from "./kit.js";
+import type { Person as Npc, Visit } from "./people.js";
+import type { Payoff, Project } from "./project.js";
+import type { Appointment, Schedule } from "./schedule.js";
+import type { Fellow } from "./seats.js";
+import { LEVEL_EVERY } from "./hero.js";
+import { abilityFor, canUse, GOODWILL_MAX, leverLeft, resolve, STAT_MAX, startMoment, WAYS, type CostKind, type Grade, type Lever, type Moment, type Outcome, type Read, type Sheet, type Stat, type Stop, type Way, type Against } from "./moment.js";
 
 /** The most health you can have. Resting heals you back toward it. */
 export const HEALTH_MAX = 5;
@@ -38,6 +49,9 @@ export interface Reward {
   says: string;
 }
 
+/** The weather outside the room's windows (the room shows each kind, src/room/daylight.ts). */
+export type Sky = "clear" | "rain" | "storm" | "fog" | "wind" | "snow";
+
 /** A stop on the road: the moment's stop, and what the table shows of it. */
 export interface RoadStop extends Stop {
   /** Its card's kind (cards.ts). */
@@ -48,6 +62,10 @@ export interface RoadStop extends Stop {
   teaser: string;
   climax?: boolean;
   reward?: Reward;
+  /** The weather while you are there, when it is not the adventure's own. */
+  weather?: Sky;
+  /** Someone here with a mind of their own (people.ts): what they want, how they feel, what they know and will say. */
+  person?: Npc;
 }
 
 /** Someone who can walk with you. They are good at one thing, and they have opinions. */
@@ -85,7 +103,14 @@ export interface Person {
 export interface Adventure {
   id: string;
   title: string;
-  trope: "rescue" | "courtship";
+  /** The kind of story: "rescue" or "courtship" for the made-up adventures, else the story's id (content/tropes.ts). */
+  trope: string;
+  /** The family of story it is (content/tropes.ts), for a road laid out from a recipe. */
+  family?: string;
+  /** Whether the card's own character walks with you ("friend") or is the one you court ("courted"). */
+  part?: "friend" | "courted";
+  /** The story in a line, as the builder tells a model. */
+  brief?: string;
   /** What the narrator says the job is, at the start. */
   goal: string;
   /** Who you are, written on the first page. */
@@ -111,9 +136,29 @@ export interface Adventure {
   loot: Loot[];
   /** Said when you are past the last stop. */
   won: string;
+  /** The weather on the road, between stops (clear when not said). */
+  weather?: Sky;
+  /** The world's kit (kit.ts): its era, its power if any, its gear, what you risk. */
+  kit?: WorldKit;
+  /** What the game allows in this story (content.ts). */
+  content?: ContentSettings;
+  /** The kind of story, for its three keys (clues.ts). */
+  kind?: StoryKind;
+  /** What there is to find out (clues.ts): every key with at least three clues. */
+  clues?: Clue[];
+  /** The other side's clock (schedule.ts): what happens, where and when, whether you are there or not. */
+  appointments?: Appointment[];
+  /** The other players at the table (seats.ts). */
+  fellows?: Fellow[];
+  /** The last story of a campaign (campaign.ts, 6.1): the big bad itself waits at the end, and the keys you carried are your edges against it. */
+  finale?: { name: string; edges: number };
 }
 
-export type Ending = "won" | "deadline" | "rival" | "turned_back";
+/** Whether the card's own character walks with you or is courted, for a made-up adventure too. */
+export const partOf = (adv: Adventure): "friend" | "courted" => adv.part ?? (adv.courted ? "courted" : "friend");
+
+/** How a story ended: won; out of time; the rival got there first; no way left at the last place; taken out in the last contest; or you gave in at it. */
+export type Ending = "won" | "deadline" | "rival" | "turned_back" | "taken" | "yielded";
 
 /** Where you are in an adventure. */
 export interface Trip {
@@ -125,12 +170,34 @@ export interface Trip {
   at: string;
   /** Stops you have reached, in order. */
   visited: string[];
-  /** The stop in your way, and how many good tries it still takes. */
-  facing: { stop: RoadStop; moment: Moment; holds: number } | null;
+  /** Margin notes already written (margin.ts), so none is written twice. */
+  noticed?: string[];
+  /** How often your fault has spoken in the margin this story. */
+  faults?: number;
+  /** The stop in your way, how many good tries it still takes, and, when it is a contest (contest.ts), the dials. */
+  facing: { stop: RoadStop; moment: Moment; holds: number; contest?: Contest } | null;
   party: string[];
   kept: string[];
-  /** Your knacks (hero.ts). */
-  perks: string[];
+  /** Your abilities (abilities.ts). */
+  abilities: Ability[];
+  /** Abilities used that are once a story. */
+  storyUsed: string[];
+  /** Marks you made at earlier stops that you can still lean on (docs/SYSTEMS.md, 4). */
+  marks: Lever[];
+  /** The narrator's marks against you (dread.ts): each makes your next try by its way throw two dice and keep the worse. */
+  against?: Against[];
+  /** Your level: it sets how big your store is. */
+  level: number;
+  /** What your store is called in your calling: heat, nerve, breath. */
+  storeName?: string;
+  /** What you did, in a few words each, for the abilities written for you at a level-up. */
+  deeds: string[];
+  /** The old knacks, in a trip kept from before abilities (read into abilities by `tripNow`). */
+  perks?: string[];
+  /** Black stones in the narrator's bowl: what has gone wrong, waiting to come back (dread.ts). */
+  dread?: number;
+  /** How many times the narrator has offered you your fault this story. */
+  tempted?: number;
   /** How many stops you have got past (not gone round): every LEVEL_EVERY of them, you level up. */
   passed: number;
   /** How far the rival has got. */
@@ -138,6 +205,26 @@ export interface Trip {
   /** Set by resting: word of you has gone ahead, and the next stop starts a step harder. */
   warned: number;
   over: Ending | null;
+  /** Your slips and the map they ink (clues.ts). */
+  book?: Casebook;
+  /** The other side's clock as it stands (schedule.ts). */
+  schedule?: Schedule;
+  /** The people you have met, as they feel now, by id (people.ts). */
+  people?: Record<string, Npc>;
+  /** Your visit with the person at each place, by stop id. */
+  visits?: Record<string, Visit>;
+  /** Goals of your own (project.ts). */
+  projects?: Project[];
+  /** The other players as they stand (seats.ts). */
+  fellows?: Fellow[];
+  /** Lines you have written, for the spotlight. */
+  turn?: number;
+  /** What the table said before a big move (seats.ts, talkItOver), at a stop: each player's way, and the way a vote chose. */
+  proposals?: { stop: string; list: { id: string; way: Way }[]; decided?: Way };
+  /** What your finished projects pay off (project.ts): kept from story to story. */
+  payoffs?: Payoff[];
+  /** A weapon of yours (a project's payoff) already brought to a fight this story. */
+  armed?: boolean;
 }
 
 export function mapOf(adv: Adventure): MapSheet {
@@ -154,14 +241,45 @@ export const lootOf = (adv: Adventure, id: string): Loot | undefined => adv.loot
 
 const copySheet = (s: Sheet): Sheet => ({ ...s, stats: { ...s.stats } });
 
-export function startTrip(adv: Adventure, sheet: Sheet, seed: string, perks: readonly string[] = []): Trip {
+export function startTrip(adv: Adventure, sheet: Sheet, seed: string, abilities: readonly Ability[] = [], level = 1): Trip {
   const party = (adv.party ?? []).filter((id) => companionOf(adv, id));
-  return { adv, seed, sheet: { ...copySheet(sheet), hour: adv.startHour }, at: adv.start, visited: [], facing: null, party, kept: [], perks: [...perks], passed: 0, rival: 0, warned: 0, over: null };
+  return {
+    adv,
+    seed,
+    sheet: { ...copySheet(sheet), hour: adv.startHour, store: storeAt(level) },
+    at: adv.start,
+    visited: [],
+    facing: null,
+    party,
+    kept: [],
+    abilities: abilities.map((a) => ({ ...a })),
+    storyUsed: [],
+    marks: [],
+    level,
+    deeds: [],
+    dread: 0,
+    tempted: 0,
+    passed: 0,
+    rival: 0,
+    warned: 0,
+    over: null,
+  };
 }
 
-/** Take a knack at a level-up. It counts from the next stop on. */
-export function takePerk(t: Trip, id: string): Trip {
-  return perkOf(id) && !t.perks.includes(id) ? { ...t, perks: [...t.perks, id] } : t;
+/** A trip kept from before abilities were made: its knacks become the abilities they always were. */
+export function tripNow(t: Trip): Trip {
+  if (Array.isArray(t.abilities)) return t;
+  const abilities = (t.perks ?? []).map(fromOldKnack).filter((a): a is Ability => !!a);
+  const level = Math.max(1, abilities.length);
+  const { perks: _old, ...rest } = t;
+  return { ...rest, abilities, storyUsed: [], marks: [], level, deeds: [], sheet: { ...t.sheet, store: t.sheet.store ?? storeAt(level) } };
+}
+
+/** Take an ability at a level-up. It counts from the next stop on, and the store grows by one. */
+export function takeAbility(t: Trip, a: Ability): Trip {
+  if (t.abilities.some((x) => x.id === a.id)) return t;
+  const level = t.level + 1;
+  return { ...t, abilities: [...t.abilities, { ...a }], level, sheet: { ...t.sheet, store: Math.min(storeAt(level), (t.sheet.store ?? 0) + 1) } };
 }
 
 /** The stops you can go on to from where you are: one, or two at a fork. */
@@ -183,24 +301,27 @@ function helped(t: Trip, sheet: Sheet): Sheet {
   const s = copySheet(sheet);
   for (const id of t.party) {
     const c = companionOf(t.adv, id);
-    if (c) s.stats[c.stat] = Math.min(STAT_MAX, s.stats[c.stat] + 1);
+    if (c) s.stats[c.stat] = Math.min(STAT_MAX, (s.stats[c.stat] ?? 0) + 1);
   }
   return s;
 }
 
-/** The stop as it is played: with the things you keep, and your knacks, added to what is there to use. */
+/** The stop as it is played: with the things you keep, and the marks you made earlier, added to what is there to use. */
 function withKept(t: Trip, stop: RoadStop): Stop {
   const kept: Lever[] = t.kept.map((id) => lootOf(t.adv, id)!).filter(Boolean).map((l) => ({ id: l.id, way: l.way, name: l.name, words: l.words }));
-  const knacks: Lever[] = t.perks.map((id) => perkOf(id)).filter((p) => !!p).map((p) => perkLever(p!));
-  return { ...stop, levers: [...stop.levers, ...kept, ...knacks] };
+  return { ...stop, levers: [...stop.levers, ...kept, ...t.marks.map((l) => ({ ...l }))] };
 }
 
-/** A try that uses nothing in the scene leans on a knack for its way, if there is one not used yet at this stop. */
-export function withKnack(m: Moment, read: Read): Read {
-  const named = read.lever ? m.stop.levers.find((l) => l.id === read.lever && l.way === read.way && !m.spent.includes(l.id)) : undefined;
-  if (named && !isPerkLever(named.id)) return read;
-  const knack = m.stop.levers.find((l) => isPerkLever(l.id) && l.way === read.way && !m.spent.includes(l.id));
-  return knack ? { ...read, lever: knack.id } : named ? read : { ...read, lever: null };
+/**
+ * A try that names no ability leans on one that works by itself (docs/SYSTEMS.md, 3.2: a knack), if one applies to
+ * its way and can still be used here: the strongest. A named lever that is gone or for another way is let go.
+ */
+export function withAbility(m: Moment, read: Read): Read {
+  const lever = read.lever && m.stop.levers.some((l) => l.id === read.lever && l.way === read.way && leverLeft(m, l)) ? read.lever : null;
+  const r = { ...read, lever };
+  if (abilityFor(m, r)) return r;
+  const auto = (m.abilities ?? []).filter((a) => passive(a) && !a.tags.length && (!a.ways.length || a.ways.includes(read.way)) && abilityFor(m, { ...r, ability: a.id })).sort((a, b) => b.much - a.much)[0];
+  return { ...r, ability: auto?.id ?? null };
 }
 
 function overClock(t: Trip): Trip {
@@ -220,9 +341,42 @@ export function arrive(t: Trip, stopId: string): Arrival | null {
   const hours = hoursTo(t, stopId);
   const sheet = copySheet(t.sheet);
   sheet.hour += hours;
-  const moment = { ...startMoment(withKept(t, stop), helped(t, sheet), `${t.seed}:${stop.id}`), trouble: t.warned, ...((stop.holds ?? 1) > 1 ? { stubborn: true } : {}) };
-  const trip = overClock({ ...t, sheet, visited: [...t.visited, stop.id], facing: { stop, moment, holds: Math.max(1, stop.holds ?? 1) }, warned: 0 });
+  const moment: Moment = {
+    ...startMoment(withKept(t, stop), helped(t, sheet), `${t.seed}:${stop.id}`),
+    trouble: t.warned,
+    ...((stop.holds ?? 1) > 1 ? { stubborn: true } : {}),
+    abilities: t.abilities.filter((a) => !t.storyUsed.includes(a.id)),
+    used: [],
+    against: t.against ?? [],
+    company: t.party.length,
+  };
+  const facing = { stop, moment, holds: Math.max(1, stop.holds ?? 1), ...(isContest(stop) ? { contest: startContest(stop) } : {}) };
+  const trip = overClock({ ...t, sheet, visited: [...t.visited, stop.id], facing, warned: 0 });
   return { trip, stop, hours };
+}
+
+/** A contest set out for the stop in your way, if it is one and has none yet (a sitting kept from before contests). */
+export function withContest(t: Trip): Trip {
+  const f = t.facing;
+  if (!f || f.contest || !isContest(f.stop)) return t;
+  return { ...t, facing: { ...f, contest: startContest(f.stop) } };
+}
+
+/** Taken out of a contest at an ordinary place, you come to this many hours later, beyond it, with nothing to show. */
+export const TAKEN_HOURS = 2;
+/** Giving in takes this long. */
+export const YIELD_HOURS = 0.5;
+
+/**
+ * You give in, in the contest in your way: you come out of it whole but with nothing (no reward), which is still
+ * better than being taken out. At the last place, giving in loses the story. Null when there is no contest in your way.
+ */
+export function yieldContest(t: Trip): Trip | null {
+  const f = t.facing;
+  if (t.over || !f?.contest) return null;
+  if (f.stop.climax) return { ...t, facing: null, over: "yielded" };
+  const sheet = { ...copySheet(t.sheet), hour: t.sheet.hour + YIELD_HOURS };
+  return overClock({ ...t, sheet, facing: null, at: f.stop.id });
 }
 
 export interface Rested {
@@ -239,8 +393,22 @@ export function rest(t: Trip): Rested | null {
   if (ate) sheet.supplies -= 1;
   const healed = Math.min(ate ? REST_HEALS : 1, HEALTH_MAX - sheet.health);
   sheet.health += healed;
+  // Resting fills the store again.
+  sheet.store = storeAt(t.level);
   sheet.hour += REST_HOURS;
   return { trip: overClock({ ...t, sheet, warned: 1 }), healed, ate };
+}
+
+/** A question to the narrator, or a look round, takes this long: no die, but the clock still runs. */
+export const ASK_HOURS = 0.25;
+
+/** Ask something, or look round, at the stop in your way: it costs a quarter of an hour, and changes nothing else. */
+export function ponder(t: Trip): Trip | null {
+  const f = t.facing;
+  if (t.over || !f) return null;
+  const sheet = { ...copySheet(t.sheet), hour: t.sheet.hour + ASK_HOURS };
+  const moment = { ...f.moment, sheet: { ...f.moment.sheet, stats: { ...f.moment.sheet.stats }, hour: sheet.hour } };
+  return overClock({ ...t, sheet, facing: { ...f, moment } });
 }
 
 /** What a companion thought of how you got past. */
@@ -269,19 +437,71 @@ export interface Turn {
   longWay: { hours: number; supplies: number } | null;
   /** The rival gained ground. */
   rivalGained: boolean;
-  /** You got past enough stops to level up: the table offers two knacks (hero.ts perkOffer). */
+  /** You got past enough stops to level up: the table offers two abilities. */
   levelUp: boolean;
+  /** A mark the try left, to lean on at a later stop (docs/SYSTEMS.md, 4). */
+  marked: Lever | null;
+  /** A mark you made earlier, used up on this try. */
+  markUsed: Lever | null;
+  /** A mark against you, used up on this try (it threw two dice and kept the worse). */
+  againstUsed: Against | null;
+  /** Black stones the try put in the narrator's bowl. */
+  dread: number;
+  /** In a contest: what the round came to on the dials. */
+  round: Round | null;
+  /** In a contest: the dials as the round left them, even when it ended the contest. */
+  contest: Contest | null;
+  /** Taken out of a contest: what it cost you at an ordinary place, or "end" at the last one. */
+  taken: { hours: number; supplies: number } | "end" | null;
+}
+
+/** A try that works with limited effect, outside a contest, takes this much longer: you only half managed it. */
+export const LIMITED_HOURS = 0.5;
+
+/** The most marks you carry from stop to stop; the oldest goes when another is made. */
+export const MARKS_MAX = 3;
+
+const DEFAULT_MARK: Record<Way, string> = { talk: "a good word about you", sneak: "a way you know past them", force: "a name for not backing down", pay: "a fair trade remembered" };
+
+/** Words in a mark's name that a line would use to lean on it, for reading a line without a model. */
+export const markWords = (name: string): string[] => [...new Set(name.toLowerCase().split(/[^\p{L}']+/u).filter((w) => w.length >= 4 && !/^(your|their|about|with|from|that|this|they|them|have|will|what|when|where|which|past|know|good|word|name|over|here|there|made|left|some)$/.test(w)))];
+
+/** The mark a try leaves: a try that went better than hoped always leaves one; one that worked does when its line used what was there. */
+export function markLeft(o: Outcome, grade: Grade | undefined, words: string | undefined, stop: RoadStop): Lever | null {
+  const well = o.tier === "crit_success" || (o.tier === "success" && (grade === "grounded" || grade === "inspired"));
+  if (!well) return null;
+  const said = (words ?? "").replace(/\s+/g, " ").trim().replace(/[.!]+$/, "").slice(0, 60);
+  const name = said.length >= 6 ? said.charAt(0).toLowerCase() + said.slice(1) : `${DEFAULT_MARK[o.check.way]} at ${stop.name}`;
+  return { id: `mark:${stop.id}:${o.next.tries}`, way: o.check.way, name, words: markWords(name), mark: true };
 }
 
 /** Throw the die at the stop in your way, for a reading of the line the player wrote. Null when that way cannot be tried. */
 export function attempt(t: Trip, read: Read): Turn | null {
   const f = t.facing;
   if (t.over || !f) return null;
-  const o = resolve(f.moment, withKnack(f.moment, read));
+  const o = resolve(f.moment, withAbility(f.moment, read));
   if (!o) return null;
   const adv = t.adv;
   const sheet: Sheet = { ...o.next.sheet, stats: { ...t.sheet.stats } };
   let trip: Trip = { ...t, sheet };
+  const ab = o.check.ability;
+  if (ab?.often === "story") trip.storyUsed = [...t.storyUsed, ab.id];
+  // A mark you made earlier is used up by a try it helped that works, like a thing you keep.
+  const markUsed = o.past && o.check.lever ? t.marks.find((l) => l.id === o.check.lever!.id) ?? null : null;
+  if (markUsed) trip.marks = t.marks.filter((l) => l.id !== markUsed.id);
+  const againstUsed = o.check.bane;
+  if (againstUsed) trip.against = (t.against ?? []).filter((a) => a.id !== againstUsed.id);
+  // Outside a contest, effect says how much a try that works did (docs/MOONSHOT.md, 2.2): a limited one took longer;
+  // a great one leaves something behind, as a try better than hoped does.
+  const marked = markLeft(o, o.effect === "great" || o.effect === "overwhelming" ? "grounded" : read.grade, read.mark, f.stop);
+  if (!f.contest && o.past && o.effect === "limited") {
+    sheet.hour += LIMITED_HOURS;
+    trip.sheet = sheet;
+  }
+  if (marked) trip.marks = [...trip.marks, marked].slice(-MARKS_MAX);
+  const dread = Math.min(DREAD_MAX, (t.dread ?? 0) + dreadFrom(o.tier)) - (t.dread ?? 0);
+  if (dread) trip.dread = (t.dread ?? 0) + dread;
+  if (o.past) trip.deeds = [...t.deeds, `${o.check.attempt || o.check.way} at ${f.stop.name}`].slice(-8);
   let fell = 0;
   if (sheet.health <= 0) {
     fell = FALL_HOURS;
@@ -295,11 +515,37 @@ export function attempt(t: Trip, read: Read): Turn | null {
   if (rivalGained) trip.rival = t.rival + 1;
 
   let more = false, cleared = false, reward: Reward | null = null, longWay: Turn["longWay"] = null;
+  let round: Round | null = null, taken: Turn["taken"] = null;
   const opinions: Opinion[] = [];
-  if (o.past && f.holds > 1) {
+  // A contest: the try is a round on the dials, and only filling them all gets you past.
+  // The save against the danger is thrown every round, and counts only in the round it arrives.
+  const save = f.contest?.danger ? throwSave(f.moment.sheet, DANGER_SAVE[f.contest.kind], `${t.seed}:${f.stop.id}:save:${f.contest.round}`) : undefined;
+  const played = f.contest ? playRound(f.contest, o.tier, read.grade, read.target ?? null, save, o.effect, o.check.position, movesOf(o.check.ability)) : null;
+  if (played) round = played.round;
+  const past = played ? played.round.won : o.past;
+  if (played && !played.round.won && (played.round.taken || fell)) {
+    // Taken out: at the last place the story is lost; anywhere else you come to beyond it, with nothing.
+    trip.facing = null;
+    if (f.stop.climax) {
+      trip.over = "taken";
+      taken = "end";
+    } else {
+      const supplies = Math.min(1, sheet.supplies);
+      const hours = fell ? 0 : TAKEN_HOURS;
+      sheet.supplies -= supplies;
+      sheet.hour += hours;
+      taken = { hours: hours + fell, supplies };
+      trip.at = f.stop.id;
+      trip.warned = 1;
+    }
+  } else if (played && !played.round.won) {
+    more = played.round.hit > 0;
+    const trouble = o.next.trouble + (played.round.danger?.came ? 1 : 0);
+    trip.facing = { ...f, contest: played.contest, moment: { ...o.next, over: null, trouble, sheet: helped(trip, sheet) } };
+  } else if (!played && o.past && f.holds > 1) {
     more = true;
     trip.facing = { ...f, holds: f.holds - 1, moment: { ...o.next, over: null, sheet: helped(trip, sheet) } };
-  } else if (o.past) {
+  } else if (past) {
     cleared = true;
     trip.facing = null;
     trip.at = f.stop.id;
@@ -333,7 +579,97 @@ export function attempt(t: Trip, read: Read): Turn | null {
   // A try begun before the deadline still counts if it wins.
   if (trip.over !== "won") trip = overClock(trip);
   const levelUp = cleared && !trip.over && trip.passed % LEVEL_EVERY === 0;
-  return { outcome: o, trip, more, cleared, reward, opinions, used, fell, longWay, rivalGained, levelUp };
+  return { outcome: o, trip, more, cleared, reward, opinions, used, fell, longWay, rivalGained, levelUp, marked, markUsed, againstUsed, dread, round, taken, contest: played?.contest ?? null };
+}
+
+/* ------------------------------ an ability used without a try ------------------------------ */
+
+/** A line that uses an ability to set something up, rather than to get past (docs/SYSTEMS.md, 3.2 and 4). */
+export interface Use {
+  use: string;
+  /** The way past that it helps, if it helps one. */
+  way: Way | null;
+  grade?: Grade;
+  /** What it leaves true, in a few words. */
+  mark?: string;
+}
+
+export interface Used {
+  trip: Trip;
+  ability: Ability;
+  /** What came of it: a mark laid in the scene, something got back, a person warmed, nothing in the rules, an ability that is for a try, or one used up. */
+  effect: "mark" | "mend" | "warm" | "nothing" | "try" | "spent";
+  mark?: Lever;
+  mended?: { kind: CostKind; amount: number };
+}
+
+/** Lay a mark in the scene you are at. It is for this stop only. */
+function markHere(t: Trip, lever: Lever): Trip {
+  const f = t.facing!;
+  return { ...t, facing: { ...f, moment: { ...f.moment, stop: { ...f.moment.stop, levers: [...f.moment.stop.levers, lever] } } } };
+}
+
+/** The easiest way still open here: where a thing learned helps when the line does not say. */
+function easiestWay(m: Moment): Way {
+  const open = WAYS.filter((w) => m.stop.ways[w] && !m.closed.includes(w));
+  return [...open].sort((a, b) => m.stop.ways[a]!.difficulty - m.stop.ways[b]!.difficulty)[0] ?? "talk";
+}
+
+/** The verbs that only work on a try with the die. */
+const TRY_ONLY = new Set(["ease", "edge", "open", "ward", "slip", "aid"]);
+
+/**
+ * Use an ability without a die, at the stop in your way: a trick, a thing learned, a mark, a mend, a sway. It takes a
+ * quarter of an hour, like a question. A trick changes no rule by itself; used well towards the goal (a grounded line
+ * that says which way it helps), it leaves a mark here, once a stop. Null when there is no such ability here.
+ */
+export function useAbility(t: Trip, u: Use): Used | null {
+  const f = t.facing;
+  if (t.over || !f) return null;
+  const m = f.moment;
+  const a = (m.abilities ?? []).find((x) => x.id === u.use);
+  if (!a) return null;
+  if (TRY_ONLY.has(a.does)) return { trip: t, ability: a, effect: "try" };
+  if (a.does !== "flourish" && !canUse(m, a)) return { trip: t, ability: a, effect: "spent" };
+  let trip = ponder(t)!;
+  const spend = (x: Trip): Trip => {
+    const fm = x.facing!;
+    const store = a.store ? Math.max(0, (fm.moment.sheet.store ?? 0) - 1) : fm.moment.sheet.store;
+    const sheet = { ...x.sheet, store: a.store ? Math.max(0, (x.sheet.store ?? 0) - 1) : x.sheet.store };
+    const used = a.often !== "always" || a.does === "flourish" ? [...(fm.moment.used ?? []), a.id] : fm.moment.used ?? [];
+    return { ...x, sheet, storyUsed: a.often === "story" ? [...x.storyUsed, a.id] : x.storyUsed, facing: { ...fm, moment: { ...fm.moment, used, sheet: { ...fm.moment.sheet, stats: { ...fm.moment.sheet.stats }, store } } } };
+  };
+  const said = (u.mark ?? "").replace(/\s+/g, " ").trim().replace(/[.!]+$/, "").slice(0, 60);
+  const lay = (way: Way, uses: number, fallback: string): Lever => {
+    const name = said.length >= 6 ? said.charAt(0).toLowerCase() + said.slice(1) : fallback;
+    return { id: `mark:${f.stop.id}:${a.id}:${m.tries}:${m.spent.length}:${(m.used ?? []).length}`, way, name, words: markWords(name), uses, mark: true };
+  };
+  if (a.does === "flourish") {
+    // A trick earns a mark only when it was used well, towards a way past, and only once at each stop.
+    if (!u.way || !(u.grade === "grounded" || u.grade === "inspired") || (m.used ?? []).includes(a.id) || !m.stop.ways[u.way] || m.closed.includes(u.way)) return { trip, ability: a, effect: "nothing" };
+    const mark = lay(u.way, 1, `what your ${a.name.toLowerCase()} did`);
+    return { trip: markHere(spend(trip), mark), ability: a, effect: "mark", mark };
+  }
+  if (a.does === "learn" || a.does === "mark") {
+    const way = u.way && m.stop.ways[u.way] && !m.closed.includes(u.way) ? u.way : a.ways.find((w) => m.stop.ways[w] && !m.closed.includes(w)) ?? easiestWay(m);
+    const mark = lay(way, a.does === "mark" ? a.much : 1, a.does === "learn" ? `what your ${a.name.toLowerCase()} showed you` : `what your ${a.name.toLowerCase()} set up`);
+    return { trip: markHere(spend(trip), mark), ability: a, effect: "mark", mark };
+  }
+  if (a.does === "mend") {
+    const kind = a.of ?? "health";
+    const cap = kind === "health" ? HEALTH_MAX : kind === "goodwill" ? GOODWILL_MAX : 99;
+    trip = spend(trip);
+    const amount = Math.max(0, Math.min(a.much, cap - trip.sheet[kind]));
+    const sheet = { ...trip.sheet, [kind]: trip.sheet[kind] + amount };
+    const fm = trip.facing!;
+    trip = { ...trip, sheet, facing: { ...fm, moment: { ...fm.moment, sheet: { ...fm.moment.sheet, stats: { ...fm.moment.sheet.stats }, [kind]: fm.moment.sheet[kind] + amount } } } };
+    return { trip, ability: a, effect: "mend", mended: { kind, amount } };
+  }
+  // A sway, used without a try: the person is warmer to you for the rest of the stop.
+  trip = spend(trip);
+  const fm = trip.facing!;
+  trip = { ...trip, facing: { ...fm, moment: { ...fm.moment, warm: (fm.moment.warm ?? 0) + a.much } } };
+  return { trip, ability: a, effect: "warm" };
 }
 
 /** Which of two stops at a fork a companion would rather take: the one where the way they like is easiest. */
@@ -342,4 +678,10 @@ export function prefers(c: Companion, stops: RoadStop[]): RoadStop | null {
   const [a, b] = stops;
   if (!a || !b || score(a) === score(b)) return null;
   return score(a) > score(b) ? a : b;
+}
+
+/** The fight verbs an ability played on a try brings to a contest round (docs/MOONSHOT.md, 7.4). */
+function movesOf(a: Ability | null | undefined): Moves {
+  if (!a) return {};
+  return a.does === "reach" ? { reach: true } : a.does === "bind" ? { bind: true } : a.does === "sweep" ? { sweep: true } : a.does === "drain" ? { drain: true } : {};
 }

@@ -7,6 +7,7 @@
  */
 import {
   AdditiveBlending,
+  BoxGeometry,
   CanvasTexture,
   Color,
   CylinderGeometry,
@@ -104,6 +105,8 @@ export class Candle {
   private runs: Run[] = [];
   private phase: number;
   private shown = -1;
+  /** Notches cut in the wax (docs/MOONSHOT.md, 5.3), each at the burn where its hour falls. */
+  private marks: { mesh: Mesh; burn: number }[] = [];
 
   /**
    * @param o.h height when new, o.r radius, in metres
@@ -210,6 +213,30 @@ export class Candle {
     this.wick.position.y = top + 0.0035;
     this.flame.position.y = top + 0.006;
     this.halo.position.y = top + 0.034;
+    // A notch the flame has reached is gone with the wax.
+    for (const m of this.marks) m.mesh.visible = m.burn > burn + 0.002;
+  }
+
+  /**
+   * Cut notches in the wax at these burns (docs/MOONSHOT.md, 5.3): the flame creeps down to each, and when it gets there
+   * the thing it marks happens. A burn outside 0..1 (an hour the candle is not burning) is not cut.
+   */
+  notch(burns: readonly number[], mat: MeshBasicMaterial | MeshStandardMaterial): void {
+    for (const m of this.marks) {
+      this.group.remove(m.mesh);
+      m.mesh.geometry.dispose();
+    }
+    this.marks = [];
+    const { r } = this.o;
+    for (const b of burns) {
+      if (!(b > 0 && b < 1)) continue;
+      // A small wedge cut into the side that faces you.
+      const mesh = new Mesh(new BoxGeometry(r * 0.95, 0.0026, r * 0.5), mat);
+      mesh.position.set(0, this.heightAt(b), r * 0.82);
+      this.group.add(mesh);
+      this.marks.push({ mesh, burn: b });
+    }
+    this.shown = -1;
   }
 
   update(t: number, s: CandleState): void {

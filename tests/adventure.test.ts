@@ -3,7 +3,7 @@
  * companions and things kept, and the words that tell it. Faces on the die are chosen by picking the seed.
  */
 import { describe, expect, test } from "bun:test";
-import { COURIER, COURTSHIP, RESCUE } from "../src/content/adventures.js";
+import { ADVENTURES, COURIER, COURTSHIP, RESCUE } from "../src/content/adventures.js";
 import { isChild } from "../src/engine/card/child.js";
 import { ahead, arrive, attempt, FALL_HOURS, HEALTH_MAX, LONG_WAY_HOURS, mapOf, prefers, rest, REST_HOURS, startTrip, unturned, type Trip } from "../src/engine/adventure.js";
 import { CARD_KINDS, cardKind } from "../src/engine/cards.js";
@@ -63,7 +63,7 @@ describe("the road", () => {
   });
 
   test("every road leads to a stop or from the start, and every stop can be reached", () => {
-    for (const adv of [RESCUE, COURTSHIP]) {
+    for (const adv of Object.values(ADVENTURES)) {
       const ids = new Set(adv.places.map((p) => p.id));
       for (const [a, b] of adv.roads) expect(ids.has(a) && ids.has(b)).toBe(true);
       for (const s of adv.stops) expect(adv.roads.some(([, b]) => b === s.id)).toBe(true);
@@ -74,15 +74,19 @@ describe("the road", () => {
 });
 
 describe("a stop that takes more than one good try", () => {
-  test("a fight at the ford takes two, and a failure in between does not undo the first", () => {
+  test("a fight at the ford is a contest: notches on its dial, and a failure in between does not take them off", () => {
     let t = go(throwAt(go(fresh(), "mill"), { way: "sneak" }, 18).trip, "crossing");
-    expect(t.facing!.holds).toBe(2);
+    expect(t.facing!.contest!.foes.reduce((n, f) => n + f.notches, 0)).toBe(4);
     let turn = throwAt(t, { way: "force" }, 18);
     expect(turn.more).toBe(true);
     expect(turn.cleared).toBe(false);
-    expect(turn.trip.facing!.holds).toBe(1);
+    expect(turn.round!.hit).toBe(2);
+    expect(turn.trip.facing!.contest!.foes[0]!.filled).toBe(2);
     turn = throwAt(turn.trip, { way: "talk" }, 2);
-    expect(turn.trip.facing!.holds).toBe(1);
+    expect(turn.round!.hit).toBe(0);
+    expect(turn.trip.facing!.contest!.foes[0]!.filled).toBe(2);
+    // The blow coming at you landed.
+    expect(turn.trip.facing!.contest!.you.filled).toBe(1);
     // Here a failed way stays open; it is only harder.
     expect(turn.trip.facing!.moment.closed).toEqual([]);
     expect(turn.trip.facing!.moment.trouble).toBe(1);
@@ -125,7 +129,7 @@ describe("things kept", () => {
     let t = throwAt(go(fresh(), "mill"), { way: "sneak" }, 18).trip;
     t = go(t, "bridge");
     expect(t.facing!.moment.stop.levers.some((l) => l.id === "token")).toBe(true);
-    const turn = throwAt(t, rulesRead("I show her Orla's token and ask to cross", t.facing!.moment)!, 3);
+    const turn = throwAt(t, rulesRead("I show her Orla's token and ask to cross", t.facing!.moment)!, 12);
     expect(turn.outcome.check.lever?.id).toBe("token");
     expect(turn.used?.id).toBe("token");
     expect(turn.trip.kept).toEqual([]);
@@ -165,7 +169,7 @@ describe("running out", () => {
   test("turned back at an ordinary stop, you go the long way round; at the last one, it is over", () => {
     let t = go(fresh(), "mill");
     for (const way of ["talk", "sneak", "force", "pay"] as const) {
-      const turn = throwAt(t, { way }, 2);
+      const turn = throwAt(t, { way }, nameCheck(t.facing!.moment, { way })!.sure ? 1 : 2);
       t = turn.trip;
       if (way === "pay") {
         expect(turn.longWay).toEqual({ hours: LONG_WAY_HOURS, supplies: 1 });
@@ -214,7 +218,7 @@ describe("reading what is written between stops", () => {
 
   test("a stop that takes more says so, and only one card kind of each id", () => {
     const t = go(throwAt(go(fresh(), "mill"), { way: "sneak" }, 18).trip, "crossing");
-    expect(turnSaid(throwAt(t, { way: "force" }, 18)).join(" ")).toContain("one more good try");
+    expect(turnSaid(throwAt(t, { way: "force" }, 18)).join(" ")).toContain("dial: 2 of 4");
     expect(new Set(CARD_KINDS.map((k) => k.id)).size).toBe(CARD_KINDS.length);
   });
 });
@@ -254,8 +258,8 @@ describe("the whole adventure, played by the director", () => {
     return { table, set: (x) => (d = x) };
   }
 
-  test("ends, one way or another, for many seeds of both adventures", async () => {
-    for (const adv of [RESCUE, COURTSHIP]) {
+  test("ends, one way or another, for many seeds of every adventure", async () => {
+    for (const adv of Object.values(ADVENTURES)) {
       for (let i = 0; i < 25; i++) {
         const log: string[] = [];
         const q = quiet(log);

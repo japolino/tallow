@@ -27,7 +27,7 @@ describe("the narrator names the check", () => {
   test("each way tests its own stat unless the line plainly goes about it another way", () => {
     const m = fresh();
     expect(nameCheck(m, { way: "talk" })!.stat).toBe("charm");
-    expect(nameCheck(m, { way: "sneak" })!.stat).toBe("cunning");
+    expect(nameCheck(m, { way: "sneak" })!.stat).toBe("grace");
     expect(nameCheck(m, { way: "force" })!.stat).toBe("brawn");
     expect(nameCheck(m, { way: "pay" })!.stat).toBe("wits");
     expect(nameCheck(m, { way: "talk", stat: "brawn" })!.stat).toBe("brawn");
@@ -37,7 +37,7 @@ describe("the narrator names the check", () => {
 
   test("the stat's number is added, and the stop says how hard it is", () => {
     const c = nameCheck(fresh(), { way: "sneak" })!;
-    expect(c.add).toBe(YOU.stats.cunning);
+    expect(c.add).toBe(YOU.stats.grace);
     expect(c.difficulty).toBe(BRIDGE.ways.sneak!.difficulty);
     expect(c.target).toBe(TARGETS[c.difficulty]);
   });
@@ -46,13 +46,15 @@ describe("the narrator names the check", () => {
     for (const way of WAYS) {
       const m = fresh();
       const c = nameCheck(m, { way })!;
+      // Sure hands (docs/MOONSHOT.md, 2.4): with 3 or more in the stat, only a 1 still fails.
       const tiers = FACES.map((f) => play(m, { way }, f).tier);
+      if (c.sure) expect(tiers.filter((t) => t === "fail").length).toBe(0);
       const count = (...ts: Tier[]): number => tiers.filter((t) => ts.includes(t)).length / 20;
       expect(c.odds.success).toBeCloseTo(count("success", "crit_success"), 10);
       expect(c.odds.partial).toBeCloseTo(count("partial"), 10);
       expect(c.odds.fail).toBeCloseTo(count("fail", "crit_fail"), 10);
       expect(c.odds.success + c.odds.partial + c.odds.fail).toBeCloseTo(1, 10);
-      expect(c.odds).toMatchObject(d20Odds(c.add, c.target, PARTIAL));
+      if (!c.sure) expect(c.odds).toMatchObject(d20Odds(c.add, c.target, PARTIAL));
     }
   });
 
@@ -92,7 +94,7 @@ describe("how you try matters", () => {
     expect<number>(used.difficulty).toBe(plain.difficulty - 1);
     expect(used.odds.success).toBeGreaterThan(plain.odds.success);
     // Used once, whatever came of it.
-    const after = play(m, { way: "sneak", lever: "ropewalk" }, 2).next;
+    const after = play(m, { way: "sneak", lever: "ropewalk" }, 1).next;
     expect(after.spent).toContain("ropewalk");
     expect(nameCheck({ ...after, closed: [] }, { way: "sneak", lever: "ropewalk" })!.lever).toBeNull();
   });
@@ -106,7 +108,7 @@ describe("how you try matters", () => {
 
   test("leaning on a different stat changes the odds", () => {
     const m = fresh();
-    expect(nameCheck(m, { way: "talk", stat: "cunning" })!.odds.success).toBeGreaterThan(nameCheck(m, { way: "talk", stat: "charm" })!.odds.success);
+    expect(nameCheck(m, { way: "talk", stat: "guile" })!.odds.success).toBeGreaterThan(nameCheck(m, { way: "talk", stat: "charm" })!.odds.success);
     expect(nameCheck(m, { way: "talk", stat: "wits" })!.odds.success).toBeLessThan(nameCheck(m, { way: "talk", stat: "charm" })!.odds.success);
   });
 });
@@ -151,7 +153,8 @@ describe("a failed roll changes the situation", () => {
     let last: Outcome | null = null;
     for (const way of ["talk", "sneak", "force", "pay"] as Way[]) {
       if (shut(m, way)) continue;
-      last = play(m, { way }, 2);
+      // Sure hands keep a hero from failing at what they are best at, except on a 1.
+      last = play(m, { way }, nameCheck(m, { way })!.sure ? 1 : 2);
       expect(last.past).toBe(false);
       m = last.next;
     }
@@ -287,7 +290,7 @@ describe("the game explains itself", () => {
     const c = nameCheck(fresh(), { way: "sneak", lever: "ropewalk" })!;
     const text = checkLines(c).join(" ");
     expect(text).toContain("Sneak");
-    expect(text).toContain("Cunning");
+    expect(text).toContain("Grace");
     expect(text).toContain(`must reach ${c.target}`);
     expect(text).toContain("the rope walk under the bridge");
     expect(text).toContain(`about ${Math.round(c.odds.success * 100)} work`);
@@ -298,9 +301,9 @@ describe("the game explains itself", () => {
   test("the roll is added up in front of you", () => {
     const o = play(fresh(), { way: "sneak" }, 9);
     const [sum, says] = rollLines(o);
-    expect(sum).toBe("The die shows 9. With your Cunning (+3) that makes 12. You needed 14.");
+    expect(sum).toBe("The die shows 9. With your Grace (+3) that makes 12. You needed 15.");
     expect(says).toContain("at a cost");
-    expect(rollLines(play(fresh(), { way: "pay" }, 4))[0]).toBe("The die shows 4. Your Wits adds nothing, so it stays 4. You needed 11.");
+    expect(rollLines(play(fresh(), { way: "pay" }, 4))[0]).toBe("The die shows 4. Your Wits adds nothing, so it stays 4. You needed 12.");
   });
 
   test("what changed is said plainly", () => {
@@ -341,8 +344,8 @@ describe("reading a written line", () => {
   test("plain words say which way it is", () => {
     expect(rulesRead("I ask her nicely to lift the bar", m)).toMatchObject({ way: "talk", stat: "charm" });
     expect(rulesRead("I threaten to tell the reeve", m)).toMatchObject({ way: "talk", stat: "brawn" });
-    expect(rulesRead("I pretend to be the reeve's clerk", m)).toMatchObject({ way: "talk", stat: "cunning" });
-    expect(rulesRead("I wait until dark and creep past the dog", m)).toMatchObject({ way: "sneak", stat: "cunning" });
+    expect(rulesRead("I pretend to be the reeve's clerk", m)).toMatchObject({ way: "talk", stat: "guile" });
+    expect(rulesRead("I wait until dark and creep past the dog", m)).toMatchObject({ way: "sneak", stat: "grace" });
     expect(rulesRead("I look for a ford further down", m)).toMatchObject({ way: "sneak", stat: "wits" });
     expect(rulesRead("I shove the bar up and run", m)).toMatchObject({ way: "force", stat: "brawn" });
     expect(rulesRead("I pay the toll", m)).toMatchObject({ way: "pay", stat: "wits" });
@@ -355,7 +358,7 @@ describe("reading a written line", () => {
 
   test("naming something that is there uses it, and goes the way it belongs to", () => {
     expect(rulesRead("I offer to put her sums right", m)).toMatchObject({ way: "talk", lever: "ledger" });
-    expect(rulesRead("I climb down to the rope walk", m)).toMatchObject({ way: "sneak", stat: "cunning", lever: "ropewalk" });
+    expect(rulesRead("I climb down to the rope walk", m)).toMatchObject({ way: "sneak", stat: "grace", lever: "ropewalk" });
     expect(rulesRead("I put my shoulder to the rotten post", m)).toMatchObject({ way: "force", lever: "post" });
     expect(rulesRead("I give her kindling for the brazier as a gift", m)).toMatchObject({ way: "pay", stat: "charm", lever: "brazier" });
     // Once used it is no longer there to be named.

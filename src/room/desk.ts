@@ -14,12 +14,18 @@
  * into a text field nobody sees, so phones, dictation and screen readers
  * work as they do anywhere else.
  */
+import { sound } from "./sound.js";
 import { BoxGeometry, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Material, type Object3D, type PerspectiveCamera, type Scene } from "three";
 import { Counters } from "./counters.js";
+import { WayBlocks } from "./ways.js";
+import { DreadBowl } from "./dread.js";
+import { Board } from "./board.js";
+import { LuckTray } from "./luck.js";
+import { AgainstSlips } from "./against.js";
 import { DrawnHand, GRIP_LEAN } from "./drawnhands.js";
 import { Page, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
 import { TableCards } from "./tablecards.js";
-import { ease, Tracks, type Reacher, type Step } from "./track.js";
+import { ease, Held, Tracks, type Reacher, type Step } from "./track.js";
 import { Voice } from "./voice.js";
 
 /** The narrator's hands as the desk uses them: reaching, and (where the hands can) closing on a thing and letting go. */
@@ -90,6 +96,16 @@ const MOST = 400;
 export class Desk {
   readonly group = new Group();
   readonly counters: Counters;
+  /** The four ways past a place, as blocks standing in front of the narrator (ways.ts). */
+  readonly ways: WayBlocks;
+  /** The narrator's bowl of dread, a black stone for every try that went wrong (dread.ts). */
+  readonly dread: DreadBowl;
+  /** The leather the narrator unrolls for a contest, and its dials (board.ts). */
+  readonly board: Board;
+  /** The narrator's own die, in its tray (luck.ts). */
+  readonly luck: LuckTray;
+  /** The narrator's slips against you (against.ts). */
+  readonly against: AgainstSlips;
   readonly voice: Voice;
   readonly tracks: Tracks;
   /** Where the view should go (`k` of the way) while you write. The room blends it in. */
@@ -158,6 +174,16 @@ export class Desk {
     this.counters = new Counters(h.narrator, this.tracks, h.reduced);
     this.voice = new Voice(h.host, h.reduced);
     this.group.add(this.counters.group);
+    this.ways = new WayBlocks(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.ways.group);
+    this.dread = new DreadBowl(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.dread.group);
+    this.board = new Board(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.board.group);
+    this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.luck.group);
+    this.against = new AgainstSlips(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.against.group);
     this.cards = new TableCards({
       narrator: h.narrator,
       tracks: this.tracks,
@@ -309,6 +335,8 @@ export class Desk {
         tick: (u) => {
           at.set(Math.sin(u * 19) * 0.04, 0.012, 0.07 + u * 0.09);
           n.reach(arm, page.group.localToWorld(at));
+          // Its pen on the paper, in bursts like words.
+          if (Math.sin(u * 31) > 0.1) sound.write(HIS.p.x);
           if (u > 0.55 && page.writing.his !== w.his) put();
         },
       });
@@ -347,7 +375,7 @@ export class Desk {
     const to: Pose = { p: ASIDE.p.clone().add(V((this.made % 3) * 0.012, (this.made % 5) * 0.0006, 0)), q: ASIDE.q };
     await this.tracks.run([
       { dur: 0.2, tick: () => n.reach(arm, page.group.position), until: () => n.reached(arm) > 0.8, patience: 1.2 },
-      this.fly(page.group, () => to, 0.5, 0, () => n.reach(arm, page.group.position)),
+      this.fly(page.group, () => to, 0.5, 0, undefined, arm),
       { dur: 0.1, begin: () => n.reach(arm, null) },
     ]);
   }
@@ -365,21 +393,29 @@ export class Desk {
   }
 
   /** Move a thing from where it is to a pose in its parent's space, turning as it goes. */
-  private fly(obj: Object3D, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void): Step {
+  /** @param arm the narrator's hand that has it, if one does: the thing then goes where those fingers go (track.ts, Held). */
+  private fly(obj: Object3D, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void, arm?: number): Step {
     const p0 = V(0, 0, 0), q0 = new Quaternion();
     let dst: Pose;
+    const held = arm === undefined ? null : new Held(this.h.narrator, arm, obj, () => this.t);
     return {
       dur,
+      until: held ? () => held.there : undefined,
+      patience: 0.9,
       begin: () => {
         p0.copy(obj.position);
         q0.copy(obj.quaternion);
         dst = to();
+        held?.take();
+        // Paper going through the air, or over the table.
+        sound.play("slide", { x: (p0.x + dst.p.x) / 2, gain: 0.5 + lift * 6 });
       },
       tick: (u) => {
         const e = ease(u);
         obj.position.lerpVectors(p0, dst.p, e);
         obj.position.y += Math.sin(Math.PI * u) * lift;
         obj.quaternion.slerpQuaternions(q0, dst.q, e);
+        held?.follow();
         also?.(u);
       },
     };
@@ -392,13 +428,8 @@ export class Desk {
     return [
       { dur: 0.2, tick: () => n.reach(arm, g.position), until: () => n.reached(arm) > 0.85 && n.fingertips(arm).distanceTo(g.position) < 0.05, patience: 1.6 },
       { dur: 0.22, begin: () => n.close?.(arm, "pinch") },
-      this.fly(g, () => to, dur, lift, (u) => {
-        n.reach(arm, g.position);
-        // The edge stays in its fingers on the way, and comes to rest exactly where it should.
-        const tips = n.fingertips(arm);
-        if (tips.distanceTo(g.position) < 0.12) g.position.lerp(tips, Math.sin(Math.PI * u) * 0.8);
-        page.curl(Math.sin(Math.PI * u) * 0.5);
-      }),
+      // The edge stays in its fingers on the way, and comes to rest exactly where it should.
+      this.fly(g, () => to, dur, lift, (u) => page.curl(Math.sin(Math.PI * u) * 0.5), arm),
       { dur: 0.2, begin: () => n.release?.(arm) },
       { dur: 0, begin: () => n.reach(arm, null) },
     ];
@@ -550,10 +581,7 @@ export class Desk {
           }
         },
       },
-      this.fly(g, () => HIS, 0.5, 0.02, (u) => {
-        n.reach(arm, g.position);
-        page.curl(Math.sin(Math.PI * u) * 0.3);
-      }),
+      this.fly(g, () => HIS, 0.5, 0.02, (u) => page.curl(Math.sin(Math.PI * u) * 0.3), arm),
       { dur: 0.15, begin: () => n.release?.(arm) },
       { dur: 0, begin: () => n.reach(arm, null) },
     ]);
@@ -586,6 +614,22 @@ export class Desk {
     this.glanceTurn++;
     this.glanceWant = 0;
   }
+
+  /**
+   * Your hero writes in the margin of the page on the pad (docs/MOONSHOT.md, 3.2): what you notice here, in pencil.
+   * The notes stay on that page when you tear it off; the next page starts with a clean margin.
+   */
+  margin(notes: string[]): void {
+    this.marginNotes = notes.slice(0, 4);
+    if (!this.sheet) {
+      this.sheet = this.newPage(null);
+      this.sheet.group.position.copy(SHEET);
+      this.book.add(this.sheet.group);
+    }
+    this.sheet.writing.margin = [...this.marginNotes];
+    this.sheet.draw();
+  }
+  private marginNotes: string[] = [];
 
   /** Open the notebook and lean in over it. */
   open(): void {
@@ -629,7 +673,10 @@ export class Desk {
       // The page is full: the last thing typed does not go on it.
       sheet.writing.mine = this.field.value = before;
       sheet.draw();
-    } else this.scribble = 1;
+    } else {
+      this.scribble = 1;
+      sound.write(this.pencil.position.x);
+    }
   };
 
   private onFieldKey = (e: KeyboardEvent): void => {
@@ -650,6 +697,7 @@ export class Desk {
     sheet.writing.mine = line;
     sheet.draw();
     this.sheet = null;
+    this.marginNotes = [];
     this.field.value = "";
     this.field.blur();
     this.field.tabIndex = -1;
@@ -663,7 +711,7 @@ export class Desk {
     this.pen.pose = "pinch";
     this.penOn = () => g.localToWorld(this.tmp.set(PAGE_W / 2 - 0.012, 0, PAGE_H - 0.02));
     const steps: Step[] = [
-      { dur: 0.3, tick: (u) => sheet.curl(ease(u) * 0.7) },
+      { dur: 0.3, begin: () => sound.play("tear", { x: g.position.x }), tick: (u) => sheet.curl(ease(u) * 0.7) },
       { dur: 0, begin: () => this.group.attach(g) },
       this.fly(g, () => OFFERED, 0.7, 0.03, (u) => sheet.curl(0.7 - ease(u) * 0.45)),
       { dur: 0.15, begin: () => n.watch(g.position, 3, this.t) },
@@ -803,6 +851,7 @@ export class Desk {
     const still = this.h.reduced;
     const to = (now: number, want: number, rate: number): number => (still || Math.abs(want - now) < 0.002 ? want : now + (want - now) * Math.min(1, dt * rate));
     this.tracks.update(t);
+    this.luck.update(t);
     this.counters.update(dt);
     this.voice.update(t, dt);
 
@@ -893,6 +942,11 @@ export class Desk {
     this.read.remove();
     this.voice.dispose();
     this.counters.dispose();
+    this.ways.dispose();
+    this.dread.dispose();
+    this.board.dispose();
+    this.luck.dispose();
+    this.against.dispose();
     this.cards.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();

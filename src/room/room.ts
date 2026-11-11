@@ -56,7 +56,7 @@ import {
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Candle, candleKit } from "./candles.js";
-import { daylight, WEATHERS, wrapHour, type Air, type LightState, type Weather } from "./daylight.js";
+import { candleBurn, daylight, WEATHERS, wrapHour, type Air, type LightState, type Weather } from "./daylight.js";
 import { Governor, QUALITY } from "./governor.js";
 import { Desk } from "./desk.js";
 import { Die, DIE_REST } from "./die.js";
@@ -67,6 +67,7 @@ import { Narrator, type Gesture } from "./narrator.js";
 
 export type { Gesture };
 import { Post } from "./post.js";
+import { sound } from "./sound.js";
 import { flameCanvas, frostCanvas, glowCanvas, latticeCanvas, leatherCanvas, rainGlassCanvas, rng, treelineCanvas, woodCanvas, type Canvas } from "./textures.js";
 import { Breath, Drift, Lightning, Mist, Rain } from "./weather.js";
 
@@ -134,6 +135,15 @@ export interface RoomHandle {
   movePiece(id: string, stopId: string): Promise<void>;
   /** Draw a new map on the sheet: an adventure built after the room was (its places keep their ids). Absent on the flat room. */
   setMap?(map: MapSheet): void;
+  /** The narrator inks a place onto the map, down its margin (engine/clues.ts). Absent on the flat room. */
+  inkPlace?(name: string): void;
+  /** Notches in the burning candle, one at the height each of these hours will fall (docs/MOONSHOT.md, 5.3). Absent on the flat room. */
+  notch?(hours: readonly number[]): void;
+  /**
+   * The black candle of a campaign (docs/MOONSHOT.md, 6.1), at the narrator's right hand: six rings scored on it, `burned`
+   * of them gone. Lit for a while when the big bad takes a step. Null puts it away. Absent on the flat room.
+   */
+  blackCandle?(c: { burned: number; lit: boolean } | null): void;
   /**
    * Have the narrator do something small with its hands: "slam" a fist on the table (the table shakes, the flames
    * flutter, the pieces and the die jump), "drum" its fingers, "tap" one finger slowly, "steeple" its hands while it
@@ -225,7 +235,7 @@ interface Piece {
     done: () => void;
     /** Set when the narrator's hand is doing the moving: which arm, and how far along it is. */
     arm?: number;
-    phase?: "reach" | "pinch" | "carry" | "release";
+    phase?: "wait" | "reach" | "pinch" | "carry" | "release";
   } | null;
 }
 
@@ -266,6 +276,12 @@ class Room implements RoomHandle {
   private candleLight = new PointLight(0xff9440, 0, 5, 1.7);
   private candleFill = new PointLight(0xff8a38, 0, 3.6, 1.8);
   private candles: Candle[] = [];
+  /** The black candle of a campaign, its kit, how far it has burnt (rings of six), and how lit it is now. */
+  private black: Candle | null = null;
+  private blackKit: ReturnType<typeof candleKit> | null = null;
+  private blackBurn = 0;
+  private blackLit = 0;
+  private notchMat = new MeshBasicMaterial({ color: 0x1a0f08 });
   private kit!: ReturnType<typeof candleKit>;
   private candleLevel = 0;
   private draught = 0;
@@ -888,6 +904,18 @@ class Room implements RoomHandle {
     candle(0, 0, 0.19, 0.0125, 0.86, upper);
     this.scene.add(stick);
 
+    // The black candle of a campaign, at the narrator's right hand: put away until a campaign begins.
+    const bk = (this.blackKit = candleKit(this.tex(flameCanvas()), this.tex(glowCanvas(128, 0.06))));
+    bk.wax.color.set(0x171213);
+    bk.run.color.set(0x110d0e);
+    bk.rim.color.set(0x241c1c);
+    const black = (this.black = new Candle({ h: 0.17, r: 0.019, burns: 0.9, seed: 991 }, bk));
+    black.group.position.set(0.6, 0, -0.27);
+    black.group.visible = false;
+    // Six rings scored round it, one for each step the big bad can take.
+    black.notch([1, 2, 3, 4, 5].map((k) => k / 6), new MeshBasicMaterial({ color: 0x5a4a3a }));
+    this.scene.add(black.group);
+
     // The narrator's book, closed, at its right hand.
     const tome = new Group();
     const cover = new MeshStandardMaterial({ map: this.tex(leatherCanvas(4, [70, 26, 20])), roughness: 0.6 });
@@ -1167,13 +1195,32 @@ class Room implements RoomHandle {
     }
   }
 
+  notch(hours: readonly number[]): void {
+    // The tall candle in the brass stick is the one the narrator cuts.
+    this.candles[3]?.notch(hours.map((h) => (wrapHour(h) >= 7 && wrapHour(h) < 18.25 ? -1 : candleBurn(h))), this.notchMat);
+  }
+
+  blackCandle(c: { burned: number; lit: boolean } | null): void {
+    if (!this.black) return;
+    this.black.group.visible = !!c;
+    if (!c) return;
+    this.blackBurn = Math.max(0, Math.min(1, c.burned / 6));
+    if (c.lit) this.blackLit = 1;
+  }
+
+  inkPlace(name: string): void {
+    const map = this.opts.map;
+    if (!map || map.inked?.includes(name)) return;
+    this.setMap({ ...map, inked: [...(map.inked ?? []), name] });
+  }
+
   movePiece(id: string, stopId: string): Promise<void> {
     const p = this.pieces.get(id);
     if (!p || !this.stops.has(stopId)) return Promise.resolve();
     if (p.move) {
       // Already on its way somewhere: finish that at once, so nothing is left hanging.
       const old = p.move;
-      if (old.arm !== undefined) this.narrator.reach(old.arm, null);
+      if (old.arm !== undefined && old.phase !== "wait") this.narrator.reach(old.arm, null);
       p.move = null;
       old.done();
     }
@@ -1190,7 +1237,12 @@ class Room implements RoomHandle {
       // The narrator moves its own pieces by hand (if that hand is free). Yours and your companions' step by themselves.
       const arm = this.narrator.armFor(from.clone().lerp(to, 0.5));
       const free = !this.tending.some((j) => j.arm === arm) && ![...this.pieces.values()].some((q) => q.move?.arm === arm);
-      p.move = p.kind === "narrator" && free ? { t0: this.t, dur: dur + 0.25, from, to, done, arm, phase: "reach" } : { t0: this.t, dur, from, to, done };
+      // A hand that is dealing or laying something down finishes that first, and then comes for the piece.
+      const byHand = p.kind === "narrator" && free;
+      const waits = byHand && this.narrator.busy(arm);
+      p.move = byHand ? { t0: this.t, dur: dur + 0.25, from, to, done, arm, phase: waits ? "wait" : "reach" } : { t0: this.t, dur, from, to, done };
+      // The hand is spoken for from this moment, so nothing else sends it elsewhere before the frame is out.
+      if (byHand && !waits) this.narrator.reach(arm, V(from.x, from.y + p.height - 0.016, from.z));
     }).then(() => this.settlePieces());
   }
 
@@ -1215,6 +1267,7 @@ class Room implements RoomHandle {
 
   dispose(): void {
     this.disposed = true;
+    sound.hush();
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.canvas.removeEventListener("pointermove", this.onPointer);
@@ -1233,6 +1286,9 @@ class Room implements RoomHandle {
     for (const r of this.rain) r.dispose();
     for (const lv of this.leaves) lv.drift.dispose();
     for (const c of this.candles) c.dispose();
+    this.black?.dispose();
+    this.blackKit?.dispose();
+    this.notchMat.dispose();
     this.heldGeo?.dispose();
     this.kit.dispose();
     this.mist.dispose();
@@ -1343,11 +1399,16 @@ class Room implements RoomHandle {
     }
     const L = (this.state = daylight(this.hour, this.air));
     this.light(L, t, dt);
+    sound.room(dt, this.air, this.candleLevel, this.hour >= 20.5 || this.hour < 5.5, this.flash);
+    // The narrator's hands first, then the table: whatever is in a hand is put where the fingers are in this frame,
+    // not where they were in the last one (a frame behind is a finger's width at the speed a hand deals).
+    this.narrator.update(t, this.camera, dt);
     this.animate(t, dt, L);
     this.aim(t, dt, L);
-    this.narrator.update(t, this.camera, dt);
     // A fist on the table: felt for a moment, then gone.
-    if (this.narrator.takeImpact() && !this.reduced) this.jolt = 1;
+    const struck = this.narrator.takeImpact();
+    if (struck) sound.play("slam", { x: -0.1 });
+    if (struck && !this.reduced) this.jolt = 1;
     else if (this.jolt) this.jolt = this.jolt < 0.004 ? 0 : this.jolt * Math.exp(-dt / 0.2);
     const haze = this.scene.fog!.color;
     this.post.set({ time: t, exposure: L.exposure * 1.08, cold: L.cold, still: this.reduced, haze: [haze.r, haze.g, haze.b], hazeK: L.fog * 0.1 });
@@ -1443,6 +1504,8 @@ class Room implements RoomHandle {
 
     // The eyes show most in the dark.
     this.narrator.glow = 0.62 + 0.38 * (1 - Math.min(1, L.ambientIntensity));
+    // The edge of its cloth catches what light the room has: the sky's by day, the candles' by night.
+    this.narrator.rim.copy(this.hemi.color).multiplyScalar(this.hemi.intensity * 0.3).add(this.tmpColor.setRGB(1, 0.5, 0.2).multiplyScalar(this.candleLevel * 0.02));
   }
 
   /** Everything the weather does that can be seen: what passes the windows, what is on the glass, what comes into the room. */
@@ -1621,7 +1684,10 @@ class Room implements RoomHandle {
       } else if (job.phase === "light") {
         // Finger and thumb close on the wick.
         go(foot.x, foot.y + tall + 0.01, foot.z);
-        if (u > this.narrator.sparkAfter) next("flare");
+        if (u > this.narrator.sparkAfter) {
+          sound.play("strike", { x: foot.x, gain: 0.7 });
+          next("flare");
+        }
       } else {
         // The fingers spring away and it takes, tall for a moment before it settles.
         go(foot.x, foot.y + tall + 0.085, foot.z - 0.04);
@@ -1653,6 +1719,11 @@ class Room implements RoomHandle {
       // By day a flame is small and gives no glow to speak of; in the dark it is the light of the room.
       c.update(t, { level: w.lit * (0.62 + 0.38 * lv), glow: w.lit * (0.2 + 0.8 * lv), burn: w.burn, draught: this.draught, still: this.reduced });
     });
+    if (this.black?.group.visible) {
+      // Lit only while the big bad takes a step: it burns a while, then the narrator pinches it out.
+      this.blackLit = Math.max(0, this.blackLit - dt / 9);
+      this.black.update(t, { level: this.blackLit, glow: this.blackLit, burn: this.blackBurn, draught: this.draught, still: this.reduced });
+    }
     this.kit.wax.emissiveIntensity = glowing * (0.2 + 0.8 * lv) * 0.6;
     this.kit.rim.emissiveIntensity = glowing * (0.2 + 0.8 * lv) * 0.55;
 
@@ -1708,6 +1779,7 @@ class Room implements RoomHandle {
       if (u >= 1) {
         p.mesh.rotation.z = 0;
         p.move = null;
+        sound.play("knock", { x: m.to.x, gain: 0.8 });
         m.done();
       }
     }
@@ -1742,7 +1814,12 @@ class Room implements RoomHandle {
     // The fingers close round the middle of the head, a little under its top.
     const head = p.height - 0.016;
     const u = t - m.t0;
-    if (m.phase === "reach") {
+    if (m.phase === "wait") {
+      if (!hand.busy(arm) || u > 8) {
+        m.phase = "reach";
+        m.t0 = t;
+      }
+    } else if (m.phase === "reach") {
       const at = V(m.from.x, m.from.y + head, m.from.z);
       hand.reach(arm, at);
       if ((hand.fingertips(arm).distanceTo(at) < 0.003 && hand.reached(arm) > 0.97) || u > 2.4) {
@@ -1765,6 +1842,7 @@ class Room implements RoomHandle {
       if (k >= 1 && (p.mesh.position.distanceTo(m.to) < 0.0008 || u > m.dur + 0.9)) {
         hand.carry(arm, null);
         p.mesh.position.copy(m.to);
+        sound.play("knock", { x: m.to.x });
         hand.release(arm);
         m.phase = "release";
         m.t0 = t;
@@ -1804,6 +1882,7 @@ class Room implements RoomHandle {
       if (u >= 1) g.phase = "hold";
     } else if (g.phase === "hold") {
       this.handAt.lerp(hold, this.reduced ? 1 : Math.min(1, dt * 10));
+      sound.shake(this.shake);
     } else {
       // Flung forward and open, then away out of sight.
       const u = (t - g.t0) / 0.75;
@@ -1857,11 +1936,12 @@ class Room implements RoomHandle {
     const eye = SEAT.eye.clone().lerp(LEAN.eye, k);
     const look = SEAT.look.clone().lerp(LEAN.look, k);
     if (narrow) {
-      // On an upright screen you sit further back, so the candles at both ends of the table stay in the picture, and
-      // lean in from higher, so the whole width of the map does.
+      // On an upright screen you sit further back and higher, so the whole width of the table stays in the picture (the
+      // notebook at one end, the dice box at the other) and the table, seen more from above, fills more of its height;
+      // and you lean in from higher, so the whole width of the map does.
       const half = Math.tan((this.baseFov * Math.PI) / 360) * this.camera.aspect;
-      eye.z += 0.6 * (1 - k);
-      eye.y += 0.1 * (1 - k) + Math.max(0.3, 0.6 / half - LEAN.eye.y) * k;
+      eye.z += 0.4 * (1 - k);
+      eye.y += 0.6 * (1 - k) + Math.max(0.3, 0.6 / half - LEAN.eye.y) * k;
     }
     const bk = ease(Math.max(0, Math.min(1, this.boxK)));
     eye.lerp(BOX_VIEW.eye, bk);

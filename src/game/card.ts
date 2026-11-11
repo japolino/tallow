@@ -13,6 +13,50 @@ export interface CardInfo {
   firstMessage?: string;
   /** A few lorebook entries, already chosen, as plain text. */
   lore?: string[];
+  /**
+   * The card is a world, place or scenario rather than one person (its name is a land, a town, a game; it narrates
+   * many people). Then nobody in the story is called by the card's name: the companion or the one courted is a
+   * person from that world. Set by the sitting (session.ts) from `looksLikeWorld` or the Decision model.
+   */
+  world?: boolean;
+}
+
+/* A card's words that say it is a world or a scenario, not a person. Strong ones decide alone. */
+const WORLD_STRONG = [
+  /\b(narrator|game ?master|dungeon ?master|storyteller|text adventure|text-based (game|rpg|adventure)|interactive (fiction|story)|simulator)\b/i,
+  /\b(rpg|role-?playing game)\b/i,
+  /\b(this|the) (card|bot) (is|describes) (a|an|the) (world|setting|scenario|place|city|kingdom|game)\b/i,
+  /\{\{char\}\} (is|acts as|plays|will play|will narrate|narrates|controls) (the |a |an )?(world|setting|scenario|narrator|game|all|every|other|npcs?|characters)\b/i,
+  /\b(play|plays|voice|voices|control|controls) (all|every|the) (other )?(npcs?|characters|people)\b/i,
+  /\bnot (a|one) (single )?(character|person)\b/i,
+  /\bnpcs?\b/i,
+  /^\W{0,4}(factions?|locations?|places|races|regions|world ?(name|info|lore|atmosphere)|magic( system)?|major threats)\W{0,4}:/im,
+];
+const WORLD_WEAK = [
+  /\b(world|realm|kingdom|empire|city|town|village|academy|school|isle|island|continent|lands?|planet|station|colony|province|valley|universe|setting|scenario)\b/i,
+  /^\W{0,4}(characters|setting|world|history|geography|lore|background)\W{0,4}:/im,
+  /\byou (play as|are playing|arrive in|wake up in|find yourself in)\b/i,
+  /\b(the (world|land|city|realm|kingdom) of)\b/i,
+];
+/* A card's words that say it is one person. */
+const PERSON = [
+  /^\W{0,4}(age|gender|sex|species|height|appearance|body|likes|dislikes|hobbies|occupation|personality|sexuality)\W{0,4}:/gim,
+  /\b\d{1,3}[ -]years?[ -]old\b/gi,
+  /\b(his|her) (hair|eyes|face|voice|smile|body|skin)\b/gi,
+  /\{\{char\}\} (is|has) (a |an )?(\d|young|old|tall|short|shy|cheerful|cold|kind|man|woman|girl|boy|guy|lady)/gi,
+];
+
+/**
+ * Whether a card reads as a world or scenario rather than one person, by its own words. The Decision model, when the
+ * user has one, is asked the same and its sure answer wins (session.ts); this is the answer without it.
+ */
+export function looksLikeWorld(card: CardInfo): boolean {
+  const name = card.name;
+  const text = [card.description, card.scenario, card.personality].map((s) => (s ?? "").slice(0, 4000)).join("\n");
+  const strong = WORLD_STRONG.filter((r) => r.test(text)).length;
+  const weak = WORLD_WEAK.filter((r) => r.test(text)).length + (WORLD_WEAK[0]!.test(name) ? 2 : 0);
+  const person = PERSON.reduce((n, r) => n + Math.min(3, text.match(r)?.length ?? 0), 0);
+  return strong * 3 + weak - person >= 4;
 }
 
 export type Trope = "rescue" | "courtship";
@@ -24,8 +68,17 @@ export function unmacro(s: string, name: string): string {
 
 const trim = (s: string | undefined, max: number): string => (s ?? "").replace(/\r/g, "").replace(/\n{3,}/g, "\n\n").trim().slice(0, max);
 
-/** The card as text for a prompt, kept short: the description first, then the rest as room allows. */
+/**
+ * The card as text for a prompt, kept short: the description first, then the rest as room allows. The lore has room
+ * of its own (up to a quarter), so a long description does not crowd it out.
+ */
 export function cardText(card: CardInfo, max = 7000): string {
+  let lore = "";
+  for (const entry of card.lore ?? []) {
+    const t = trim(entry, 600);
+    if (t && lore.length + t.length < max / 4) lore += `\nLore:\n${unmacro(t, card.name)}\n`;
+  }
+  const room = max - lore.length;
   const parts: [string, string | undefined, number][] = [
     ["Description", card.description, 4000],
     ["Personality", card.personality, 800],
@@ -35,13 +88,9 @@ export function cardText(card: CardInfo, max = 7000): string {
   let out = `Name: ${card.name}\n`;
   for (const [label, text, cap] of parts) {
     const t = trim(text, cap);
-    if (t && out.length + t.length < max) out += `\n${label}:\n${unmacro(t, card.name)}\n`;
+    if (t && out.length + t.length < room) out += `\n${label}:\n${unmacro(t, card.name)}\n`;
   }
-  for (const entry of card.lore ?? []) {
-    const t = trim(entry, 600);
-    if (t && out.length + t.length < max) out += `\nLore:\n${unmacro(t, card.name)}\n`;
-  }
-  return out.trim();
+  return (out + lore).trim();
 }
 
 /** Whether the card's character may be courted: never anyone the card reads as a child (docs/DESIGN.md, 7). */

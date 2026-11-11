@@ -15,7 +15,7 @@ Words used here, in plain terms:
 - **Way**: one of the four ways past a stop: talk, sneak, force or pay.
 - **Try**: one go at getting past, by one way. Each try is one throw of the die.
 - **Card**: something the narrator lays on the table: a stop on the road, a person with you, a thing you won. Never a move you play (section 1.7).
-- **Trope**: a familiar kind of story (a rescue, a heist, a courtship) used as the skeleton of an adventure.
+- **Trope**: a familiar kind of story (a rescue, a heist, a courtship). Tropes come in seven families; when you ask for one, the dice pick a story within it (section 3.1).
 
 ---
 
@@ -48,8 +48,14 @@ Two rules hold in every moment:
 
 ### 1.3 The long game
 
-- Finishing an adventure pays experience and loot.
-- Levelling up gives a new skill or perk, chosen from a bounded list. Nothing goes outside fixed limits.
+When an adventure ends, the table does not just stop:
+
+1. The narrator says, in two or three sentences, what became of the people and the place: who was saved or lost, what the goal came to, told for the card's own world (the teller model; nothing is said when there is none).
+2. A story won is rewarded: two knack cards are laid out and you touch the one to keep, and you keep up to two things still in your hands. They are on your side of the table at the start of the next story.
+3. The narrator's hand gathers every card back into the deck: the road, your side, the rival.
+4. "Another story?" You write what kind, or that the narrator should choose, or that you are done for tonight. Done, the narrator says goodnight and the room closes.
+
+You stay who you are: the hero, their knacks and what they carry are kept for that chat and that card, with the stories already played, so the next one is a new one. Sitting down again, the narrator says you are back and does not ask who you are. Writing "someone new" when asked for a story makes a new hero. Nothing goes outside fixed limits: a knack comes from the bounded list, and no more than two things are carried.
 
 ### 1.4 Where the decisions are
 
@@ -62,7 +68,7 @@ If a feature does not feed one of these four decisions or show their results, it
 
 ### 1.5 The rules of one moment
 
-Built at milestone 2 (`src/engine/moment.ts`) and played in the preview at one made-up stop. The stats and their names are a first proposal (open question 2).
+Built at milestone 2 (`src/engine/moment.ts`) and played in the preview at one made-up stop. The stats and their names were a first proposal, since decided (section 11, item 2).
 
 - **Four stats**, each a number from 0 to 4 that is added to the die:
   - *Brawn*: strength and toughness.
@@ -78,7 +84,7 @@ Built at milestone 2 (`src/engine/moment.ts`) and played in the preview at one m
   | Force | Brawn | nothing else | health |
   | Pay | Wits | Charm (sweetening the deal) | supplies |
 
-- **The stop says how hard each way is**: easy, fair, hard or very hard. The die plus the stat must reach 8, 11, 14 or 17. A stop can leave a way out: you cannot talk to a locked gate.
+- **The stop says how hard each way is**: easy, fair, hard or very hard. The die plus the stat must reach 9, 12, 15 or 18. A stop can leave a way out: you cannot talk to a locked gate.
 - **Using something that is there helps.** The situation names a few things (a ledger that will not add up, a rope walk under the bridge). A line that uses one makes its way one step easier, once.
 - **What the die can say**:
   - A 20 always works, and works better than hoped.
@@ -135,7 +141,7 @@ Built at milestone 3 (`src/room/tablecards.ts`, `src/room/cardart.ts`, the kinds
 ## 2. Principles
 
 - **Models read and narrate. Code decides every number.** A model may read a card, read what you wrote, and tell the story. Every roll, cost and outcome comes from code and seeded dice (dice whose results can be replayed from a seed), so nothing a model says can change a roll.
-- **The chat stays the story.** Replies in the scene are written by the chat's own model and preset. What the game decided is added as a note at the end of the prompt, so the reply tells the decided outcome in the chat's own voice. Not built yet: at milestone 4 a sitting at the table uses the user's model (through Lumiverse's quiet generation) to build the adventure, read lines and tell results, but writes nothing into the chat (open question 10).
+- **The chat stays the story.** Replies in the scene are written by the chat's own model and preset. What the game decided is added as a note at the end of the prompt, so the reply tells the decided outcome in the chat's own voice. Not built yet: at milestone 4 a sitting at the table uses the user's model (through Lumiverse's quiet generation) to build the adventure, read lines and tell results, but writes nothing into the chat (section 11, item 10).
 - **The game explains itself.** The player may never have played a tabletop game. The narrator says what is being asked and what the things on the table mean, in plain words.
 - **No screen furniture.** Nothing is drawn over the room but the narrator's words. If the game needs to show or ask something, it is a thing on the table or something the narrator does (section 1.6).
 - **No menus on your turn: you write.** A menu of moves lets you skip the part that is fun: thinking of something clever and saying it in your own words. So nothing on your turn is picked from a list, and no card is a move. The four ways (talk, sneak, force, pay) are how the game reads your line; they are not buttons. The notebook is the only way a turn is put in.
@@ -155,9 +161,21 @@ Built at milestone 3 (`src/room/tablecards.ts`, `src/room/cardart.ts`, the kinds
 
 ### 3.1 Trope mode (the game)
 
-You pick a trope: heist, rescue, mystery, escort, hunt, siege, survive the night, courtship, and so on. The game builds a custom adventure for the selected card from that trope's skeleton: the goal, the kinds of stops, and the climax. All of that is fixed up front. The narrator is free only in the telling.
+You pick a kind of story, or let the narrator choose. There are seven families, and 25 stories within them (`src/content/tropes.ts`):
 
-Only tropes the card can support are offered. A card with one person in one room is not offered a siege.
+| Family | Stories |
+|---|---|
+| A rescue | someone taken; a jailbreak; someone lost; a ransom, with takers who want paying |
+| A heist | the vault; stealing back what was stolen; the swap; smuggling something through |
+| A mystery | who did it; someone vanished; a haunting; a plot, with plotters |
+| A journey | an escort; a message to carry; an escape, with hunters behind; a pilgrimage |
+| A hunt | a beast; a bounty; an old score |
+| A romance | a courtship; a forbidden love, with a watcher; a secret admirer; an old flame |
+| A night to survive | the long night; a siege; a storm |
+
+The dice pick a story within the family you asked for, preferring one you have not played; "you choose" picks a family other than the last one too. So asking for "a mystery" twice gives two different mysteries. Each story is a recipe, not a fixed map: how many stops (a range), the mix of people, obstacles and fights, which ways it leans to (a heist leans to sneaking, a romance to talking), its climax, whether a rival works against you, what may be found and who may join, its weathers, and how tight its clock is. Code lays out a new road from the recipe and the seed (`src/engine/road.ts`): the kinds of card at each stop, the forks, how hard each way is, the levers, the loot, the deadline. Every road is checked by code: it can be won, no card repeats, no more than two fights, at least one person. The builder then moves the whole road into the card's own world: its places, its people, its words (section 9). The narrator is free only in the telling.
+
+The stories are our own short recipes for familiar plots; no list of tropes or its wording is copied. A romance is offered only to a card that can be courted.
 
 ### 3.2 Free form (second priority)
 
@@ -176,7 +194,7 @@ The stops of the region sheet are dealt onto it as cards, face down until you re
 
 Pieces show which stop or spot you are in. There is no square-by-square movement and no grid tactics.
 
-Built so far: the region sheet only, drawn for each adventure (its title, stops and roads) once the adventure is built. Place sheets are not built. A fight is, for now, a stop like any other that takes two good tries, each one that works settling one of the foes; it is played with the same written lines and the same die, not a separate turn-based engine (open question 5).
+Built so far: the region sheet only, drawn for each adventure (its title, stops and roads) once the adventure is built. Place sheets are not built. A fight is, for now, a stop like any other that takes two good tries, each one that works settling one of the foes; it is played with the same written lines and the same die, not a separate turn-based engine (section 11, item 5).
 
 ---
 
@@ -196,8 +214,8 @@ One character, built up front: a class, stats, skills and perks. Every choice is
 
 Built at milestone 4 (`src/engine/hero.ts`), with no menu: the narrator asks who you are, and you write it. A model (or, with none, a list of plain words) reads what you wrote into one of four kinds of person (a courier, a sellsword, a player, a scholar), with your name and a sentence of who you are. It may move your stat points to fit what you wrote, but the four stats always add up to 6, each 0 to 4: code checks it and keeps the kind's own spread if the model's does not add up.
 
-- **Knacks** (perks). Each kind starts with one. A knack belongs to one way through: once at each stop, a try that goes that way and uses nothing in the scene is a step easier, as if it used a thing there. There are eight.
-- **Levelling up.** Every third stop you get past, two knacks you do not have are dealt face up, for two different ways when there are two. You keep one.
+- **Abilities** (replacing the old knacks; docs/SYSTEMS.md, 3). Each hero starts with a trick and two others, written for them by the hero model and priced by code. A knack among them works by itself on a try that fits.
+- **Levelling up.** Every third stop you get past, two abilities are dealt face up, written from what you did (or from the stock, with no model). You keep one, and your store grows by one.
 
 ---
 
@@ -245,6 +263,14 @@ The room is not scenery. Each part of it tells you something about the game.
 - **Sculpted where it matters.** The room, the map, the die and the small props are built in code. The narrator's mantle (real cloth dropped over a seated figure and left to fall), its hood (thick cloth with a brim, round a hollow that takes no light), its hands and jointed arms, and the pieces on the map are made by Blender scripts kept in `models/`, so they can be rebuilt. If a model file is missing the room uses a plainer shape built in code.
 - **It runs on what you have.** The room watches how long its frames take. On a slow machine it draws less, a step at a time: a coarser picture first, then no candle shadows, then smaller sun shadows, then no dust in the air. It keeps its own pace whatever the frame rate, so a throw takes as long as it should. On an upright phone you sit further back, so the candles at both ends of the table stay in the picture.
 
+### 8.2 The sound
+
+- **Real recordings, not made ones.** Every sound in the room is a recording from Freesound (CC0, or CC BY with credit), trimmed and brought to one loudness, and shipped inside Tallow (`assets/sounds/`, listed in `src/room/soundfiles.ts`). Nothing is fetched for them and no account or key is needed. Each sound has two to five takes, and one is picked at random, a little faster or slower, every time, so the table never repeats itself exactly. A stand-in made in code plays only until the recordings are ready.
+- **What is always there.** A low room tone, the fire while the candles burn, rain and wind with the weather (the wind gusting), crickets on a quiet night, and thunder after each flash. Each is a long loop faded over its own start, so it has no seam.
+- **The table.** The die shaken in your hand and thrown across the wood, a card dealt and laid down, the deck shuffled, the pencil on the page, the page torn off, a piece set down, a token, a weight in the pan, a stone dropped in the bowl, the leather map unrolled and rolled up, a match struck for the candles, a hand slammed on the table.
+- **Music.** Kevin MacLeod's pieces from incompetech.com, streamed while they play and crossfaded with the moment: the road, a place, a contest, the night, the end. Turn the music to 0 and nothing is fetched.
+- **Settings live in the drawer.** Mute, and master, music and sounds levels; the full list of who made the music and the recordings is there and in `CREDITS.md`. Nothing plays before your first click or key press.
+
 ---
 
 ## 9. Build order
@@ -259,7 +285,7 @@ Each milestone ends with something the user can look at.
    - companions, anyone being courted, loot and perks as cards on your side;
    - the card set of section 8.1, with made-up people standing in for a character card's;
    - every wait given its start, its middle of any length and its end (section 2), with a stand-in for the model that can be made slow on purpose, so that the long waits can be looked at;
-   - the rules that belong to a whole adventure: resting, running out (open question 9), and fights (open question 5).
+   - the rules that belong to a whole adventure: resting, running out (section 11, item 9), and fights (section 11, item 5).
 
    Every turn is still a line written in the notebook. Nothing in this milestone adds a list to pick from. Built: the rescue and the courtship (`src/content/adventures.ts`), the director that plays a whole adventure at any table (`src/game/director.ts`), the room's table (`src/game/roomtable.ts`), and two scripts: `bun run adventure` plays it as text, `bun run table` plays it in the room in a real browser. Fights are the simple kind of section 4.
 4. **The character builder, companions from the card, and running inside Lumiverse** against a real card. Built:
@@ -267,6 +293,8 @@ Each milestone ends with something the user can look at.
    - the builder (`src/game/build.ts`): the trope's made-up adventure is the skeleton, and every id, number, road and kind of card in it is kept; the model writes only the words, for the card's world, and code checks each field, keeping the skeleton's words for any that do not check. If fewer than 60% of them check, twice, the made-up adventure is played with the card's character in their part;
    - the hero (section 6), the model's three jobs with their checks and stand-ins (`src/game/prompts.ts`, `src/game/modelminds.ts`), and the Spindle extension (`src/frontend.ts`, `src/backend.ts`, `spindle.json`; built into `dist/` by `bun run build`);
    - a live-test stepper (`bun run live`) that plays a sitting against a real card one model answer at a time, so a person or another model can answer as the model and as the player. Eight of the user's cards were played through it; what they found is fixed or listed in section 11.
+
+5. **The moonshot, first pass** (`docs/MOONSHOT.md`): effect and position, six stats and a seventh, the margin, people, clues and the inked map, the other side's clock, projects, world kits, content settings, other players at the table, and the campaign, put together by `src/engine/world.ts`. `src/content/tavern.ts` is the tavern at midnight, by hand. What is played now and what is not yet: MOONSHOT.md, section 14.
 
 ---
 
@@ -281,32 +309,48 @@ Copied, not imported, so the two projects can change separately.
 | Skill point budget | written anew, smaller (`src/engine/hero.ts`) |
 | Card reader | written anew for what this game reads (`src/game/card.ts`) |
 | Model roles and fallbacks | written anew: four roles, each checked, each with a stand-in (`src/game/prompts.ts`, `src/game/modelminds.ts`) |
+| Model routing: a connection and reasoning per role, the Decision model, embeddings | copied and cut down, with no settings drawer (`src/meaning/models.ts`, `src/backend/models.ts`) |
+| Lorebook entries picked by meaning | written anew, smaller: a few entries for the builder (`src/game/lore.ts`) |
 | Story-beat reading of a written line | copied and reshaped for the four ways (`src/meaning/read.ts`) |
-| Prompt-suffix helper | not needed yet: nothing is written into the chat (open question 10) |
+| Prompt-suffix helper | not needed yet: nothing is written into the chat (section 11, item 10) |
 | Rule for who is read as a child | copied (`src/engine/card/child.ts`), then narrowed (section 7) |
 | The overlay a room is shown in | copied from the sibling chess extension and renamed (`src/frontend/overlay.ts`) |
 
 ---
 
-## 11. Open questions
+## 11. Open questions, and what was decided
 
-1. **The name.** "Tallow" is a placeholder.
-2. **Stats.** Built with four as a first proposal: Brawn, Cunning, Charm and Wits, each 0 to 4 (section 1.5). Whether these are the right four, and the right names, is not decided.
-3. **How costs are shown at the table.** Decided: physical counters that the narrator gives and takes (section 1.6). Still open: what the counters look like (red stones, coins and pale seals are a first proposal), and whether your stats should have a place on the table too. For now your stats are written on the first page you are handed and show as the pale weights in your pan.
-4. **Who moves your piece.** The narrator moves its own piece by hand. Yours still hops by itself; whether your drawn hand should move it is not decided. Whether the narrator's piece should always stand for what is in your way (as in section 1.5) is also not confirmed.
-5. **Fights in the room.** For now a fight is a stop that takes two good tries (section 4). Whether it should become a turn-based fight of its own, and how that would look on the table (a place sheet with pieces, or something else), is not decided.
-6. **Models.** The narrator's mantle, hood and hands and the pieces are sculpted by script; the rest is built in code. Whether to use any downloaded asset packs (for the books, the candlestick, the dice box) is not decided.
-7. **Which weather the story uses.** Snow, rain, storm, fog and wind are built. Which of them an adventure calls for, and whether heat is needed, is not decided.
-8. **Free form.** Second priority; not designed beyond section 3.2.
-9. **Running out.** Built as a first proposal: at no health you go down and come to two hours later with 1; at no supplies paying is closed where it costs anything; at no goodwill talking is a step harder (section 1.5). Turned back at a stop that is not the last, you go the long way round it, for hours and a supply. Whether these are the right rules is for the user to judge in play.
-10. **Where the words go.** Decided for the table: in the room, spoken by the narrator and written on the pages (section 1.6). How this meets the Lumiverse chat is still not decided: whether a page is also a chat message, whether the adventure's end is written into the chat as a note for the chat's own model, and which of the two the story's model writes into. At milestone 4 a sitting writes nothing into the chat.
-11. **How exact the balance should be.** It leans by the real chances but shows no number. Whether a player wants the count as well (said by the narrator, or written on the page) is not decided.
-12. **Ways that are closed.** A way that has failed is closed at that stop. The narrator says so and it is written on the turn's page, but nothing standing on the table shows which ways are still open.
-13. **The table on an upright phone.** The room sits small in the middle of a tall screen, and the balance and the notebook stand near the edges of the picture. Not designed yet.
-14. **What you know at a fork.** The two cards are face down, and a choice between two things you know nothing about is not a decision. What you are told about each before you pick (a line from the narrator, the kind of stop shown on the card's back, what a companion thinks) is not decided.
-15. **Where the cards lie.** The near edge of the table already holds the notebook, the counters, the pile of pages and the dice box, and the balance stands at the left. Where the cards on your side go, and how a stop's card lies with the pieces on the map, is not designed.
-16. **The 22 kinds of card.** Which kinds, and what each is called, is not decided. They must cover the stops of every trope in section 3.1.
-17. **Which waits are long.** The reader of your line, the story's model and the picture maker each take a different time on a real machine. Which waits need a middle that can last, and which are always short, is to be measured at milestone 4. Not measured yet: the live tests answered by hand, and nothing has been played inside Lumiverse with a real model.
-18. **How hard it should be.** In the live tests, seven of eight players won, most of them easily at the early stops, and two found the last stop a wall (fixed in part: a failed way stays open there now). The text playthrough wins about 83% of the time with plain lines. The numbers (8, 11, 14, 17 to reach; one step for a thing used, a knack or a companion's point) are a first proposal, and whether the early stops should be harder is for the user to judge in play.
-19. **A made-up skeleton for every card.** The builder moves the rescue's river road and the courtship's fair into the card's own world, keeping every stop's shape. For a card set somewhere very different (a modern school, a world with no roads), the shape still shows through: a ford, a toll, a festival. More skeletons per trope, chosen by the card's setting, would fit better.
-20. **Questions to the narrator.** A line that asks something ("what does she think?") or does nothing ("I wait") gets the answer that it does not get you past, and a reminder of what does. Whether the narrator should answer questions about the scene, without it costing a try, is not decided.
+Most of the first questions have been settled by building and playing; each says what was decided and why, so it can be
+undone on purpose. What is still open is marked **Open**.
+
+1. **The name.** Decided for now: it stays "Tallow". It is short, it is ours, and it fits a room lit by candles. Renaming later costs only the words.
+2. **Stats.** Decided: four, Brawn, Cunning, Charm and Wits, each 0 to 4 (section 1.5). Every way past a thing maps to one of them, and the hero is made from your own words without a sheet to fill in.
+3. **How costs are shown at the table.** Decided: physical counters the narrator gives and takes (section 1.6). Red stones are health, coins are supplies, pale seals are goodwill. Your stats are written on the first page and show as the pale weights in your pan; they get no other place, so the near edge of the table stays clear.
+4. **Who moves your piece.** Decided: the narrator moves its own piece by hand, and yours goes by itself. Your hand is for writing and for the die; moving your own piece would be a step with no decision in it.
+5. **Fights in the room.** Decided: a fight is a stop that takes two good tries (section 4), told as a fight. A turn-based fight of its own is not in this version: it would be a second game inside the first.
+6. **Models.** Decided: no downloaded asset packs. The narrator, the pieces and the room are sculpted by script or built in code, so nothing in the room belongs to anyone else.
+7. **Which weather the story uses.** Decided and built: an adventure has a weather on the road, and a place may have its own, shown outside the window while you are there. The river road is clear, with fog at the ford, wind on the tor and a storm at the keep; the city road is rain, with wind on the roofs and a storm at the tower; the courtships are clear. Heat is not needed.
+8. **Free form.** Deferred: a mode of its own, to be designed once the trope mode has been played in Lumiverse (section 3.2).
+9. **Running out.** Kept as built (section 1.5): at no health you go down and come to two hours later with 1; at no supplies paying is closed where it costs anything; at no goodwill talking is a step harder. Turned back at a stop that is not the last, you go the long way round it, for hours and a supply. For the user to judge in play.
+10. **Where the words go.** Decided for this version: in the room only, spoken by the narrator and written on the pages (section 1.6). A sitting writes nothing into the Lumiverse chat, so a game never disturbs a chat or the chat's own model. **Open:** whether the end of an adventure should be offered to the chat as a note, which would be the user's choice each time.
+11. **How exact the balance should be.** Decided: it leans by the real chances and shows no number. The count would turn every try into sums; the lean is enough to choose by.
+12. **Ways that are closed.** Decided and built: four wooden blocks stand at the far edge of the table, Talk, Sneak, Force and Pay (`src/room/ways.ts`). At a place the narrator stands up the ways there are; a way that fails is tipped over by its hand; when the place is behind you, all four are laid down. A glance across the table says what is still open.
+13. **The table on an upright phone.** Decided and built: on a screen held upright you sit further back and higher, so the whole width of the table stays in the picture (the notebook at one end, the dice box at the other) and the table, seen more from above, fills more of the height; the narrator's words come up in the dark below the table. Writing, the balance and the die each have a nearer view of their own, which fills the screen. Played through in the checks at phone size (`PHONE=1 bun run table`), not yet on a real phone.
+14. **What you know at a fork.** Decided and built: the narrator says of each card what kind of trouble it is, and one line more: whether someone there may walk on with you or there is something to be had, whether it takes more than one good try, and which way looks easiest (`forkHint` in `src/engine/tell-adventure.ts`). A companion still says which they would rather take.
+15. **Where the cards lie.** Decided as built: a stop's card lies face down on its place on the map and is turned face up when you reach it; the cards on your side (who is with you, what you carry, your knacks) lie in a row by the counters at the near edge.
+16. **The 22 kinds of card.** Decided: the 22 in `src/engine/cards.ts`. People: the Toll-Keeper, the Innkeeper, the Miller, the Warden, the Guardian, the Rival, the Beloved, the Fellow Traveller. Things in the way: the Barred Gate, the High Water, the Steep Way, the Throng, the Contest. Fights: the Ambush, the Hound, the Watch. Places: the Keep, the Bonfire. Things kept: the Key, the Token, the Lantern, the Purse. They are old-fashioned on purpose, as tarot is, and stand for modern things too (the Barred Gate is a locked door, the Throng a packed street).
+17. **Which waits are long.** **Open.** The reader of your line, the story's model and the builder each take a different time on a real machine, and nothing has been played inside Lumiverse with a real model yet. Every wait already has the room's own middle to hide in (the narrator shuffles, reads, muses); which of them need a longer one is to be measured there. With a Decision model the reading of a line should take about a second (item 22).
+18. **How hard it should be.** Decided for now: the numbers to reach are 9, 12, 15 and 18 (easy, fair, hard, very hard), one step lower for a thing used, a knack or a companion's point. A careful player who writes plain lines wins about 70 to 77% of the time on every road and every fork (`bun run adventure`). The live tests had seven of eight players winning easily; this is a little harder. For the user to judge in play.
+19. **A road for every card.** Decided and built: the road is laid out by code from the story's recipe (section 3.1), with old-world names for a card set in another age or world and city names for a card set in our own times, told by the words it uses (phones, cars, a city, a hospital, a band...). The first two hand-made adventures (the river road and the fair, and the city) are kept for the checks and for `?adventure=rescue`. With a Decision model the card is asked of it first, while the narrator greets you; the words decide when there is none or it cannot tell. The builder still moves either into the card's own world.
+20. **Questions to the narrator.** Decided and built: a line that asks something ("what does she want?") or only looks ("I look around") is answered from the scene in a few sentences, with no die. It takes a quarter of an hour of the night, which the narrator says the first time, and changes nothing else.
+21. **Leaving the table.** Decided and built: a sitting left before its end (the ✕, or a reload) is kept for that chat and that card. Sitting down again, the narrator asks whether to go on or begin a new one, and lays the table out as it was. It is kept before every try, so leaving never takes back a throw.
+22. **The user's own models, used as far as they go.** Decided and built. Every model is the user's, through Lumiverse, and every one is optional past the first:
+    - *Each job on its own connection.* The builder may think first when its model can (it runs once, while you write who you are); the reader, the hero and the teller never do, because they are asked while you wait. Each falls back to the default connection when its own fails. There is still nothing to set in the room: the rule of nothing on screen but the room (1) is for the game, not for the settings, which live outside it. Tallow's drawer tab in Lumiverse ("Tallow", `src/frontend/drawer.ts`) has a button to sit down, the permissions with a button to allow the missing ones, and a connection and a thinking choice (auto, think first, answer straight away) for each job, with the Decision and embedding connections; the choices are kept in Tallow's user storage (`models.json`), and anything not chosen is "auto".
+    - *The Decision model* ("decisions" permission), when the user has one, answers small typed questions in about a second: which way a line tries, the stat it leans on and the thing it uses; and every written choice: a rescue or a courtship, go on or begin anew, rest or press on, which card at a fork or a level. Only a sure answer is taken. When it is unsure, or there is none, the reader model reads the line, and the rules read it last; the choices go to the rules' own words. Nothing it says can open a shut way or use a thing for the wrong way.
+    - *The card's lorebook* ("world_books"): a few of its entries go to the builder, so the adventure has more of the card's world. Always-on entries and ones the card names rank first; with an embedding model ("embeddings") the entries nearest the card in meaning are kept even when the card does not name them.
+
+    The three extras are asked for once, with the reason, the first time you sit down; a no is kept, and the game is whole without them.
+23. **A card that is a world.** Decided and built: some cards are not a person but a land, a town or a game that narrates many people. Then the narrator says the story is set there, and nobody in it is called by the card's name: the companion in a rescue and the one courted are people of that world, taken from the ones the card names or invented by the builder (a plain stand-in name when there is no model). It is told by the card's own words (a narrator, NPCs, factions, races; few of one person's looks and age: `looksLikeWorld` in `src/game/card.ts`), and with a Decision model the card is asked of it first, for a few seconds at most, before the greeting.
+24. **More than one story a sitting.** Decided and built (section 1.3): an ending, a reward, the table cleared, and "Another story?". The hero is kept per chat and card. Played in the checks (`bun scripts/ending.ts`), not yet with a real model.
+25. **Stories that do not repeat.** Decided and built: seven families, 25 recipes, and a road laid out new from each (section 3.1). With the seed and the forks, the same story is not the same road twice. A careful player wins about 70 to 80% of every recipe (`ADV=gen:all bun run adventure`).
+26. **The card's own world.** Decided and built: the builder is told to put the stops at places the card or its lorebook names and to fill them with its people, factions and words, and the card is given to the teller too, for the telling, the answers and the ending. How well it does is the model's; it is to be judged with a real model in Lumiverse.

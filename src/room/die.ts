@@ -3,6 +3,7 @@
  * showing the number the code already rolled. The throw is only a showing;
  * it never decides anything (docs/DESIGN.md, 2).
  */
+import { sound } from "./sound.js";
 import {
   BufferAttribute,
   CanvasTexture,
@@ -78,20 +79,28 @@ export function restingTurn(faces: D20Faces, value: number, readFrom: Vector3): 
   return yaw.multiply(up);
 }
 
+/** The colours of a die: the player's is dark red with gold numbers, the narrator's old bone with dark ones. */
+export type DieLook = "player" | "narrator";
+const LOOKS: Record<DieLook, { ground: string; face: [string, string, string]; ink: string }> = {
+  player: { ground: "#3a0d10", face: ["#7a1a1c", "#5a1216", "#2c080b"], ink: "#f0d08a" },
+  narrator: { ground: "#5c5446", face: ["#e2d8c0", "#c9bc9c", "#6e6450"], ink: "#1c120c" },
+};
+
 /** The numerals, one triangle per number, on a 5 by 4 sheet. */
-function atlas(): CanvasTexture {
+function atlas(look: DieLook = "player"): CanvasTexture {
+  const L = LOOKS[look];
   const W = 1024, H = 1024, cw = W / 5, ch = H / 4, R = 96;
   const [c, g] = mk(W, H);
-  g.fillStyle = "#3a0d10";
+  g.fillStyle = L.ground;
   g.fillRect(0, 0, W, H);
   for (let n = 1; n <= 20; n++) {
     const cx = ((n - 1) % 5) * cw + cw / 2;
     const cy = Math.floor((n - 1) / 5) * ch + ch / 2 + 12;
     // A slightly lighter face inside a dark edge, so each facet reads.
     const gr = g.createRadialGradient(cx, cy, 6, cx, cy, R * 1.05);
-    gr.addColorStop(0, "#7a1a1c");
-    gr.addColorStop(0.75, "#5a1216");
-    gr.addColorStop(1, "#2c080b");
+    gr.addColorStop(0, L.face[0]);
+    gr.addColorStop(0.75, L.face[1]);
+    gr.addColorStop(1, L.face[2]);
     g.fillStyle = gr;
     g.beginPath();
     g.moveTo(cx, cy - R);
@@ -99,7 +108,7 @@ function atlas(): CanvasTexture {
     g.lineTo(cx + R * 0.866, cy + R * 0.5);
     g.closePath();
     g.fill();
-    g.fillStyle = "#f0d08a";
+    g.fillStyle = L.ink;
     g.font = `700 ${n >= 10 ? 74 : 86}px Georgia, "Times New Roman", serif`;
     g.textAlign = "center";
     g.textBaseline = "middle";
@@ -119,11 +128,13 @@ export const DIE_REST = DIE_RADIUS * 0.7947;
 export class Die {
   readonly mesh: Mesh;
   private faces: D20Faces;
-  private roll: { t0: number; dur: number; from: Vector3; to: Vector3; end: Quaternion; axisA: Vector3; axisB: Vector3; done: () => void } | null = null;
+  private roll: { t0: number; dur: number; from: Vector3; to: Vector3; end: Quaternion; axisA: Vector3; axisB: Vector3; done: () => void; hits: number } | null = null;
+  private readonly look: DieLook;
   /** The number showing, or null before the first roll. */
   showing: number | null = null;
 
-  constructor() {
+  constructor(look: DieLook = "player") {
+    this.look = look;
     const geo = new IcosahedronGeometry(DIE_RADIUS, 0);
     this.faces = d20Faces(geo);
     const uv = new Float32Array(60 * 2);
@@ -136,7 +147,7 @@ export class Die {
       uv.set([cx, 1 - (cy - Ru), cx - Ru * 0.866, 1 - (cy + Ru * 0.5), cx + Ru * 0.866, 1 - (cy + Ru * 0.5)], f * 6);
     }
     geo.setAttribute("uv", new BufferAttribute(uv, 2));
-    const tex = atlas();
+    const tex = atlas(look);
     this.mesh = new Mesh(geo, new MeshPhysicalMaterial({ map: tex, roughness: 0.28, metalness: 0, clearcoat: 0.9, clearcoatRoughness: 0.18, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0 }));
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
@@ -190,7 +201,7 @@ export class Die {
     const travel = to.clone().sub(from).setY(0).normalize();
     return new Promise((done) => {
       this.roll = {
-        t0: now, dur: 1.7, from: from.clone(), to: to.clone(), end,
+        t0: now, dur: 1.7, from: from.clone(), to: to.clone(), end, hits: 0,
         // Rolling: about the horizontal axis across the direction of travel. Plus a slower skew, so it tumbles rather than wheels.
         axisA: new Vector3(travel.z, 0, -travel.x),
         axisB: new Vector3(0.3, 1, 0.2).normalize(),
@@ -211,6 +222,15 @@ export class Die {
     const p = r.from.clone().lerp(r.to, e);
     // Three bounces, each lower than the last, the last ending exactly at rest.
     const hop = Math.abs(Math.sin(Math.PI * 3 * Math.pow(u, 0.75))) * (1 - u) * (1 - u);
+    // A clack each time it comes down, at the foot of each bounce, softer each time.
+    const hit = Math.floor(3 * Math.pow(u, 0.75) + 1e-6);
+    if (hit > r.hits) {
+      r.hits = hit;
+      // The first landing plays the whole recorded tumble; the made stand-in clacks at each bounce instead.
+      const rate = this.look === "narrator" ? 0.88 : 1;
+      if (hit === 1) sound.play("throw", { x: p.x, rate, gain: this.look === "narrator" ? 0.75 : 1 });
+      else sound.play("clack", { x: p.x, gain: [0, 1, 0.6, 0.3][hit] ?? 0.3, rate });
+    }
     p.y = r.to.y + DIE_REST + r.from.y * (1 - e) * (1 - e) + hop * 0.09;
     this.mesh.position.copy(p);
     const left = 1 - e;

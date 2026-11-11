@@ -10,8 +10,9 @@ All four milestones are built. It runs as a local preview page, and as a Lumiver
 
 1. **The room**: the hours of the day, six kinds of weather, candles that burn down through the night, the narrator, the map and its pieces, and the die.
 2. **One moment of the game**: something stands in your way, you write what you do, the game names the check, you throw the die, and the situation changes.
-3. **A whole adventure** in trope mode, a rescue or a courtship: the road dealt face down as cards, a stop's card turned when you arrive, forks, companions, things won, resting, a rival, a clock, and knacks to choose at a level-up.
-4. **Inside Lumiverse, for a real card**: "Sit at the table" by the chat's input bar opens the room over the app. The narrator greets you by the card's character, asks which story and who you are, and builds the adventure for the card with your own model while you write.
+3. **A whole adventure** in trope mode, a rescue or a courtship: the road dealt face down as cards, a stop's card turned when you arrive, forks, companions, things won, resting, a rival, a clock, and abilities to choose at a level-up (docs/SYSTEMS.md). Four wooden blocks at the far edge of the table show which ways past a place are still open; questions to the narrator are answered from the scene without a die; the weather outside the window follows the road.
+4. **Inside Lumiverse, for a real card**: "Sit at the table", in Tallow's drawer tab or the Extras menu (the ⋯ button) under the chat's message box, opens the room over the app. The narrator greets you by the card's character, asks which story and who you are, and builds the adventure for the card with your own model while you write. A card set in our own times gets a city road instead of the river road. Leave the table in the middle of a story and it is kept: sit down again and the narrator asks whether to go on.
+5. **Many stories, one hero**: seven kinds of story (a rescue, a heist, a mystery, a journey, a hunt, a romance, a night to survive), 25 stories within them, and a new road laid out by code for each, so no two are alike. When a story ends, the narrator says what became of everyone, a story won gives an ability and up to two things to keep, the cards are gathered back into the deck, and the narrator asks for another story, or says goodnight. The hero is kept per chat and card, and the stories already played are not drawn again soon.
 
 Not done yet: nothing from a sitting is written into the chat, and it has not been played inside Lumiverse with a real model (the live tests answered as the model by hand). See [docs/DESIGN.md](docs/DESIGN.md), section 11.
 
@@ -34,7 +35,15 @@ copies the build into your Lumiverse's `data/extensions/tallow/`. In Lumiverse, 
 - **generation**, to ask your model to build the adventure and tell what happens;
 - **app_manipulation**, to open the room over the whole app (without it, the room opens in a floating window).
 
-Open a chat with a character and press "Sit at the table". The ✕ at the top leaves the table. Without the generation permission, or if the model does not answer, the game still plays: a made-up adventure with the card's character in it, and plain stand-in lines.
+Then, once, three optional ones; the game is whole without them:
+
+- **decisions**, so your Decision model reads each line you write in about a second, and reads your written choices (which story, rest or press on, which card);
+- **world_books**, so a few entries of the card's lorebook go into the adventure;
+- **embeddings**, so your embedding model picks the lorebook entries nearest the card.
+
+**Setting it up**: Tallow has its own tab in Lumiverse's drawer, "Tallow". It has a button to sit at the table, the permissions with a button to allow the missing ones, and the models: which of your connections each job uses (building the adventure, narrating, reading your lines, reading who you are) and whether it thinks first, plus your Decision and embedding connections. Anything left on "Auto" uses your default connection; the builder thinks first when its model can, and the rest answer straight away, so they are quick. Choices are kept in Tallow's user storage (`models.json`). The tab is outside the game: inside the room there is still nothing but the room.
+
+Open a chat with a character, then press "Sit at the table" in the Tallow tab, or in the ⋯ (Extras) menu under the message box. A card that is a world or a scenario rather than one person is told apart: the story is set there, and your companion is someone of that world. The ✕ at the top leaves the table. Without the generation permission, or if the model does not answer, the game still plays: a made-up adventure with the card's character in it, and plain stand-in lines.
 
 ## Run the preview
 
@@ -47,9 +56,9 @@ Then open http://localhost:4184. No Lumiverse needed.
 
 ### Play an adventure
 
-Open http://localhost:4184/?adventure=rescue (or `=courtship`) to play a whole made-up adventure at the table, with stand-ins for the model. Add `&slow=2500` to make every stand-in take two and a half seconds, so the narrator's waits can be watched. Every turn is played the way the moment below is, and where the road forks you touch one of the two cards (or write which).
+Open http://localhost:4184/?adventure=rescue (or `=courtship`, `=night-rescue`, `=city-courtship`, or `=gen:haunting` for a road laid out from one story's recipe) to play a whole made-up adventure at the table, with stand-ins for the model. Add `&slow=2500` to make every stand-in take two and a half seconds, so the narrator's waits can be watched. Every turn is played the way the moment below is, and where the road forks you touch one of the two cards (or write which).
 
-Open http://localhost:4184/host to try the built extension (`dist/frontend.js`) in a pretend Lumiverse, with a made-up card and no model.
+Open http://localhost:4184/host to try the built extension (`dist/frontend.js`) in a pretend Lumiverse, with a made-up card and no model. Add `?card=hangul` for a card whose name is written in Hangul, `?card=modern` for one set in our own times, or `?card=world` for a card that is a world rather than a person, and `&decide=1` for a pretend Decision model.
 
 ### Play the moment
 
@@ -110,13 +119,13 @@ plays the room with a real mouse (moves, clicks and the wheel sent through the b
 bun run adventure
 ```
 
-plays a whole adventure as text, using only what the table would say. `ADV=courtship` for the courtship, `RUNS=400` to play it 400 times and print how often it is won.
+plays a whole adventure as text, using only what the table would say. `ADV=courtship` for the courtship (or `night-rescue`, `city-courtship`), `FORK=left` or `right` to always take that side of a fork, `RUNS=400` to play it 400 times and print how often it is won. `ADV=gen:vault` plays a road laid out from one story's recipe (the ids are in `src/content/tropes.ts`), and `ADV=gen:all RUNS=300` prints how often every story is won.
 
 ```
 bun run table
 ```
 
-plays a whole adventure in the room in a real browser, the way a player would, and takes pictures into `.artifacts/table/`. `bun scripts/sit.ts` (after `bun run build`) does the same for the built extension in the pretend Lumiverse.
+plays a whole adventure in the room in a real browser, the way a player would, and takes pictures into `.artifacts/table/`. `bun scripts/sit.ts` (after `bun run build`) does the same for the built extension in the pretend Lumiverse, then reloads in the middle of the story and checks that the sitting is taken up again (`CARD=hangul`, `CARD=modern` or `CARD=world` for the other made-up cards, `DECIDE=1` with the pretend Decision model). `PHONE=1 bun run table` plays on a phone held upright. `bun scripts/ending.ts` (after `bun run build`) plays a whole story in the built extension and checks what comes after it: the reward, the cards gathered back, "Another story?", goodnight, and the hero kept for the next sitting (`STORY=mystery` for another kind; pictures in `.artifacts/ending/`).
 
 ```
 bun run live -- --card card.json --state run1 next
@@ -128,11 +137,12 @@ plays a sitting against a real card one step at a time: each step prints what th
 ## Layout
 
 - `src/room/`: the room. `room.ts` is the entry (`mountRoom`); `daylight.ts` turns the hour and the weather into light and says how far the candles have burnt; `weather.ts` is snow, rain, leaves, fog and lightning; `candles.ts` is a candle that melts; `narrator.ts` and `hand.ts` are the figure across the table and your own hand; `desk.ts` is your side of the table (the notebook and pencil, the pages, the hands that write and hold them), with `paper.ts` (a page), `counters.ts` (the counters and the balance), `voice.ts` (the narrator's words) and `drawnhands.ts` (your drawn hands); `governor.ts` decides when a slow machine should draw less; `flat.ts` is a plain 2D picture shown where WebGL is not available.
-- `src/engine/`: game rules, with no model and no browser in them. `dice.ts` is the seeded dice; `moment.ts` is one moment of the loop; `tell.ts` says a moment in plain words; `weigh.ts` turns a check into weights for the balance; `adventure.ts` is a whole adventure (the road, forks, resting, companions, the rival, the clock) and `tell-adventure.ts` says it; `hero.ts` is who you are (kinds of person, stat points, knacks); `cards.ts` is the kinds of card; `card/child.ts` is the rule for who is read as a child.
-- `src/content/`: the two made-up adventures, which are also the skeletons an adventure for a card is built on.
-- `src/game/`: playing it. `director.ts` plays an adventure at any table; `roomtable.ts` is the room's table; `session.ts` is a whole sitting for a card; `card.ts` reads a card; `build.ts` builds the adventure for it; `prompts.ts` is what a model is asked and how its answers are checked; `modelminds.ts` asks it, and `minds.ts` holds the stand-ins.
+- `src/engine/`: game rules, with no model and no browser in them. `dice.ts` is the seeded dice; `moment.ts` is one moment of the loop; `tell.ts` says a moment in plain words; `weigh.ts` turns a check into weights for the balance; `adventure.ts` is a whole adventure (the road, forks, resting, companions, the rival, the clock) and `tell-adventure.ts` says it; `hero.ts` is who you are (kinds of person, stat points, a calling); `abilities.ts` is what you can do (verbs, prices, the budget, the stock); `cards.ts` is the kinds of card; `card/child.ts` is the rule for who is read as a child.
+- `src/content/`: `tropes.ts` is the seven families and their 25 story recipes; `stopkinds.ts` is what each kind of card at a stop is (its ways, levers, words, old and city names), with the things to find and the walkers who may join; the hand-made adventures (a river road and a fair, a city night and a canal festival) are kept for the checks. `src/engine/road.ts` lays out a road from a recipe and a seed.
+- `src/game/`: playing it. `director.ts` plays an adventure at any table; `roomtable.ts` is the room's table; `session.ts` is a whole sitting for a card; `card.ts` reads a card; `build.ts` builds the adventure for it; `prompts.ts` is what a model is asked and how its answers are checked; `decisions.ts` is what the Decision model is asked; `modelminds.ts` asks them, and `minds.ts` holds the stand-ins; `lore.ts` picks the card's lorebook entries.
 - `src/frontend.ts`, `src/backend.ts`, `src/frontend/overlay.ts`, `src/shared/protocol.ts`: the Spindle extension. `spindle.json` is its manifest; `scripts/build.ts` builds it.
-- `src/meaning/`: what a model is asked and how its answer is cleaned. `read.ts` reads a written line, with a list of plain words for when no model answers.
+- `src/meaning/`: what a model is asked and how its answer is cleaned. `read.ts` reads a written line, with a list of plain words for when no model answers; `models.ts` routes each job to a connection.
+- `src/backend.ts` and `src/backend/models.ts`: the extension's backend, which reads the card and its lorebook and asks the models.
 - `models/`: Blender scripts that make the sculpted parts (the narrator's mantle, hood, hand and jointed arm, and the pieces on the map). Run one with `blender --background --python models/NAME.py`; it writes into `assets/models/`. The room falls back to shapes built in code if a model file is missing.
 - `assets/models/`: the files those scripts wrote.
 - `preview/`: the preview page and its made-up data. `play.ts` plays the moment at the table: it says the narrator's lines and tells the room what to show. `host.ts` is the pretend Lumiverse for the built extension.
