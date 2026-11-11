@@ -208,14 +208,15 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
     },
 
     async offer(cards) {
-      await desk.cards.offer(cards.map((c) => ({ id: c.id, kind: c.card, name: c.name })));
+      await desk.cards.offer(cards.map((c) => ({ id: c.id, kind: c.card, name: c.name, text: c.text })));
       const options = Object.fromEntries(cards.map((c, i) => [String(i), `the card on the ${i ? "right" : "left"}: ${c.name}`]));
       const picked = await choose((line) => byMeaning("Which card do you keep, left or right?", line, options, () => pickRead(line, cards.map((c) => c.name))), LEVEL_AGAIN);
       await desk.cards.unoffer(picked);
       return picked;
     },
 
-    give: (card: SideCard) => desk.cards.give({ id: card.id, kind: card.card, name: card.name }, card.side === "rival"),
+    give: (card: SideCard) => desk.cards.give({ id: card.id, kind: card.card, name: card.name, text: card.text }, card.side === "rival"),
+    sheets: (pages) => desk.sheets(pages),
     take: (id) => desk.cards.take(id),
     rival: (n, max) => desk.cards.rival(n, max),
     dread: (n) => desk.dread.show(n),

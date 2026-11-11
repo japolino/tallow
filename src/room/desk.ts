@@ -95,6 +95,15 @@ const READ: Pose = { p: V(-0.3, 0.37, -0.8), q: new Quaternion().setFromEuler(ne
 const WINDOW = V(-2.3, 0.95, -0.35);
 /** The pile of pages you have read, by your right hand. */
 const PILE = V(0.2, 0.004, 0.225);
+/** Your sheets (who you are, what you can do, who walks with you, what you carry): a second stack, by your left hand. */
+const SHEAF = V(-0.175, 0.004, 0.215);
+const SHEAF_YAW = -0.13;
+/** How many pages of a stack in your hands can be seen behind the one in front. */
+const DEEP = 5;
+/** The order the page in front of a stack in your hands is drawn in (paper.ts, inFront); those behind it come before. */
+const HELD_ORDER = 18;
+/** How far, as a share of its width, a page is drawn aside when it is put to the back of the stack or brought from there. */
+const ASIDE = 0.66;
 /** How far in front of the eye your drawn hands hang (the same as the hand with the die). */
 const HAND_D = 0.42;
 /**
@@ -171,6 +180,15 @@ export class Desk {
   private his: Page | null = null;
   private held: Page | null = null;
   private pile: Page[] = [];
+  /** Your sheets, the first on top. */
+  private sheaf: Page[] = [];
+  /** Your sheets as they now stand, waiting for the stack to be out of your hands to be written out. */
+  private sheetsWant: { heading: string; his: string[] }[] | null = null;
+  /** The stack up in your hands (the pile or your sheets), and its pages there in order: the one in front first. */
+  private upStack: Page[] | null = null;
+  private hand: Page[] = [];
+  /** Where your right thumb is while it draws a page aside, instead of on the corner of the page in front. */
+  private rightAt: Vector3 | null = null;
   /** The pages the narrator has done with, lowest first, and how many it has ever put there. */
   private heap: Page[] = [];
   private shoved = 0;
@@ -215,6 +233,7 @@ export class Desk {
     this.cards = new TableCards({
       narrator: h.narrator,
       tracks: this.tracks,
+      camera: h.camera,
       stop: (id) => h.stops?.get(id),
       now: () => this.t,
       glance: (eye, look, fov, settled, hold) => this.lookAt(eye, look, fov, settled, hold),
@@ -327,7 +346,7 @@ export class Desk {
 
   /** True while a page is up in your hands to be read: the room then draws itself as finely as it can (room.ts). */
   get pageUp(): boolean {
-    return !!this.held;
+    return !!this.held || this.cards.looking;
   }
 
   /** True while the game is waiting for a line. */
@@ -502,55 +521,238 @@ export class Desk {
     this.read.textContent = [w.mine && `You wrote: ${w.mine}`, w.heading, ...w.his].filter(Boolean).join(" ");
   }
 
-  private slot(i: number): Pose {
+  /** Where the i-th page of a stack lies on the table: the pile of what you have read, its newest on top, or your sheets, the first on top. */
+  private slot(i: number, stack: Page[] = this.pile): Pose {
+    if (stack === this.sheaf) {
+      const up = Math.max(0, this.sheaf.length - 1 - i);
+      return pose(SHEAF.x + ((i * 3) % 2) * 0.003, SHEAF.y + up * 0.0007, SHEAF.z, 0, SHEAF_YAW + (((i * 29) % 5) - 2) * 0.012);
+    }
     return pose(PILE.x + ((i * 5) % 3) * 0.004, PILE.y + i * 0.0007, PILE.z, 0, -0.06 + (((i * 37) % 7) - 3) * 0.014);
   }
 
-  /** Set down the page in your hands: a new one goes on top of the pile, one from the pile goes back where it was. */
+  /** Where the k-th page from the front of a stack in your hands is: a little higher, a little askew, behind the one before. */
+  private deep(k: number): Pose {
+    const at = this.holdPose();
+    const d = Math.min(k, DEEP);
+    at.p.add(V(k ? (((k * 7) % 3) - 1) * 0.0028 : 0, d * 0.0026, -d * 0.0012));
+    // Turned a little in its own plane, the way loose sheets never quite square up.
+    if (k) at.q.multiply(new Quaternion().setFromAxisAngle(V(0, 1, 0), (((k * 5) % 5) - 2) * 0.014));
+    return at;
+  }
+
+  /** Draw the pages in your hands in their order, the one in front over the rest, and only as many as can be seen. */
+  private order(): void {
+    this.hand.forEach((p, k) => {
+      p.order = HELD_ORDER - Math.min(k, DEEP + 1);
+      p.group.visible = k <= DEEP;
+    });
+  }
+
+  /** Move pages together, each from where it is to its own pose in its parent's space. */
+  private flyAll(pages: Page[], to: (k: number) => Pose, dur: number, lift = 0): Step {
+    const from: Pose[] = [];
+    let dst: Pose[] = [];
+    return {
+      dur,
+      begin: () => {
+        pages.forEach((p, k) => (from[k] = { p: p.group.position.clone(), q: p.group.quaternion.clone() }));
+        dst = pages.map((_, k) => to(k));
+        sound.play("slide", { x: PILE.x, gain: 0.6 + lift * 6 });
+      },
+      tick: (u) => {
+        const e = ease(u);
+        pages.forEach((p, k) => {
+          p.group.position.lerpVectors(from[k]!.p, dst[k]!.p, e);
+          p.group.position.y += Math.sin(Math.PI * u) * lift;
+          p.group.quaternion.slerpQuaternions(from[k]!.q, dst[k]!.q, e);
+        });
+      },
+    };
+  }
+
+  /** Set down what is in your hands: a page just handed to you goes on top of the pile, a stack goes back where it lay. */
   setDown(): Promise<void> {
     const page = this.held;
     if (!page || (this.mode !== "holding" && this.mode !== "reading")) return Promise.resolve();
-    const fromPile = this.mode === "reading";
-    const i = fromPile ? this.readAt : this.pile.length;
+    const done = (): void => {
+      this.readAt = -1;
+      this.mode = "idle";
+      this.read.textContent = "";
+      for (const down of this.downs.splice(0)) down();
+      this.applySheets();
+    };
+    if (this.mode === "reading" && this.upStack) {
+      const stack = this.upStack;
+      const pages = this.hand;
+      this.mode = "busy";
+      this.held = null;
+      this.hand = [];
+      this.rightAt = null;
+      for (const p of pages) {
+        this.group.attach(p.group);
+        p.inFront = false;
+        p.group.visible = true;
+      }
+      return this.tracks.run([this.flyAll(pages, (k) => this.slot(stack.indexOf(pages[k]!), stack), 0.55, 0.03)]).then(() => {
+        for (const p of pages) p.glow = 0.05;
+        this.upStack = null;
+        done();
+      });
+    }
+    const i = this.pile.length;
     this.mode = "busy";
     this.group.attach(page.group);
     page.inFront = false;
     this.held = null;
-    return this.tracks
-      .run([this.fly(page.group, () => this.slot(i), 0.55, 0.03)])
-      .then(() => {
-        if (!fromPile) this.pile.push(page);
-        page.glow = 0.05;
-        this.readAt = -1;
-        this.mode = "idle";
-        this.read.textContent = "";
-        for (const down of this.downs.splice(0)) down();
-      });
-  }
-
-  /** Pick a page up off the pile to read it again (the top one unless told otherwise). */
-  pickUp(i = this.pile.length - 1): Promise<void> {
-    const page = this.pile[i];
-    if (!page || this.mode !== "idle") return Promise.resolve();
-    this.mode = "busy";
-    this.readAt = i;
-    this.take(page);
-    return this.tracks.run([this.fly(page.group, () => this.holdPose(), 0.55)]).then(() => {
-      this.mode = "reading";
-      this.tell(page);
+    this.hand = [];
+    return this.tracks.run([this.fly(page.group, () => this.slot(i), 0.55, 0.03)]).then(() => {
+      this.pile.push(page);
+      page.glow = 0.05;
+      done();
     });
   }
 
-  /** Turn to the page before (-1) or after (+1) the one in your hands. */
+  /**
+   * Pick up a stack whole, to leaf through: the pile of what you have read, its newest page in front unless told
+   * otherwise, or your sheets, the first in front.
+   */
+  pickUp(i?: number, stack: Page[] = this.pile): Promise<void> {
+    if (!stack.length || this.mode !== "idle") return Promise.resolve();
+    void this.cards.unlook();
+    const at = Math.max(0, Math.min(stack.length - 1, i ?? (stack === this.pile ? stack.length - 1 : 0)));
+    this.mode = "busy";
+    this.upStack = stack;
+    this.readAt = at;
+    // In your hands the page you read is in front, the ones before it behind it in turn, and the ones after it at the back.
+    this.hand = [...stack.slice(0, at + 1).reverse(), ...stack.slice(at + 1).reverse()];
+    for (const p of this.hand) {
+      this.h.camera.attach(p.group);
+      p.inFront = true;
+      p.curl(0);
+    }
+    this.order();
+    for (const p of this.hand) p.group.visible = true;
+    this.held = this.hand[0]!;
+    this.thumbK = Math.min(this.thumbK, 0.01);
+    return this.tracks.run([this.flyAll(this.hand, (k) => this.deep(k), 0.55)]).then(() => {
+      this.order();
+      this.mode = "reading";
+      this.tell(this.held!);
+    });
+  }
+
+  /**
+   * Turn to the page before (-1) or after (+1) the one in front: the one in front is drawn aside and put to the back
+   * of the stack, or the one at the back is drawn out and laid in front. Your right hand goes with the page.
+   */
   async leaf(by: number): Promise<void> {
-    const to = this.readAt + by;
-    if (this.mode !== "reading" || !this.pile[to]) return;
-    await this.setDown();
-    await this.pickUp(to);
+    const stack = this.upStack;
+    if (this.mode !== "reading" || !stack || !stack[this.readAt + by]) return;
+    this.mode = "busy";
+    const n = this.hand.length;
+    const back = by < 0;
+    const moving = this.hand[back ? 0 : n - 1]!;
+    const rest = this.hand.filter((p) => p !== moving);
+    const next = back ? [...rest, moving] : [moving, ...rest];
+    const from = new Map(this.hand.map((p) => [p, { p: p.group.position.clone(), q: p.group.quaternion.clone() }]));
+    const to = new Map(next.map((p, k) => [p, this.deep(k)]));
+    // Aside: drawn off to the right and a little down, turned as the thumb drags it.
+    const aside = this.deep(0);
+    aside.p.add(V(PAGE_W * ASIDE, -0.012, 0));
+    aside.q.multiply(new Quaternion().setFromAxisAngle(V(0, 1, 0), -0.14));
+    const corner = (p: Page): Vector3 => p.group.localToWorld(V(PAGE_W / 2 - THUMB_IN, 0, PAGE_H - THUMB_UP));
+    const top = HELD_ORDER + 1, bottom = HELD_ORDER - DEEP - 2;
+    const was = this.held!;
+    let swapped = false;
+    await this.tracks.run([
+      {
+        dur: 0.62,
+        begin: () => {
+          sound.play("slide", { x: 0.1, gain: 0.7 });
+          moving.order = back ? top : bottom;
+          moving.group.visible = true;
+        },
+        tick: (u) => {
+          // The others close up or make room, each to its new place.
+          const all = ease(u);
+          for (const p of rest) {
+            const a = from.get(p)!, b = to.get(p)!;
+            p.group.position.lerpVectors(a.p, b.p, all);
+            p.group.quaternion.slerpQuaternions(a.q, b.q, all);
+          }
+          // The page that moves: out to the side in the first half, in to its new place in the second.
+          const a = from.get(moving)!, b = to.get(moving)!;
+          const half = u < 0.5;
+          const e = ease(half ? u * 2 : (u - 0.5) * 2);
+          if (half) {
+            moving.group.position.lerpVectors(a.p, aside.p, e);
+            moving.group.quaternion.slerpQuaternions(a.q, aside.q, e);
+          } else {
+            if (!swapped) {
+              swapped = true;
+              // Past the edge of the stack it goes behind it, or comes over it.
+              moving.order = back ? bottom : top;
+              this.hand = next;
+              this.held = next[0]!;
+              rest.forEach((p) => (p.order = HELD_ORDER - Math.min(next.indexOf(p), DEEP + 1)));
+            }
+            moving.group.position.lerpVectors(aside.p, b.p, e);
+            moving.group.quaternion.slerpQuaternions(aside.q, b.q, e);
+          }
+          // Your right thumb: on the page as it goes out (or out to meet it), then back to the one in front (or in with it).
+          if (back) this.rightAt = half ? corner(moving) : corner(moving).lerp(corner(next[0]!), e);
+          else this.rightAt = half ? corner(was).lerp(corner(moving), e) : corner(moving);
+        },
+      },
+    ]);
+    this.hand = next;
+    this.held = next[0]!;
+    this.rightAt = null;
+    this.readAt += by;
+    this.order();
+    this.mode = "reading";
+    this.tell(this.held);
+  }
+
+  /** Your sheets as they now stand (tell-adventure.ts, sheetPages): written out at once, or when they are out of your hands. */
+  sheets(pages: { heading: string; his: string[] }[]): void {
+    this.sheetsWant = pages;
+    this.applySheets();
+  }
+
+  private applySheets(): void {
+    const want = this.sheetsWant;
+    if (!want || this.upStack === this.sheaf) return;
+    this.sheetsWant = null;
+    while (this.sheaf.length > want.length) {
+      const p = this.sheaf.pop()!;
+      this.group.remove(p.group);
+      p.dispose();
+    }
+    want.forEach((w, i) => {
+      let p = this.sheaf[i];
+      if (!p) {
+        p = new Page(++this.made, true);
+        p.glow = 0.05;
+        this.group.add(p.group);
+        this.sheaf.push(p);
+      }
+      if (p.writing.heading !== w.heading || p.writing.his.join("\n") !== w.his.join("\n")) {
+        p.writing.heading = w.heading;
+        p.writing.his = [...w.his];
+        p.draw();
+      }
+    });
+    this.sheaf.forEach((p, i) => {
+      const at = this.slot(i, this.sheaf);
+      p.group.position.copy(at.p);
+      p.group.quaternion.copy(at.q);
+    });
   }
 
   /** Put down whatever you have picked up to look at, and shut the notebook, before the narrator hands you something. */
   private async calm(): Promise<void> {
+    await this.cards.unlook();
     if (this.mode === "writing") this.close();
     if (this.mode === "reading") await this.setDown();
   }
@@ -680,6 +882,8 @@ export class Desk {
     if (this.mode !== "idle" || !this.wanted) return;
     this.h.sitBack();
     this.voice.hush();
+    // A card held up to be read goes back down: the notebook needs both eyes.
+    void this.cards.unlook();
     this.mode = "writing";
     if (!this.sheet) {
       this.sheet = this.newPage(null);
@@ -788,14 +992,28 @@ export class Desk {
     return Math.hypot(((p.x + 1) / 2) * r.width - (e.clientX - r.left), ((1 - p.y) / 2) * r.height - (e.clientY - r.top)) / r.height;
   }
 
-  /** Where the middle of a thing you can click is, in the room: the notebook, the pile of pages, the dice box. */
-  where(what: "book" | "pile" | "box"): Vector3 {
+  /** Where the middle of a thing you can click is, in the room: the notebook, the pile of pages, your sheets, the dice box. */
+  where(what: "book" | "pile" | "sheaf" | "box"): Vector3 {
     if (what === "book") return this.book.localToWorld(V(0, 0, PAGE_H / 2));
+    if (what === "sheaf") return V(SHEAF.x + Math.sin(SHEAF_YAW) * PAGE_H * 0.5, 0, SHEAF.z + Math.cos(SHEAF_YAW) * PAGE_H * 0.5);
     return what === "pile" ? V(PILE.x, 0, PILE.z + PAGE_H / 2) : this.h.box.clone().setY(0.02);
   }
 
+  /** Which card on your side the pointer is over, or -1. */
+  private sideCard(e: { clientX: number; clientY: number }): number {
+    let best = -1, near = 0.045;
+    this.cards.sideAt().forEach((at, i) => {
+      const d = this.far(e, at);
+      if (d < near) {
+        near = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   /** What the pointer is over that a click would use. */
-  private over(e: { clientX: number; clientY: number }): "book" | "pile" | "box" | "card0" | "card1" | null {
+  private over(e: { clientX: number; clientY: number }): "book" | "pile" | "sheaf" | "box" | "card0" | "card1" | null {
     if (this.cards.choosing) {
       const near = [0, 1].map((i) => {
         const at = this.cards.laid(i);
@@ -805,7 +1023,9 @@ export class Desk {
       if (near[i]! < 0.09) return i ? "card1" : "card0";
     }
     if (this.wanted && this.far(e, this.where("book")) < 0.13) return "book";
-    if (this.pile.length && this.far(e, this.where("pile")) < 0.12) return "pile";
+    const pile = this.pile.length ? this.far(e, this.where("pile")) : Infinity;
+    const sheaf = this.sheaf.length ? this.far(e, this.where("sheaf")) : Infinity;
+    if (Math.min(pile, sheaf) < 0.12) return pile <= sheaf ? "pile" : "sheaf";
     if (this.onDie && this.far(e, this.where("box")) < 0.14) return "box";
     return null;
   }
@@ -815,6 +1035,10 @@ export class Desk {
     const on = this.over(e);
     this.cards.hover = on === "card0" ? 0 : on === "card1" ? 1 : -1;
     if (on === "card0" || on === "card1") return true;
+    // A card on your side can be picked up to be read, whenever your hands are free.
+    const free = this.mode === "idle" || this.mode === "writing";
+    this.cards.sideHover = free ? this.sideCard(e) : -1;
+    if (this.cards.sideHover >= 0 || this.cards.looking) return true;
     return this.mode === "holding" || this.mode === "reading" || this.voice.speaking || this.glanceWant > 0 || (this.mode === "idle" && !!on);
   }
 
@@ -825,6 +1049,19 @@ export class Desk {
     if (pick === "card0" || pick === "card1") {
       this.cards.choosing?.(pick === "card0" ? 0 : 1);
       return true;
+    }
+    // A card held up to your eyes: touching another card on your side shows that one instead; anywhere else puts it back.
+    if (this.cards.looking) {
+      const i = this.sideCard(e);
+      void (i >= 0 && i !== this.cards.lookingAt ? this.cards.look(i) : this.cards.unlook());
+      return true;
+    }
+    if ((this.mode === "idle" || this.mode === "writing") && !this.voice.speaking) {
+      const i = this.sideCard(e);
+      if (i >= 0) {
+        void this.cards.look(i);
+        return true;
+      }
     }
     if (this.voice.hurry()) return true;
     // Turned to the balance, the dice box and the notebook are out of sight: a click turns you back to them.
@@ -854,6 +1091,7 @@ export class Desk {
     }
     if (on === "book") this.open();
     else if (on === "pile") void this.pickUp();
+    else if (on === "sheaf") void this.pickUp(undefined, this.sheaf);
     else if (on === "box") this.onDie?.();
     return !!on;
   }
@@ -863,7 +1101,11 @@ export class Desk {
     if (["INPUT", "BUTTON", "TEXTAREA", "SELECT", "A", "SUMMARY"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey) return;
     const go = e.key === "Enter" || e.key === " ";
     let used = true;
-    if (go && this.voice.hurry()) used = true;
+    const looking = this.cards.lookingAt;
+    if (looking >= 0 && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.cards.look(Math.max(0, looking - 1));
+    else if (looking >= 0 && (e.key === "ArrowRight" || e.key === "ArrowDown")) void this.cards.look(looking + 1);
+    else if (looking >= 0 && (go || e.key === "Escape")) void this.cards.unlook();
+    else if (go && this.voice.hurry()) used = true;
     else if (this.mode === "holding" && (go || e.key === "Escape")) void this.setDown();
     else if (this.mode === "reading" && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.leaf(-1);
     else if (this.mode === "reading" && (e.key === "ArrowRight" || e.key === "ArrowDown")) void this.leaf(1);
@@ -984,11 +1226,13 @@ export class Desk {
     this.thumbs.forEach((hand, i) => {
       hand.group.visible = show;
       if (!show || !page) return;
-      const corner = page.group.localToWorld(V((i ? 1 : -1) * (PAGE_W / 2 - THUMB_IN), 0, PAGE_H - THUMB_UP));
+      const corner = i && this.rightAt ? this.rightAt : page.group.localToWorld(V((i ? 1 : -1) * (PAGE_W / 2 - THUMB_IN), 0, PAGE_H - THUMB_UP));
       this.hang(hand, corner, (1 - ease(this.thumbK)) * 0.25, (i ? 1 : -1) * THUMB_TURN);
       hand.update(t, bright);
     });
     if (page) page.glow = 0.12 + ease(this.thumbK) * 0.5;
+    // The pages behind it in a stack are lit as it is, a little less.
+    for (const p of this.hand) if (p !== page) p.glow = 0.1 + ease(this.thumbK) * 0.38;
   }
 
   dispose(): void {
@@ -1006,7 +1250,7 @@ export class Desk {
     this.cards.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();
-    for (const page of [this.sheet, this.his, this.held, ...this.pile, ...this.heap]) page?.dispose();
+    for (const page of new Set([this.sheet, this.his, this.held, ...this.pile, ...this.heap, ...this.sheaf])) page?.dispose();
     for (const m of this.mats) m.dispose();
   }
 }

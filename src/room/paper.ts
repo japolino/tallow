@@ -89,7 +89,8 @@ export class Page {
   private bent = 0;
   private seed: number;
 
-  constructor(seed = 1) {
+  /** @param sheet one of your sheets (desk.ts): card-stock ruled round its edge, with no binder holes. */
+  constructor(seed = 1, private sheet = false) {
     this.seed = seed;
     const [c, g] = mk(PX_W, PX_H);
     this.g = g;
@@ -135,6 +136,11 @@ export class Page {
     }
   }
 
+  /** The order it is drawn in while it is in your hands with others (desk.ts): the highest lies over the rest. */
+  set order(n: number) {
+    for (const m of this.group.children as Mesh[]) m.renderOrder = n;
+  }
+
   /**
    * Bend the sheet: 0 lies flat; above 0 the free end lifts and the page bows, as it does when it is peeled from the
    * binder or carried by one corner.
@@ -156,7 +162,7 @@ export class Page {
   draw(): void {
     const g = this.g;
     const r = rng(900 + this.seed * 31);
-    g.fillStyle = PAPER;
+    g.fillStyle = this.sheet ? "#d6bd88" : PAPER;
     g.fillRect(0, 0, PX_W, PX_H);
     // Age: darker toward the edges, and a few foxed spots.
     const edge = g.createRadialGradient(PX_W / 2, PX_H / 2, PX_H * 0.3, PX_W / 2, PX_H / 2, PX_H * 0.72);
@@ -170,12 +176,21 @@ export class Page {
       g.arc(r() * PX_W, r() * PX_H, 3 + r() * 9, 0, Math.PI * 2);
       g.fill();
     }
-    // The holes the binder's rings went through.
-    g.fillStyle = "rgba(40,28,16,0.55)";
-    for (let i = 0; i < 9; i++) {
-      g.beginPath();
-      g.ellipse(PX_W * (0.1 + i * 0.1), 20, 9, 7, 0, 0, Math.PI * 2);
-      g.fill();
+    if (this.sheet) {
+      // A sheet: ruled round in red ink, a thick rule and a thin.
+      g.strokeStyle = "rgba(120,30,20,0.7)";
+      g.lineWidth = 4;
+      g.strokeRect(18, 18, PX_W - 36, PX_H - 36);
+      g.lineWidth = 1.5;
+      g.strokeRect(27, 27, PX_W - 54, PX_H - 54);
+    } else {
+      // The holes the binder's rings went through.
+      g.fillStyle = "rgba(40,28,16,0.55)";
+      for (let i = 0; i < 9; i++) {
+        g.beginPath();
+        g.ellipse(PX_W * (0.1 + i * 0.1), 20, 9, 7, 0, 0, Math.PI * 2);
+        g.fill();
+      }
     }
 
     const width = PX_W - SIDE * 2;
@@ -248,9 +263,25 @@ export class Page {
       g.fillStyle = INK;
       if (head.length) {
         g.font = `bold ${headSize}px ${HIS_FONT}`;
+        // A sheet's heading is set in the middle, in red ink, with a rule under it.
+        if (this.sheet) {
+          g.fillStyle = "#7a1e14";
+          g.textAlign = "center";
+        }
         for (const line of head) {
-          g.fillText(line, SIDE, y + headSize);
+          g.fillText(line, this.sheet ? PX_W / 2 : SIDE, y + headSize);
           y += headSize * 1.25;
+        }
+        if (this.sheet) {
+          g.textAlign = "left";
+          g.fillStyle = INK;
+          g.strokeStyle = "rgba(120,30,20,0.6)";
+          g.lineWidth = 1.5;
+          g.beginPath();
+          g.moveTo(PX_W * 0.3, y + 4);
+          g.lineTo(PX_W * 0.7, y + 4);
+          g.stroke();
+          y += 10;
         }
         y += headSize * 0.45;
       }

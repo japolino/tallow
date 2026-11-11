@@ -18,6 +18,7 @@ import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, takenOutOf, d
 import { canLuck, luckRead, throwLuck, type LuckAsk } from "../engine/luck.js";
 import { giveIn, narratorTurn, refuse, tempting, type Move } from "../engine/dread.js";
 import { leverLeft, nameCheck, shut, statOf, TRY_HOURS, WAYS, wayStates, type Against, type Check, type Lever, type Moment, type Sheet, type Way } from "../engine/moment.js";
+import { abilityCardText, companionCardText, lootCardText, markCardText, sheetPages } from "../engine/tell-adventure.js";
 import { arriveSaid, backSaid, campAsk, campRead, endPage, endSaid, firstPage, forkRead, forkSaid, levelSaid, levelTaken, PRESS_ON, restSaid, startSaid, stopPage, turnSaid, usedSaid, moveNote, moveRule, spendSaid, temptSaid, temptRead, temptYes, TEMPT_NO } from "../engine/tell-adventure.js";
 import { hourSaid, notches as scheduleNotches } from "../engine/schedule.js";
 import { ASK_AGAIN, ASK_NEXT, ASK_SAID, ASK_TIME_SAID, cantSaid, changeLines, checkHeading, checkSaid, DIE_SAYS, narratorNote, rollLines, SCALE_SAYS, shutSaid, UNCLEAR_SAID } from "../engine/tell.js";
@@ -59,6 +60,8 @@ export interface SideCard {
   /** The name written under the picture: a person's name, or a thing's. */
   name: string;
   side: "companion" | "loot" | "courted" | "rival" | "perk" | "mark";
+  /** What is written on it under the picture, to be read when you pick it up: what it is and what it does. */
+  text?: string;
 }
 
 export interface Table {
@@ -128,6 +131,8 @@ export interface Table {
   blackCandle?(c: { burned: number; lit: boolean } | null): void;
   /** Theatre of the mind (free form): the map and the pieces put away (true), or set out again for a story (false). */
   theatre?(on: boolean): void;
+  /** Your sheets (tell-adventure.ts, sheetPages), the stack by your left hand: written out again as they now stand. */
+  sheets?(pages: { heading: string; his: string[] }[]): void;
 }
 
 export type Stage = "start" | "fork" | "road" | "write" | "given" | "check" | "throw" | "told" | "camp" | "over";
@@ -177,10 +182,49 @@ export interface DirectOptions {
   battles?: boolean;
 }
 
-export const abilityCard = (a: Ability): SideCard => ({ id: `ability:${a.id}`, card: a.card, name: a.name, side: "perk" });
-export const markCard = (l: Lever): SideCard => ({ id: l.id, card: "token", name: l.name, side: "mark" });
+export const abilityCard = (a: Ability): SideCard => ({ id: `ability:${a.id}`, card: a.card, name: a.name, side: "perk", text: abilityCardText(a) });
+export const markCard = (l: Lever): SideCard => ({ id: l.id, card: "token", name: l.name, side: "mark", text: markCardText(l) });
 
-export function direct(adv: Adventure, sheet: Sheet, seed: string, table: Table, minds: Minds, opts: DirectOptions = {}): Director {
+export function direct(adv: Adventure, sheet: Sheet, seed: string, bare: Table, minds: Minds, opts: DirectOptions = {}): Director {
+  /** The words on a card dealt to your side, from what it is in the story, when it came without any. */
+  const texted = (c: SideCard): SideCard => {
+    const t = trip;
+    // An ability's card is written in your calling's words for its store ("heat", "nerve"), when it is yours.
+    const mine = c.side === "perk" ? t.abilities.find((x) => `ability:${x.id}` === c.id) : undefined;
+    if (mine) return { ...c, text: abilityCardText(mine, t.storeName) };
+    if (c.text) return c;
+    const text =
+      c.side === "perk" ? (() => { const a = t.abilities.find((x) => `ability:${x.id}` === c.id); return a ? abilityCardText(a, t.storeName) : undefined; })()
+      : c.side === "companion" ? (() => { const x = companionOf(t.adv, c.id); return x ? companionCardText(x) : undefined; })()
+      : c.side === "loot" ? (() => { const x = lootOf(t.adv, c.id); return x ? lootCardText(x) : undefined; })()
+      : c.side === "mark" ? (() => { const x = t.marks.find((m) => m.id === c.id); return x ? markCardText(x) : undefined; })()
+      : c.side === "courted" ? t.adv.courted?.who
+      : t.adv.rival ? `${t.adv.rival.who.replace(/[.]+$/, "")}. A dark seal goes on this card for every try of yours that fails; at ${t.adv.rival.max}, the rival has won.` : undefined;
+    return text ? { ...c, text } : c;
+  };
+  /** Your sheets follow the story: written out again whenever a page is handed over, or a card is dealt or taken. */
+  const sheetsNow = (): void => {
+    if (bare.sheets) bare.sheets(sheetPages(trip));
+  };
+  const table: Table = Object.assign(Object.create(bare) as Table, {
+    page: (w: { heading?: string; his: string[] }) => {
+      sheetsNow();
+      return bare.page(w);
+    },
+    give: async (c: SideCard) => {
+      await bare.give(texted(c));
+      sheetsNow();
+    },
+    take: async (id: string) => {
+      await bare.take(id);
+      sheetsNow();
+    },
+    offer: (cards: SideCard[]) => bare.offer(cards.map(texted)),
+    carry: async (before: Sheet | null, after: Sheet, paid: boolean) => {
+      await bare.carry(before, after, paid);
+      sheetsNow();
+    },
+  });
   const carry = (opts.carry ?? []).filter((l, i, all) => all.findIndex((x) => x.id === l.id) === i);
   // Who you say you are, and what you bring from an earlier story.
   const yours = (a: Adventure): Adventure => ({ ...a, ...(opts.who ? { who: opts.who } : {}), loot: [...a.loot.filter((l) => !carry.some((c) => c.id === l.id)), ...carry] });

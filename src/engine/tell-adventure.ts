@@ -3,7 +3,7 @@
  * the end. The table (preview/table.ts) and the text playthrough (scripts/adventure.ts) both speak through these,
  * so what is read in the script is what is said in the room.
  */
-import { FALL_HOURS, HEALTH_MAX, hubDone, placeName, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
+import { companionOf, FALL_HOURS, HEALTH_MAX, hubDone, lootOf, placeName, withParty, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
 import { cardKind, FAMILY_SAYS } from "./cards.js";
 import { coming, contestKind, type Contest, type ContestKind, type Dial, type Round } from "./contest.js";
 import { shapeOf, storeAt, type Ability } from "./abilities.js";
@@ -14,6 +14,7 @@ import { STATS, type Lever, type Way } from "./moment.js";
 import { TRY_HOURS } from "./moment.js";
 import { clock, KIND_SAYS, span, STAT_MEANS, STAT_NAME } from "./tell.js";
 import { kitLines, type TakenOut, type WorldKit } from "./kit.js";
+import { yourPiece } from "./battle.js";
 import { seededRng } from "./dice.js";
 
 const WAY_DOING: Record<Way, string> = { talk: "talk your way past", sneak: "slip by unseen", force: "go at a thing head on", pay: "pay your way" };
@@ -541,6 +542,62 @@ export function abilityRule(a: Ability, store = "store"): string {
 /** An ability in a sentence, for the first page: its kind, its name, what it looks like and what it does. */
 export function abilityLine(a: Ability, store = "store"): string {
   return `Your ${shapeOf(a)}, ${a.name}: ${a.looks.replace(/[.]+$/, "")}. ${abilityRule(a, store)}`;
+}
+
+/** What is written on an ability's card, under its picture: its kind, what it looks like, and what it does. */
+export function abilityCardText(a: Ability, store = "store"): string {
+  return `${cap(shapeOf(a))}. ${a.looks.replace(/[.]+$/, "")}. ${abilityRule(a, store)}`;
+}
+
+/** What is written on a companion's card: who they are, the stat they lift, and what they like and hate. */
+export function companionCardText(c: Companion): string {
+  return `${c.who.replace(/[.]+$/, "")}. Your ${STAT_NAME[c.stat]} counts one higher. Likes it when you ${WAY_DOING[c.likes]}; hates it when you ${WAY_DOING[c.dislikes]}.`;
+}
+
+/** What is written on a thing you keep. */
+export const lootCardText = (l: { way: Way }): string => `Use it to ${WAY_OPEN[l.way]}: that try is one step easier, once.`;
+
+/** What is written on the slip of a mark you made. */
+export const markCardText = (l: Lever): string => `Something to lean on when you ${WAY_OPEN[l.way]}: that try is a step easier${(l.uses ?? 1) > 1 ? `, ${l.uses} times` : ", once"}.${l.edge ? " In a fight it counts one more against a foe." : ""}`;
+
+/**
+ * Your sheets, the stack by your left hand that you can pick up and leaf through: who you are and how you stand,
+ * what you can do, who walks with you, and what you carry. Set out again whenever any of it changes.
+ */
+export function sheetPages(t: Trip): { heading: string; his: string[] }[] {
+  const s = t.sheet;
+  const store = t.storeName ?? "store";
+  const st = s.stats;
+  const me = yourPiece({ id: "you", name: "you", stats: st, at: [0, 0], level: t.level });
+  const statLines = [...STATS.map((k) => `${STAT_NAME[k]} ${st[k]}: ${STAT_MEANS[k]}.`), ...(typeof st.power === "number" ? [`${s.powerName ?? "Power"} ${st.power}.`] : [])];
+  const pages: { heading: string; his: string[] }[] = [
+    {
+      heading: "Who you are",
+      his: [
+        t.adv.who,
+        `Level ${t.level}. Health ${s.health} of ${HEALTH_MAX}. Supplies ${s.supplies}. Goodwill ${s.goodwill}. ${cap(store)} ${s.store ?? 0} of ${storeAt(t.level)}.`,
+        `Your strengths, each out of 4:\n${statLines.join("\n")}`,
+        `In a fight: Stamina ${me.stamina}, Composure ${me.composure}, Defense ${me.defense}.`,
+      ],
+    },
+  ];
+  // What you can do, four to a page, so each can be read.
+  const can = [...t.abilities.map((a) => abilityLine(a, store)), storeLine(store, s.store ?? 0)];
+  for (let i = 0; i < can.length; i += 4) pages.push({ heading: i ? "What you can do, more" : "What you can do", his: can.slice(i, i + 4) });
+  const with_ = withParty(t).map((id) => companionOf(t.adv, id)).filter((c): c is Companion => !!c);
+  const people = [
+    ...with_.map((c) => `${c.name}: ${companionCardText(c)}`),
+    ...(t.adv.courted ? [`${t.adv.courted.name}, whom you would win: ${t.adv.courted.who.replace(/[.]+$/, "")}.`] : []),
+    ...(t.adv.rival ? [`${t.adv.rival.name}, your rival: ${t.rival} of ${t.adv.rival.max} seals.`] : []),
+  ];
+  pages.push({ heading: "Who walks with you", his: people.length ? people : ["No one. You go alone."] });
+  const things = [
+    ...t.kept.map((id) => lootOf(t.adv, id)).filter((l) => !!l).map((l) => `${l!.name}. ${lootCardText(l!)}`),
+    ...t.marks.map((l) => `${l.name}. ${markCardText(l)}`),
+    ...(t.against ?? []).map((a) => `Against you, the narrator's slip: ${a.name}. Your next try to ${WAY_OPEN[a.way]} throws two dice, and the worse counts.`),
+  ];
+  pages.push({ heading: "What you carry", his: things.length ? things : ["Nothing yet but what you stand up in."] });
+  return pages;
 }
 
 /** The store in a sentence (docs/SYSTEMS.md, 2.2). */

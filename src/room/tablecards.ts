@@ -1,13 +1,14 @@
 /**
  * The cards on the table (docs/DESIGN.md, 1.7). They are the narrator's: it deals the road face down onto the map,
  * turns a stop's card when you get there, takes it away when you are past, lays two out when the road splits, and
- * deals what you gain to your side of the table, face up. You never play a card; you touch one only to pick a road.
+ * deals what you gain to your side of the table, face up. You never play a card; you touch one to pick a road, or to
+ * pick up one on your side and hold it up to read what is written on it.
  *
  * Every card moves in the narrator's fingers: the hand reaches it, closes, carries it, lets go. With motion reduced
  * the moves take no time.
  */
 import { sound } from "./sound.js";
-import { BoxGeometry, CanvasTexture, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, SRGBColorSpace, Vector3, type Material } from "three";
+import { BoxGeometry, CanvasTexture, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, SRGBColorSpace, Vector3, type Material, type PerspectiveCamera } from "three";
 import { cardKind, type CardFamily } from "../engine/cards.js";
 import { cardBack, cardFace } from "./cardart.js";
 import { ease, Held, type Reacher, type Step, type Tracks } from "./track.js";
@@ -23,6 +24,8 @@ type Hands = Reacher & { close?(arm: number, on?: "pinch" | "grasp"): void; rele
 
 export interface CardHost {
   narrator: Hands;
+  /** Your eyes: a card you pick up to read is held up in front of them. */
+  camera: PerspectiveCamera;
   tracks: Tracks;
   /** Where a stop is on the map, in the room. */
   stop(id: string): Vector3 | undefined;
@@ -53,6 +56,9 @@ const RIVAL = V(-0.325, 0.0012, -0.543);
 /** Your side: a short row in front of the map, between the counters and the pile of pages. */
 const SIDE = V(0.005, 0.0012, 0.31);
 const SIDE_STEP = 0.028;
+/** How far in front of your eyes a card is held up to be read (nearer than your drawn hands, 0.42), and how much of the view's height it fills. */
+const EYE_D = 0.3;
+const EYE_FILL = 0.8;
 
 export interface CardSpec {
   id: string;
@@ -60,6 +66,8 @@ export interface CardSpec {
   kind: string;
   /** A name written on its face. */
   name?: string;
+  /** What is written on it under the picture: what it is and what it does. */
+  text?: string;
 }
 
 class Card {
@@ -78,7 +86,7 @@ class Card {
       this.textures.push(t);
       return t;
     };
-    const face = tex(cardFace(spec.kind, spec.name));
+    const face = tex(cardFace(spec.kind, spec.name, spec.text));
     const back = tex(cardBack(this.family));
     // A card gives back a little of its own light, so it can be made out in a dark room.
     const m = (t: CanvasTexture): MeshStandardMaterial => {
@@ -132,6 +140,11 @@ export class TableCards {
   /** True while the narrator's hand is at the deck, so the other waits its turn. */
   private atDeck = false;
   private hoverK = [0, 0];
+  /** Which card on your side the pointer is over, or -1: it brightens, to show it can be picked up. */
+  sideHover = -1;
+  /** The card on your side held up to your eyes to be read, and whether it is on its way up or down. */
+  private eyed: Card | null = null;
+  private eyeBusy: Promise<void> = Promise.resolve();
 
   constructor(private h: CardHost) {
     const back = cardBack("place");
@@ -163,7 +176,7 @@ export class TableCards {
   /* ----------------------------------- moves ---------------------------------- */
 
   /** @param arm the narrator's hand that has it, if one does: the card then goes where those fingers go (track.ts, Held). */
-  private fly(obj: Mesh | Group, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void, arm?: number): Step {
+  private fly(obj: Mesh | Group, to: () => Pose, dur: number, lift = 0, also?: (u: number) => void, arm?: number, pat = true): Step {
     const p0 = V(0, 0, 0), q0 = new Quaternion();
     let dst: Pose;
     let landed = false;
@@ -190,7 +203,7 @@ export class TableCards {
         if (u >= 1 && !landed && (held?.there ?? true)) {
           landed = true;
           // Held up to be looked at is not laid down.
-          if (dst.p.y < 0.05) sound.play("pat", { x: dst.p.x });
+          if (pat && dst.p.y < 0.05) sound.play("pat", { x: dst.p.x });
         }
       },
     };
@@ -416,6 +429,68 @@ export class TableCards {
     return { p: SIDE.clone().add(V(i * SIDE_STEP, i * 0.0004, ((i * 7) % 3) * 0.003)), q: UP((((i * 5) % 5) - 2) * 0.04) };
   }
 
+  /** Where each card on your side is, for the pointer. */
+  sideAt(): Vector3[] {
+    return this.side.filter((c) => c !== this.eyed).map((c) => c.mesh.getWorldPosition(new Vector3()));
+  }
+
+  /** True while a card is held up to your eyes. */
+  get looking(): boolean {
+    return !!this.eyed;
+  }
+
+  /** Which card on your side is held up to your eyes, or -1. */
+  get lookingAt(): number {
+    return this.eyed ? this.side.indexOf(this.eyed) : -1;
+  }
+
+  /** Where a card is held up to be read, in your eyes' own space: upright, as large as the view allows. */
+  private eyePose(): { pose: Pose; scale: number } {
+    const cam = this.h.camera;
+    const half = Math.tan((cam.fov * Math.PI) / 360);
+    const scale = Math.min((EYE_FILL * 2 * EYE_D * half) / CARD_H, (0.86 * 2 * EYE_D * half * cam.aspect) / CARD_W);
+    // Face toward you, the top of its picture up, leaning back a little.
+    return { pose: { p: V(0, -0.004, -EYE_D), q: Q(Math.PI / 2 - 0.06, 0, 0) }, scale };
+  }
+
+  /**
+   * Pick up the i-th card on your side and hold it up to your eyes, large enough to read what is written on it; with
+   * another card up, that one goes back first. Asking for the one already up leaves it there.
+   */
+  look(i: number): Promise<void> {
+    this.eyeBusy = this.eyeBusy.then(async () => {
+      const card = this.side[Math.max(0, Math.min(this.side.length - 1, i))];
+      if (!card) return;
+      if (this.eyed === card) return;
+      if (this.eyed) await this.down();
+      this.eyed = card;
+      this.sideHover = -1;
+      const s0 = card.mesh.scale.x;
+      this.h.camera.attach(card.mesh);
+      const { pose, scale } = this.eyePose();
+      await this.h.tracks.run([this.fly(card.mesh, () => pose, 0.45, 0, (u) => card.mesh.scale.setScalar(s0 + (scale - s0) * ease(u)), undefined, false)]);
+    });
+    return this.eyeBusy;
+  }
+
+  /** Put the card held up to your eyes back where it lay on your side. */
+  unlook(): Promise<void> {
+    if (!this.eyed) return this.eyeBusy;
+    this.eyeBusy = this.eyeBusy.then(() => this.down());
+    return this.eyeBusy;
+  }
+
+  private async down(): Promise<void> {
+    const card = this.eyed;
+    if (!card) return;
+    this.eyed = null;
+    const i = this.side.indexOf(card);
+    this.group.attach(card.mesh);
+    const s0 = card.mesh.scale.x;
+    const to = i >= 0 ? this.sideSlot(i) : { p: this.deckTop(), q: DOWN(this.deck.rotation.y) };
+    await this.h.tracks.run([this.fly(card.mesh, () => to, 0.4, 0.02, (u) => card.mesh.scale.setScalar(s0 + (SIDE_SCALE - s0) * ease(u)))]);
+  }
+
   /** Where a laid-out card is, for the pointer. */
   laid(i: number): Vector3 | null {
     return this.fork[i]?.mesh.position ?? null;
@@ -451,6 +526,7 @@ export class TableCards {
 
   /** A card on your side goes back to the narrator. */
   async take(id: string): Promise<void> {
+    await this.unlook();
     const i = this.side.findIndex((c) => c.spec.id === id);
     if (i < 0) return;
     const card = this.side[i]!;
@@ -517,6 +593,7 @@ export class TableCards {
    * with its seals, one after another, so the table is bare for the next story.
    */
   async sweep(): Promise<void> {
+    await this.unlook();
     const cards = [...this.road.values(), ...this.side, ...(this.rivalCard ? [this.rivalCard] : [])];
     const seals = this.seals;
     this.road.clear();
@@ -613,6 +690,8 @@ export class TableCards {
   }
 
   update(dt: number, reduced: boolean): void {
+    // A card on your side under the pointer brightens; the one held up to be read is lit to be read.
+    this.side.forEach((c, i) => (c.glow = c === this.eyed ? 0.5 : i === this.sideHover ? 0.22 : 0));
     // The laid-out card under the pointer lifts a little and brightens.
     this.fork.forEach((c, i) => {
       const want = this.choosing && this.hover === i ? 1 : 0;
