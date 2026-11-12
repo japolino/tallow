@@ -21,6 +21,7 @@ import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMe
 import { refused } from "../engine/content.js";
 import { laid, type Keeper, type Told, type Voice } from "./voice.js";
 import { parseSceneLine, sceneLineMessages, sceneTellMessages } from "./scenewriter.js";
+import { REVISE_MS, reviseScenes } from "./lastingwriter.js";
 
 /** How long a scene's telling may run without a preset, in characters. */
 const SCENE_TELL = 900;
@@ -235,7 +236,8 @@ ${note}`, { voiced: !!v })));
       // The line's whole reading is one answer, kept whole or asked once more: there is no stock reading worth having.
       for (let i = 0; i < 2; i++) {
         try {
-          const r = parseSceneLine(await within(ask(sceneLineMessages(line, c), "reader"), ms), c);
+          // A try kept whole whose ask did not check is played at the scene, and says so.
+          const r = parseSceneLine(await within(ask(sceneLineMessages(line, c), "reader"), ms), c, (why) => fell("scene line", `the try was kept, but not what it was after: ${why}`));
           if (r) return r;
           fell("scene line", "answer did not check");
         } catch (e) {
@@ -258,6 +260,11 @@ ${wrote ?? ""}`, { voiced: !!v })), SCENE_TELL);
         }
       }
       return "";
+    },
+    async sceneRevise(story, from, truths) {
+      const got = await reviseScenes((m, role) => within(ask(m, role), REVISE_MS), story, from, truths, (why) => fell("scene revise", why));
+      if (!got.length) fell("scene revise", "no scene written again checked: the scenes stay as they were");
+      return got;
     },
     async content(line, s) {
       try {

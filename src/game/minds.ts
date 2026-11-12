@@ -15,7 +15,7 @@ import { lookSaid } from "../engine/tell.js";
 import type { LineRead, Person } from "../engine/people.js";
 import type { ContentSettings } from "../engine/content.js";
 import { askLike, rulesReading } from "../meaning/read.js";
-import type { SceneLine } from "../engine/hand.js";
+import type { Scene, SceneLine, SceneStory } from "../engine/hand.js";
 import type { SceneContext } from "./scenewriter.js";
 
 /**
@@ -117,6 +117,11 @@ export interface Minds {
    * note of what must be true. Empty when no model can, and code's own words stand.
    */
   sceneTell?(at: { name: string; situation: string }, note: string, wrote?: string): Promise<string>;
+  /**
+   * In a story of scenes: the scenes from `from` on written again to fit what tries have won (`truths`, engine/lasting.ts),
+   * each checked as the builder's are. Those that do not check are left out, and stay as they were.
+   */
+  sceneRevise?(story: SceneStory, from: number, truths: readonly string[]): Promise<Scene[]>;
 }
 
 /**

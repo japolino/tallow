@@ -7,7 +7,10 @@
  *   bun --env-file=.env.local scripts/play-real.ts --card card.json --lines lines.txt [--seed s]
  *
  * lines.txt has one player line per line; when they run out, the night ends. A line that starts with "FORK:" is kept
- * for the next fork in a story, and only for a fork.
+ * for the next fork in a story, and only for a fork. One that starts with "DIE:" is kept for the next die spent in a
+ * story of scenes: "high", "low", "mid", or the die's number (the best die when there is none).
+ *
+ * Cards given and taken are printed, and at the end how many calls each job made and how long they took.
  */
 import { readFileSync } from "node:fs";
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
@@ -32,13 +35,22 @@ const t0 = Date.now();
 const at = (): string => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
 const out = (s: string): void => console.log(s);
 
+/** Calls and milliseconds by job: the role, and the scenes written again told apart from the builder's first story. */
+const calls: Record<string, { n: number; ms: number }> = {};
+const jobOf = (messages: Message[], role: Role): string => (messages[0]?.content.includes("keep a short tabletop story true") ? "revise" : role);
+
 const ask = async (messages: Message[], role: Role): Promise<string> => {
   const model = role === "reader" ? env.CHAT_MODEL_FAST! : env.CHAT_MODEL_STRONG!;
   const s = Date.now();
+  const job = jobOf(messages, role);
+  const tally = (calls[job] ??= { n: 0, ms: 0 });
+  tally.n++;
   const r = await fetch(env.CHAT_URL!, { method: "POST", headers: { Authorization: `Bearer ${env.CHAT_API_KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ model, messages }), signal: AbortSignal.timeout(90_000) });
   const j = (await r.json()) as { choices?: { message?: { content?: string } }[] };
   const text = j.choices?.[0]?.message?.content ?? "";
-  out(`    (${role} on ${model}, ${Date.now() - s} ms${text ? "" : `: ${JSON.stringify(j).slice(0, 160)}`})`);
+  tally.ms += Date.now() - s;
+  out(`    (${job} on ${model}, ${Date.now() - s} ms${text ? "" : `: ${JSON.stringify(j).slice(0, 160)}`})`);
+  if (job === "revise" || (job === "reader" && /"own"\s*:\s*\{/.test(text))) out(`    (${job} said: ${text.replace(/\s+/g, " ").slice(0, 900)})`);
   if (!text) throw new Error("no answer");
   return text;
 };
@@ -62,7 +74,7 @@ const table = {
     for (const x of l) out(`NARRATOR: ${x}`);
   },
   async write() {
-    const i = lines.findIndex((l) => !l.startsWith("FORK:"));
+    const i = lines.findIndex((l) => !l.startsWith("FORK:") && !l.startsWith("DIE:"));
     const line = i >= 0 ? lines.splice(i, 1)[0]! : "done for tonight";
     out(`\n[${at()}] YOU: ${line}`);
     return { line, given: Promise.resolve() };
@@ -110,8 +122,23 @@ const table = {
   async offer() {
     return 0;
   },
-  async give() {},
-  async take() {},
+  async hand(dice: readonly number[]) {
+    if (dice.length) out(`[hand: ${dice.join(", ")}]`);
+  },
+  async pickDie(dice: readonly number[]) {
+    const i = lines.findIndex((l) => l.startsWith("DIE:"));
+    const want = i >= 0 ? lines.splice(i, 1)[0]!.slice(4).trim().toLowerCase() : "high";
+    const sorted = [...dice].sort((a, b) => a - b);
+    const value = want === "low" ? sorted[0]! : want === "mid" ? sorted[Math.floor(sorted.length / 2)]! : /^\d+$/.test(want) && dice.includes(Number(want)) ? Number(want) : sorted.at(-1)!;
+    out(`[${at()}] YOU spend the ${value} (${want})`);
+    return dice.indexOf(value);
+  },
+  async give(c: { id: string; side: string; name: string; text?: string }) {
+    out(`[card given: ${c.side} / ${c.name} (${c.id})${c.text ? `: ${c.text}` : ""}]`);
+  },
+  async take(id: string) {
+    out(`[card taken: ${id}]`);
+  },
   async rival() {},
   async move() {},
   theatre() {},
@@ -120,3 +147,4 @@ const table = {
 const minds = modelMinds(ask, { decide, onFallback: (job, why) => out(`    [FELL BACK: ${job}: ${why}]`) });
 await sit({ card, seed: arg("seed") ?? "real-1", table, minds, ask, fellBack: (job, why) => out(`    [NOT TAKEN: ${job}: ${why}]`) });
 out(`\n[${at()}] over.`);
+out(Object.entries(calls).map(([k, v]) => `${k}: ${v.n} calls, ${(v.ms / 1000).toFixed(1)} s`).join("\n"));

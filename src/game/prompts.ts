@@ -16,6 +16,7 @@ import type { Trade } from "../engine/effect.js";
 import { SETUP_VERBS } from "../meaning/read.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
 import { STAT_MEANS } from "../engine/tell.js";
+import { truthsSaid } from "../engine/tell-lasting.js";
 
 export interface Message {
   role: "system" | "user" | "assistant";
@@ -467,6 +468,8 @@ export function epilogueMessages(t: Trip, ctx: TellContext = {}): Message[] {
     `The story: ${t.adv.title}. ${t.adv.goal}`,
     t.adv.courted ? `The one courted: ${t.adv.courted.name}, ${t.adv.courted.who}` : "",
     company.length ? `With the player at the end: ${company.join("; ")}.` : "",
+    // What tries won in a story of scenes is part of what became of everyone (engine/lasting.ts).
+    ...truthsSaid(t).map((x) => `What became true in the story: ${x}`),
     `Places they went: ${t.visited.map((id) => placeName(t.adv, id)).join(", ") || "none"}.`,
     `How it ended: ${endSaid(t)[0]}`,
     ctx.who ? `The player: ${ctx.who}` : "",

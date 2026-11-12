@@ -6,6 +6,7 @@
 import { HEALTH_MAX, REST_HEALS, REST_HOURS, type Trip } from "./adventure.js";
 import { bandOf, comesTo, GRIP_MAX, HAND_SIZE, sceneNow, STEP, thingsNow, THROUGH_MAX, TRADE_PRICE, type Band, type Entered, type HandRest, type Left, type Loss, type Priced, type Scene, type Spent, type TradeKind } from "./hand.js";
 import { STATS, type CostKind } from "./moment.js";
+import { askStakeSaid, companyEndSaid, companySaid, truthsSaid } from "./tell-lasting.js";
 import { clock, DIFFICULTY_NAME, span, STAT_NAME, statName } from "./tell.js";
 
 const and = (xs: readonly (string | number)[]): string => (xs.length <= 1 ? String(xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
@@ -94,7 +95,9 @@ function standing(t: Trip, scene: Scene): string {
   const h = t.hand;
   const lost = h?.lost.length ? ` Earlier in this story, and still true: ${h.lost.join(" ")}` : "";
   const who = scene.person ? ` Here: ${scene.person.name}, ${scene.person.who} They want: ${scene.person.wants}` : "";
-  return `The scene: ${scene.situation}${who} What the player is here to do: ${scene.through} What closes on them as it goes wrong: ${scene.closing} So far they are ${h?.through ?? 0} of ${THROUGH_MAX} steps through, and it has closed ${h?.grip ?? 0} of ${GRIP_MAX} on them.${lost}`;
+  // What tries have won stays true in every telling after, and whoever goes with the player is in the scene as themselves (lasting.ts).
+  const won = [...truthsSaid(t), ...companySaid(t)].map((x) => ` ${x}`).join("");
+  return `The scene: ${scene.situation}${who} What the player is here to do: ${scene.through} What closes on them as it goes wrong: ${scene.closing} So far they are ${h?.through ?? 0} of ${THROUGH_MAX} steps through, and it has closed ${h?.grip ?? 0} of ${GRIP_MAX} on them.${lost}${won}`;
 }
 
 /** What a narrator model must show to open a scene. */
@@ -122,11 +125,12 @@ export function spentNote(s: Spent, scene: Scene): string {
   const parts = [
     `The player tried this: ${p.attempt || "what they wrote"}${p.using ? `, using ${p.using.name}` : ""}.`,
     BAND_NOTE[s.band],
-    s.gain ? (p.aim === "loose" ? `They get ${steps(s.gain)} loose of what was closing on them.` : `It takes them ${steps(s.gain)} of ${THROUGH_MAX} toward this: ${scene.through}`) : "They are no further through.",
+    // A try at something of the player's own moves no step through the scene: what it won is told by its own note (tell-lasting.ts).
+    p.aim === "own" ? "" : s.gain ? (p.aim === "loose" ? `They get ${steps(s.gain)} loose of what was closing on them.` : `It takes them ${steps(s.gain)} of ${THROUGH_MAX} toward getting through this scene, by what they did: their own way of going about it counts, whether or not it is the way the scene was written for (${scene.through.replace(/[.!\s]+$/, "")}).`) : "They are no further through.",
     s.closed > 0 ? `The scene closes on them by ${steps(s.closed)}: ${scene.closing} What happens to them, shown as it happens: ${p.threat}` : "",
     s.losses.length ? `It costs them ${and(s.losses.map(lossSaid))}: show how.` : "",
     s.traded ? `They chose to give up ${TRADE_PRICE[s.traded]} ${STAKE_OF[s.traded]} to make it land: show the price they paid for it.` : "",
-    s.scene === "won" ? `That is enough: they are through. Show it done: ${scene.through}` : s.scene === "taken" ? `It has closed on them altogether. Show it going the scene's way, not theirs: ${scene.taken}` : "The scene is not over: stop where they can act again, and do not settle the rest of it.",
+    s.scene === "won" ? `That is enough: they are through. Show it done, by the way they went about it: ${scene.through}` : s.scene === "taken" ? `It has closed on them altogether. Show it going the scene's way, not theirs: ${scene.taken}` : "The scene is not over: stop where they can act again, and do not settle the rest of it.",
     `Before this they were ${Math.max(0, (h?.through ?? 0) - (p.aim === "through" ? s.gain : 0))} of ${THROUGH_MAX} through. The scene: ${scene.situation}${scene.person ? ` Here: ${scene.person.name}, ${scene.person.who}` : ""}`,
   ];
   return parts.filter(Boolean).join(" ");
@@ -145,6 +149,8 @@ export function spentPlain(s: Spent): string {
 export function stakeSaid(t: Trip, p: Priced): string[] {
   const scene = sceneNow(t);
   const dice = t.hand?.dice ?? [];
+  // A try at something of the player's own says what it is after, what makes it hard, and what each band would make true.
+  if (p.aim === "own" && p.own) return [...askStakeSaid(t, p), `Your dice: ${dice.map((d, i) => `the ${d} ${BAND_SAYS[p.bands[i] ?? "fail"]}`).join("; ")}.`, "Which die do you spend on it? Touch it, or write its number. Or write something else, and this is left alone."];
   const fail = comesTo(p.risk, "fail");
   const gain = comesTo(p.risk, "clean").gain;
   const need = p.add ? `the die plus ${p.add} must reach ${p.target}` : `the die alone must reach ${p.target}`;
@@ -209,9 +215,11 @@ export function handRestSaid(r: HandRest): string[] {
 /** Said when a story of scenes is over. */
 export function handEndSaid(t: Trip): string[] {
   const adv = t.adv;
-  if (t.over === "won") return [adv.won, "That is the story, and you won it."];
-  if (t.over === "taken") return [adv.scenes?.scenes.at(-1)?.taken ?? "", adv.deadline.lost, "That is the story, and it went against you."].filter(Boolean);
-  return [`It is ${clock(t.sheet.hour)}: ${adv.deadline.name} has come.`, adv.deadline.lost, "That is the story, and it went against you."];
+  const company = companyEndSaid(t);
+  if (t.over === "won") return [adv.won, ...company, "That is the story, and you won it."];
+  if (t.hand?.walked) return [adv.deadline.lost, ...company, "That is the story, and you walked away from it."];
+  if (t.over === "taken") return [adv.scenes?.scenes.at(-1)?.taken ?? "", adv.deadline.lost, ...company, "That is the story, and it went against you."].filter(Boolean);
+  return [`It is ${clock(t.sheet.hour)}: ${adv.deadline.name} has come.`, adv.deadline.lost, ...company, "That is the story, and it went against you."];
 }
 
 /** The last page. */

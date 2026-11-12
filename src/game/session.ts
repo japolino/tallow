@@ -30,6 +30,7 @@ import { KIND, MINOR, SETTING } from "./decisions.js";
 import { campaignBy, contentBy, someoneNewBy } from "./meaning.js";
 import { abilityCard, direct, type Director, type Table, type Written } from "./director.js";
 import { sceneAdventure } from "../engine/hand.js";
+import { companyKept, type Carried } from "../engine/lasting.js";
 import { directScenes } from "./scenes.js";
 import { writeScenes } from "./scenewriter.js";
 import { roam } from "./free.js";
@@ -55,6 +56,8 @@ export interface Kept {
   payoffs?: Payoff[];
   /** Goals of your own still under way (project.ts), to go on with in the next story. A favour stays with its story. */
   projects?: Project[];
+  /** Whoever a try won to go with you in a story of scenes (engine/lasting.ts), still with you at its end: with you in the next. */
+  company?: Carried[];
 }
 
 /** How long a model is given to write a big bad before the stock one is used. */
@@ -447,7 +450,9 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     await table.sweep?.();
     const grown: Hero = { ...hero, abilities: t.abilities.map((a) => ({ ...a })), level: t.level };
     const projects = (t.projects ?? []).filter((p) => !p.id.startsWith("favour:") && p.filled < p.segments);
-    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.scenes ? `${SCENES_PLAYED}${t.adv.title}` : t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}), ...(projects.length ? { projects } : {}) };
+    // Whoever went with you to the end of a story of scenes goes on with you; a road story leaves them as they were.
+    const company = t.adv.scenes ? companyKept(t) : (kept0?.company ?? []);
+    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.scenes ? `${SCENES_PLAYED}${t.adv.title}` : t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}), ...(projects.length ? { projects } : {}), ...(company.length ? { company } : {}) };
     o.keep?.(next);
     return next;
   };
@@ -531,16 +536,17 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     const seed = stories ? `${o.seed}:${stories}` : o.seed;
     const kitP = writeKit(o.ask, cardText(card, 3000), content ?? DEFAULT_CONTENT, () => kitFor(card, modern ?? modernCard(card), content), { asked: askedFor, ...(modern !== undefined ? { modern } : {}) });
     const before = (kept?.played ?? []).filter((p) => p.startsWith(SCENES_PLAYED)).map((p) => p.slice(SCENES_PLAYED.length));
+    const company = kept && !someoneNew ? (kept.company ?? []) : [];
     const writing: { p?: ReturnType<typeof writeScenes> } = {};
     // Written once you have said who you are, from that and from what you asked for, while your words are read into your sheet.
-    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before }, content ?? DEFAULT_CONTENT, (why) => o.fellBack?.("story of scenes", why))));
+    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before, company: company.map((c) => `${c.name}, ${c.who}`) }, content ?? DEFAULT_CONTENT, (why) => o.fellBack?.("story of scenes", why))));
     const hero = await whoYouAre(someoneNew, start);
     const story = await table.wait("deal", writing.p ?? start(hero.who));
     if (!story) return { hero };
     const kit = await kitP;
     const adv = sceneAdventure(story, { seed, who: hero.who, kit, ...(content ? { content } : {}) });
     o.built?.(adv);
-    const d = directScenes(adv, inKit({ ...hero.sheet, ...START }, kit), seed, table, o.minds, { abilities: hero.abilities ?? [], level: hero.level ?? 1, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(o.save ? { save: o.save } : {}) });
+    const d = directScenes(adv, inKit({ ...hero.sheet, ...START }, kit), seed, table, o.minds, { abilities: hero.abilities ?? [], level: hero.level ?? 1, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(o.save ? { save: o.save } : {}), ...(company.length ? { company } : {}) });
     o.started?.(d);
     last = await d.done;
     // Left for tonight in the middle of it: kept as it stood (scenes.ts saved it).

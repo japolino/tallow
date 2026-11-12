@@ -23,6 +23,7 @@ import { ageFrom, type ContentSettings } from "./content.js";
 import type { Contest } from "./contest.js";
 import { d20Tier, rollD20, seededRng } from "./dice.js";
 import type { WorldKit } from "./kit.js";
+import type { Lasting, OwnRead } from "./lasting.js";
 import { PARTIAL, TARGETS, TRY_HOURS, WAYS, type CostKind, type Difficulty, type Sheet, type Stat } from "./moment.js";
 
 /* ------------------------------ the numbers ------------------------------ */
@@ -45,9 +46,12 @@ export const STEP = 3;
 /** How much a try puts at risk, judged by the reader from the line and the scene. More risked, more gained. */
 export type Risk = "slight" | "real" | "grave";
 export const RISKS: readonly Risk[] = ["slight", "real", "grave"];
-/** What a try is for: getting through the scene, or getting loose of what is closing on you. */
-export type Aim = "through" | "loose";
-export const AIMS: readonly Aim[] = ["through", "loose"];
+/**
+ * What a try is for: getting through the scene, getting loose of what is closing on you, or something of the player's
+ * own that would stay true beyond the scene (lasting.ts): someone won over, a promise, a thing, a change in the world.
+ */
+export type Aim = "through" | "loose" | "own";
+export const AIMS: readonly Aim[] = ["through", "loose", "own"];
 /** What a failure can cost (moment.ts). */
 export const STAKES: readonly CostKind[] = ["health", "supplies", "goodwill", "hours"];
 
@@ -133,6 +137,10 @@ export interface HandState {
   lost: string[];
   /** Whether the scene in play has been come to. False between scenes. */
   opened: boolean;
+  /** What tries have won that stays won, who is with you, and how the people you have met stand with you (lasting.ts). */
+  lasting?: Lasting;
+  /** The player walked away from the last scene, and so from the story (lasting.ts, walkAway). */
+  walked?: boolean;
 }
 
 /**
@@ -178,37 +186,49 @@ export function checkSceneStory(raw: unknown, why?: (reason: string) => void): S
   for (const [k, v] of Object.entries(top)) if (!v) return no(`"${k}" ${wrong(o[k])}`);
   const scenes: Scene[] = [];
   for (const [i, rawScene] of o.scenes.entries()) {
-    const s = obj(rawScene);
-    if (!s) return no(`scene ${i + 1} is not a scene`);
-    const id = `s${i + 1}`;
-    const parts = {
-      name: label(s.name, 48),
-      face: label(s.face, 36),
-      situation: plain(s.situation, 2400, 40),
-      through: plain(s.through, 500, 6),
-      closing: plain(s.closing, 500, 6),
-      taken: plain(s.taken, 700, 6),
-      boon: plain(s.boon, 160),
-    };
-    for (const [k, v] of Object.entries(parts)) if (!v) return no(`scene ${i + 1}: "${k}" ${wrong(s[k])}`);
-    // Three were asked for: more than three and the first three are the scene's; fewer than two is not a scene to play.
-    const things = (Array.isArray(s.things) ? s.things : []).slice(0, 3).map((t) => plain(t, 160));
-    if (things.length < 2) return no(`scene ${i + 1}: it has ${things.length} things to use, not two or three`);
-    const bad = things.findIndex((t) => !t);
-    if (bad >= 0) return no(`scene ${i + 1}: thing ${bad + 1} ${wrong((s.things as unknown[])[bad])}`);
-    let person: Scene["person"];
-    if (s.person !== undefined && s.person !== null) {
-      const p = obj(s.person);
-      const pn = label(p?.name, 48);
-      const who = plain(p?.who, 600, 4);
-      const wants = plain(p?.wants, 600, 4);
-      if (!p || !pn || !who || !wants) return no(`scene ${i + 1}: its person ${!p ? "is not a person" : !pn ? `has a name that ${wrong(p.name)}` : !who ? `has a "who" that ${wrong(p.who)}` : `has a "wants" that ${wrong(p.wants)}`}`);
-      person = { name: pn, who, wants, ...(typeof p.age === "string" ? { age: p.age.slice(0, 20) } : {}) };
-    }
-    scenes.push({ id, name: parts.name!, card: sceneCard(s.card, !!person), face: parts.face!, situation: parts.situation!, ...(person ? { person } : {}), through: parts.through!, closing: parts.closing!, taken: parts.taken!, things: things.map((t, j) => ({ id: `${id}-t${j + 1}`, name: t! })), boon: parts.boon!, difficulty: SCENE_DIFFICULTY[i] ?? 1 });
+    const scene = checkScene(rawScene, i, why);
+    if (!scene) return null;
+    scenes.push(scene);
   }
   if (new Set(scenes.map((s) => s.name.toLowerCase())).size !== scenes.length) return no("two scenes have the same name");
   return { title: top.title!, goal: top.goal!, won: top.won!, lost: top.lost!, by: top.by!, scenes };
+}
+
+/**
+ * One scene as a model wrote it, the `i`th of its story, checked as `checkSceneStory` checks every scene: every part
+ * there in words of its own. Also used for a scene written again later to fit what has become true (lasting.ts).
+ */
+export function checkScene(rawScene: unknown, i: number, why?: (reason: string) => void): Scene | null {
+  const no = (reason: string): null => (why?.(reason), null);
+  const wrong = (v: unknown): string => (typeof v !== "string" ? "is missing" : /[{}<>]/.test(v) ? "still has a note's brackets in it" : `is ${v.trim().length} characters`);
+  const s = obj(rawScene);
+  if (!s) return no(`scene ${i + 1} is not a scene`);
+  const id = `s${i + 1}`;
+  const parts = {
+    name: label(s.name, 48),
+    face: label(s.face, 36),
+    situation: plain(s.situation, 2400, 40),
+    through: plain(s.through, 500, 6),
+    closing: plain(s.closing, 500, 6),
+    taken: plain(s.taken, 700, 6),
+    boon: plain(s.boon, 160),
+  };
+  for (const [k, v] of Object.entries(parts)) if (!v) return no(`scene ${i + 1}: "${k}" ${wrong(s[k])}`);
+  // Three were asked for: more than three and the first three are the scene's; fewer than two is not a scene to play.
+  const things = (Array.isArray(s.things) ? s.things : []).slice(0, 3).map((t) => plain(t, 160));
+  if (things.length < 2) return no(`scene ${i + 1}: it has ${things.length} things to use, not two or three`);
+  const bad = things.findIndex((t) => !t);
+  if (bad >= 0) return no(`scene ${i + 1}: thing ${bad + 1} ${wrong((s.things as unknown[])[bad])}`);
+  let person: Scene["person"];
+  if (s.person !== undefined && s.person !== null) {
+    const p = obj(s.person);
+    const pn = label(p?.name, 48);
+    const who = plain(p?.who, 600, 4);
+    const wants = plain(p?.wants, 600, 4);
+    if (!p || !pn || !who || !wants) return no(`scene ${i + 1}: its person ${!p ? "is not a person" : !pn ? `has a name that ${wrong(p.name)}` : !who ? `has a "who" that ${wrong(p.who)}` : `has a "wants" that ${wrong(p.wants)}`}`);
+    person = { name: pn, who, wants, ...(typeof p.age === "string" ? { age: p.age.slice(0, 20) } : {}) };
+  }
+  return { id, name: parts.name!, card: sceneCard(s.card, !!person), face: parts.face!, situation: parts.situation!, ...(person ? { person } : {}), through: parts.through!, closing: parts.closing!, taken: parts.taken!, things: things.map((t, j) => ({ id: `${id}-t${j + 1}`, name: t! })), boon: parts.boon!, difficulty: SCENE_DIFFICULTY[i] ?? 1 };
 }
 
 /**
@@ -225,7 +245,7 @@ function sceneCard(v: unknown, person: boolean): string {
 }
 
 /** A scene as a stop: what the map, the card and the content rules need of it. Nothing is played by its ways. */
-function sceneStop(s: Scene, last: boolean): RoadStop {
+export function sceneStop(s: Scene, last: boolean): RoadStop {
   const ways = Object.fromEntries(WAYS.map((w) => [w, w === "pay" ? { difficulty: s.difficulty, price: 1 } : { difficulty: s.difficulty }])) as RoadStop["ways"];
   return {
     id: s.id,
@@ -294,7 +314,9 @@ export function thingsNow(t: Trip): SceneThing[] {
   const h = t.hand;
   const s = sceneNow(t);
   if (!h || !s) return [];
-  return [...s.things, ...h.boons, ...t.abilities.map(abilityThing)].filter((x) => !h.used.includes(x.id));
+  // Whoever goes with you can be leaned on once a scene, like a thing in it (lasting.ts).
+  const company = (h.lasting?.company ?? []).filter((c) => !c.gone).map((c) => ({ id: `with:${c.id}`, name: c.name }));
+  return [...s.things, ...h.boons, ...company, ...t.abilities.map(abilityThing)].filter((x) => !h.used.includes(x.id));
 }
 
 /** The stats a hero has: the six, and the seventh where their sheet has it. */
@@ -312,10 +334,15 @@ export interface SceneTry {
   aim: Aim;
   /** The id of a thing the line uses (thingsNow), if any. */
   thing?: string | null;
+  /** For a try after something of the player's own (aim "own"): what it is after, as the reader made it out (lasting.ts). */
+  own?: OwnRead | null;
 }
 
-/** What a written line is: a try, a line that risks nothing, one of the dice named for a try that waits, or stopping for tonight. */
-export type SceneLine = ({ kind: "try" } & SceneTry) | { kind: "free" } | { kind: "die"; die: number } | { kind: "stop" };
+/**
+ * What a written line is: a try, a line that risks nothing, one of the dice named for a try that waits, walking away
+ * from the scene (lasting.ts, walkAway), or stopping for tonight.
+ */
+export type SceneLine = ({ kind: "try" } & SceneTry) | { kind: "free" } | { kind: "die"; die: number } | { kind: "leave" } | { kind: "stop" };
 
 /**
  * A reader's answer, checked against the table as it stands: the stat is one the hero has, the thing is there and
@@ -325,7 +352,7 @@ export function checkSceneLine(raw: unknown, t: Trip, pending: boolean): SceneLi
   const o = obj(raw);
   const h = t.hand;
   if (!o || !h) return null;
-  if (o.kind === "free" || o.kind === "stop") return { kind: o.kind };
+  if (o.kind === "free" || o.kind === "stop" || o.kind === "leave") return { kind: o.kind };
   if (o.kind === "die") return pending && typeof o.die === "number" && h.dice.includes(o.die) ? { kind: "die", die: o.die } : null;
   if (o.kind !== "try") return null;
   const stat = statsOf(t.sheet).find((s) => s === o.stat);
@@ -359,8 +386,8 @@ export function price(t: Trip, r: SceneTry): Priced | null {
   const add = t.sheet.stats[stat] ?? 0;
   const using = r.thing ? (thingsNow(t).find((x) => x.id === r.thing) ?? null) : null;
   const target = TARGETS[s.difficulty] - (using ? STEP : 0);
-  // Getting loose means something only when something has closed.
-  const aim: Aim = r.aim === "loose" && h.grip > 0 ? "loose" : "through";
+  // Getting loose means something only when something has closed; a try of one's own, only with what it is after.
+  const aim: Aim = r.aim === "loose" && h.grip > 0 ? "loose" : r.aim === "own" && r.own ? "own" : "through";
   return { ...r, stat, aim, thing: using?.id ?? null, add, target, using, bands: h.dice.map((d) => bandOf(d, add, target)) };
 }
 
@@ -386,7 +413,7 @@ export interface Loss {
 }
 
 /** Take a cost off a sheet. Supplies or goodwill you have none left of come off your health instead. */
-function pay(sheet: Sheet, kind: CostKind, n: number): { sheet: Sheet; losses: Loss[] } {
+export function pay(sheet: Sheet, kind: CostKind, n: number): { sheet: Sheet; losses: Loss[] } {
   const s = copySheet(sheet);
   const losses: Loss[] = [];
   if (n <= 0) return { sheet: s, losses };
