@@ -5,8 +5,9 @@
  * badly wrong). When you come to a place and there are DREAD_SPEND stones in it, the narrator takes them out and makes
  * one of its moves there. So a failure is never only a cost now: it comes back later.
  *
- * The moves are a short fixed list. Code picks which, from the place and what you carry, and never one that cannot
- * happen or that would finish you; the model only tells it.
+ * The moves are a short fixed list. Code says which can happen here (never one that cannot, or that would finish you)
+ * and a model chooses among them from the scene (who is here, what they would do); the seeded pick by weight is only
+ * the fallback when no model answers. The model then tells it.
  *
  * Temptation. Once or twice a story, the narrator offers you your calling's fault: let it have its way here, and you
  * take back 1 of your store, but the fault makes things worse at this place (a move, with no dread spent).
@@ -97,8 +98,23 @@ export function movesHere(t: Trip, allowed?: readonly MoveKind[]): [MoveKind, nu
   return (Object.keys(can) as MoveKind[]).filter((k) => can[k] && w[k] > 0 && (!allowed || allowed.includes(k))).map((k) => [k, w[k]]);
 }
 
-/** Pick a move for the place in your way, by weight, seeded. Null when none can happen. */
-export function pickMove(t: Trip, salt: string, allowed?: readonly MoveKind[]): Move | null {
+/** What each move is, for a model choosing one from the scene. */
+export const MOVE_SAID: Record<MoveKind, string> = {
+  trouble: "trouble: things here get worse; what stands here grows harder to get past",
+  shut: "shut: one way past is closed off here (the easiest still open)",
+  delay: "delay: something holds the player up and costs them time",
+  hurt: "hurt: something here hurts the player, unless they save against it",
+  spoil: "spoil: a thing here they could have used is lost, broken or taken",
+  sour: "sour: a mark they earned earlier turns out to be no good here",
+  cold: "cold: word of them goes round and people think less of them",
+  brand: "brand: those here are warned, and ready for one way the player might try",
+};
+
+/**
+ * A move for the place in your way: the kind a model chose from the scene, when it is one that can happen here, else
+ * one picked by weight, seeded. What it touches (which way, which thing) is code's. Null when none can happen.
+ */
+export function pickMove(t: Trip, salt: string, allowed?: readonly MoveKind[], chosen?: MoveKind | null): Move | null {
   const f = t.facing;
   const options = movesHere(t, allowed);
   if (!f || !options.length) return null;
@@ -111,6 +127,7 @@ export function pickMove(t: Trip, salt: string, allowed?: readonly MoveKind[]): 
       break;
     }
   }
+  if (chosen && options.some(([k]) => k === chosen)) kind = chosen;
   const m = f.moment;
   if (kind === "shut") {
     // The way the narrator shuts is the one you would most like: the easiest still open.
@@ -179,9 +196,9 @@ export interface NarratorTurn {
 }
 
 /** On coming to a place: if the bowl holds enough, the narrator takes the stones out and makes a move here. */
-export function narratorTurn(t: Trip): NarratorTurn | null {
+export function narratorTurn(t: Trip, chosen?: MoveKind | null): NarratorTurn | null {
   if ((t.dread ?? 0) < DREAD_SPEND || !t.facing || t.over) return null;
-  const move = pickMove(t, `turn:${t.visited.length}:${t.dread}`);
+  const move = pickMove(t, `turn:${t.visited.length}:${t.dread}`, undefined, chosen);
   if (!move) return null;
   return { trip: { ...applyMove(t, move), dread: (t.dread ?? 0) - DREAD_SPEND }, move, spent: DREAD_SPEND };
 }
@@ -196,7 +213,7 @@ export function tempting(t: Trip, fault: string | undefined): boolean {
 }
 
 /** What a fault can do when you let it have its way: shut a door, make things worse, sour someone, cost you time. */
-const TEMPT_MOVES: readonly MoveKind[] = ["shut", "trouble", "cold", "delay", "brand"];
+export const TEMPT_MOVES: readonly MoveKind[] = ["shut", "trouble", "cold", "delay", "brand"];
 
 export interface GaveIn {
   trip: Trip;
@@ -204,8 +221,8 @@ export interface GaveIn {
 }
 
 /** You let your fault have its way here: 1 back to your store, and the fault makes things worse at this place. */
-export function giveIn(t: Trip): GaveIn | null {
-  const move = pickMove(t, `tempt:${t.tempted ?? 0}`, TEMPT_MOVES);
+export function giveIn(t: Trip, chosen?: MoveKind | null): GaveIn | null {
+  const move = pickMove(t, `tempt:${t.tempted ?? 0}`, TEMPT_MOVES, chosen);
   if (!move) return null;
   const moved = applyMove(t, move);
   const store = Math.min(storeAt(t.level), (moved.sheet.store ?? 0) + 1);

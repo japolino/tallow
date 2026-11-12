@@ -138,10 +138,11 @@ describe("an adventure built for a card", () => {
     expect(applyWords("rescue", HANA, {}, "s").adv.companions.find((c) => c.id === FRIEND)!.name).toBe("하나");
   });
 
-  test("every number, id and road stays the skeleton's; words that do not check are the skeleton's", () => {
+  test("every number, id and road stays the skeleton's; a unit that does not check is the skeleton's whole", () => {
     const base = SKELETONS.rescue;
     const raw = {
       title: "The Lamps of Coldharbour",
+      goal: "Relight the lamps before teatime.", won: "The lamps burn again.", 
       places: { mill: "Wick Street", abbey: "The Chapel of Quiet Forms" },
       stops: { mill: { situation: "A lamp is out and the street is <b>dark</b>.", teaser: "a dark street" } },
       deadline: { name: "teatime", lost: "The lamps go out for good." },
@@ -166,6 +167,12 @@ describe("an adventure built for a card", () => {
     expect(adv.who).not.toBe(base.who);
     expect(used).toBeGreaterThan(0);
     expect(used).toBeLessThan(of);
+    // The frame was written whole; the half-written stop is the made-up one, by its new name.
+    expect(adv.goal).toBe("Relight the lamps before teatime.");
+    const fresh = applyWords("rescue", MAREN, { ...raw, goal: undefined }, "s");
+    expect(fresh.missing).toContain("frame");
+    expect(fresh.adv.title).toBe(base.title);
+    expect(fresh.missing).toContain("stop:mill");
   });
 
   test("a courtship puts the card's character in the beloved's part, and falls back to a rescue for a child", async () => {

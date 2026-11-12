@@ -201,8 +201,10 @@ describe("a second skeleton for each trope", () => {
 
   test("the builder is given the city skeleton, and keeps its shape", async () => {
     const [, user] = buildMessages(NOW, CITY.rescue);
-    expect(user!.content).toContain("Brant");
-    const built = applyWords(CITY.rescue, NOW, { title: "Night Shift", places: { cafe: "The Corner Diner" } }, "s").adv;
+    // No stock words of the made-up road to copy: the frame is notes, written from what the player asked for.
+    expect(user!.content).not.toContain("Brant");
+    expect(user!.content).toContain("whose it is and why it matters");
+    const built = applyWords(CITY.rescue, NOW, { title: "Night Shift", goal: "Find Ines before dawn.", won: "You find her.", deadline: { lost: "Dawn comes." }, places: { cafe: "The Corner Diner" } }, "s").adv;
     expect(built.title).toBe("Night Shift");
     expect(built.roads).toEqual(NIGHT_RESCUE.roads);
     expect(built.places.find((p) => p.id === "cafe")!.name).toBe("The Corner Diner");

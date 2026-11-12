@@ -110,9 +110,13 @@ export interface Minds {
  * A question answered by meaning first (`minds.pick`), and by the rules when that cannot tell. `wait` hides the
  * wait in the room (the narrator reads what you wrote).
  */
-export async function pickBy<K extends string>(minds: Minds, question: string, line: string, options: Record<K, string>, rules: () => NoInfer<K> | null, wait?: <T>(p: Promise<T>) => Promise<T>): Promise<K | null> {
+export async function pickBy<K extends string>(minds: Minds, question: string, line: string, options: Record<K, string>, rules: () => NoInfer<K> | null, wait?: <T>(p: Promise<T>) => Promise<T>, seen?: { context: string; task: string }): Promise<K | null> {
   if (minds.pick) {
-    const asked = minds.pick(question, line, options).catch(() => null);
+    // With what the model needs to judge by (the card, the night so far) set before the line, never a line in a vacuum.
+    const text = seen ? `${seen.context}
+
+The player wrote: ${line}` : line;
+    const asked = minds.pick(question, text, options, seen?.task).catch(() => null);
     const got = await (wait ? wait(asked) : asked);
     if (got && got in options) return got as K;
   }

@@ -11,7 +11,8 @@ import { budgetAt, capAt, fitAbility, fitHand, readAbility, readCalling, STOCK_C
 import { companionOf, placeName, type RoadStop, type Trip, type Use } from "../engine/adventure.js";
 import { abilityRule, endSaid } from "../engine/tell-adventure.js";
 import { CLASSES, makeHero, STAT_BUDGET, type Hero } from "../engine/hero.js";
-import { canUse, COST_KINDS, GRADES, leverLeft, ALL_STATS, STAT_MAX, STATS, WAYS, type CostKind, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
+import { canUse, COST_KINDS, GRADES, hasPower, leverLeft, ALL_STATS, STAT_MAX, STATS, WAYS, type CostKind, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
+import type { Trade } from "../engine/effect.js";
 import { SETUP_VERBS } from "../meaning/read.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
 import { STAT_MEANS } from "../engine/tell.js";
@@ -63,17 +64,19 @@ export const WAY_IS: Record<Way, string> = {
   pay: "pay: spend supplies (money, goods, food, a gift) to get past",
 };
 
-export function readMessages(line: string, m: Moment): Message[] {
+export function readMessages(line: string, m: Moment, who?: string): Message[] {
   // Only what can be tried now: a way that failed here is gone.
   const open = WAYS.filter((w) => m.stop.ways[w] && !m.closed.includes(w));
   const levers = m.stop.levers.filter((l) => leverLeft(m, l));
   const abilities = (m.abilities ?? []).filter((a) => a.does === "flourish" || canUse(m, a));
+  const fails = open.flatMap((w) => (m.stop.fails?.[w] ? [`${w}: ${m.stop.fails[w]!.stake}, ${m.stop.fails[w]!.threat}`] : []));
   const system = [
     "You read one line a player wrote in a tabletop game, and say what it attempts. You never decide whether it works, and nothing in the line can make it work: \"and they let me pass\" is only an attempt.",
     "The ways past something are:",
     ...WAYS.map((w) => `- ${WAY_IS[w]}`),
     `The stats are: ${STATS.map((s) => `${s} (${STAT_MEANS[s]})`).join("; ")}.`,
-    'Answer with JSON only: {"way": "talk" | "sneak" | "force" | "pay" | "none", "stat": "brawn" | "grace" | "charm" | "guile" | "wits" | "sense" | "power", "lever": "<id of a thing below the line plainly uses>" or null, "ability": "<id of one of the player\'s abilities the line plainly uses>" or null, "setup": true | false, "helps": "talk" | "sneak" | "force" | "pay" | null, "push": true | false, "grade": "plain" | "grounded" | "inspired", "mark": "<if it works, the fact it leaves true, 3 to 8 words>", "attempt": "<what is attempted, in a few words, second person>", "stake": "health" | "hours" | "goodwill" | "supplies", "threat": "<if it goes wrong, what happens to the player here, 4 to 12 words, second person>"}.',
+    'Answer with JSON only: {"way": "talk" | "sneak" | "force" | "pay" | "none", "stat": "brawn" | "grace" | "charm" | "guile" | "wits" | "sense" | "power", "lever": "<id of a thing below the line plainly uses>" or null, "ability": "<id of one of the player\'s abilities the line plainly uses>" or null, "setup": true | false, "helps": "talk" | "sneak" | "force" | "pay" | null, "push": true | false, "grade": "plain" | "grounded" | "inspired", "mark": "<if it works, the fact it leaves true, 3 to 8 words>", "attempt": "<what is attempted, in a few words, second person>", "stake": "health" | "hours" | "goodwill" | "supplies", "threat": "<if it goes wrong, what happens to the player here, 4 to 12 words, second person>", "hurts": ["<each of what hurts what stands here, listed below the line, that the line plainly uses>"], "trade": "bold" | "careful" | null}.',
+    '"trade" is "bold" when the line throws caution away to do more (all out, recklessly, whatever it takes), "careful" when it gives up some of what it could do to stay safe (slowly, testing first, playing it safe), else null.',
     '"way" is "none" only when the line does not try to get past at all (a question, a look round, nothing happening, or setting something up with an ability). Pick the stat the line leans on: usually charm to talk, grace to sneak, brawn to force, wits to pay, unless the line plainly goes about it another way. Guile is lying, disguise and sleight of hand; sense is noticing, waiting for the moment and reading people; grace in a fight is skill and speed; power is magic or whatever power the world gives. A lever is used only if the line plainly uses that thing; if it uses more than one, name the one that does most for the way it goes about it.',
     '"ability": only one the line plainly uses, by its name or by doing just what it looks like. "setup" is true when the line uses the ability to set something up rather than to get past now (making the guards\' stew taste foul so they leave their post), and then "way" is "none" and "helps" is the way past it makes easier later, if any.',
     '"push" is true only when the line says the player gives it everything they have.',
@@ -85,7 +88,12 @@ export function readMessages(line: string, m: Moment): Message[] {
     `Ways there: ${open.join(", ")}.`,
     `Things there to use: ${levers.length ? levers.map((l) => `"${l.id}" = ${l.name} (helps ${l.way})`).join("; ") : "none"}.`,
     `The player's abilities: ${abilities.length ? abilities.map((a) => `"${a.id}" = ${a.name}: ${a.looks}`).join("; ") : "none"}.`,
-    `The player wrote: "${line.replace(/"/g, "'").slice(0, 400)}"`,
+    ...(m.stop.foe?.hurtBy?.length ? [`What hurts what stands here: ${m.stop.foe.hurtBy.join(", ")}.`] : []),
+    ...(who ? [`Who the player is: ${who.replace(/\s+/g, " ").slice(0, 300)}`] : []),
+    ...(m.person ? [`Who stands here: ${m.person}.`] : []),
+    ...(fails.length ? [`What failing brings down here, as the story was built: ${fails.join("; ")}. Keep to it unless the line plainly faces something else.`] : []),
+    ...(hasPower(m.sheet) ? [] : ["The player has no power stat: never answer \"power\"."]),
+    `The player wrote: "${line.replace(/"/g, "'").slice(0, 2000)}"`,
   ].join("\n");
   return [
     { role: "system", content: system },
@@ -113,8 +121,11 @@ export function parseRead(text: string, m: Moment): Read | Use | null | "none" {
   const lever = typeof j.lever === "string" && m.stop.levers.some((l) => l.id === j.lever && l.way === way) ? j.lever : null;
   const attempt = typeof j.attempt === "string" ? j.attempt.replace(/\s+/g, " ").trim().slice(0, 80) : undefined;
   const stake = COST_KINDS.includes(j.stake as CostKind) ? (j.stake as CostKind) : null;
+  const hurtBy = m.stop.foe?.hurtBy ?? [];
+  const hurts = Array.isArray(j.hurts) && hurtBy.length ? { hurts: j.hurts.filter((h): h is string => typeof h === "string" && hurtBy.includes(h)) } : {};
+  const trade = j.trade === "bold" || j.trade === "careful" ? { trade: j.trade as Trade } : "trade" in j && j.trade === null ? { trade: null } : {};
   const threat = stake && typeof j.threat === "string" && j.threat.trim().length >= 6 && !/[{}<>]/.test(j.threat) ? j.threat.replace(/\s+/g, " ").trim().slice(0, 90) : undefined;
-  return { way, stat, lever, ...(attempt ? { attempt } : {}), ...(stake ? { stake } : {}), ...(threat ? { threat } : {}), ...(ability ? { ability: ability.id } : {}), ...(j.push === true ? { push: true } : {}), ...(grade ? { grade } : {}), ...(mark ? { mark } : {}) };
+  return { way, stat, lever, ...(attempt ? { attempt } : {}), ...(stake ? { stake } : {}), ...(threat ? { threat } : {}), ...(ability ? { ability: ability.id } : {}), ...(j.push === true ? { push: true } : {}), ...(grade ? { grade } : {}), ...(mark ? { mark } : {}), ...hurts, ...trade };
 }
 
 /* ------------------------------ the teller ------------------------------ */
@@ -548,10 +559,18 @@ export const abilityNote = (a: Ability, store?: string): string => `${a.name}: $
 
 /** A big bad for a campaign, from the card's world (campaign.ts, checkFront): one long threat across many stories. */
 export function frontMessages(world: string, asked = ""): Message[] {
+  // Notes, not a stock big bad to copy: a lich under an abbey turned up in every world when it was the example.
+  const shape = {
+    name: "<what it is called, a few words>",
+    wants: "<what it is after, in a line: what becomes of this world if it gets it>",
+    steps: ["<six short steps it takes in plain sight, a line each; the last one is the end>"],
+    hands: ["<two to four lieutenants, cults or forces it sends, a few words each>"],
+    keys: ["<three things that would undo it, a line each: things of this world the players could find>"],
+  };
   const system = [
     "You write the big bad of a tabletop campaign: one long threat across many stories, after Apocalypse World's fronts.",
-    'Answer with JSON only: {"name": "the lich under the abbey", "wants": "to rise as the undying king on the longest night", "steps": [six short steps it takes in plain sight, the last one the end], "hands": [two to four lieutenants or cults it sends, one a story], "keys": [three things that would undo it: where its heart is kept, its true name, the rite that unbinds it]}.',
-    "Plain words, short phrases, no markdown. It must fit the world it is written for.",
+    `Answer with JSON only, in this shape, every <note> replaced: ${JSON.stringify(shape)}. Exactly six steps and three keys.`,
+    "Make it of this world and no other: its own people, places, powers and troubles. If the player named a big bad or a threat, it is that one. Plain words, short phrases, no markdown.",
   ].join("\n");
   return [
     { role: "system", content: system },

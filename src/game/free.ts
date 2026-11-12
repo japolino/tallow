@@ -234,8 +234,9 @@ export async function roam(o: RoamOptions): Promise<Trip> {
     const m = trip.facing!.moment;
     // What the line is, asked of a model while the page is in the air (game/route.ts); the reading of how it goes about
     // it at the same time, for a try. The word rules are only for when no model is there, or none is sure.
-    // The table's own words, said to the narrator and not in the story, are commands, never read by a model.
-    const quick = (DONE.test(w.line) && w.line.trim().length < 40) || COMMAND_NOTEBOOK.test(w.line);
+    // Only the notebook command skips the model. "Goodnight, Mara" said in the story is not leaving the table, so ending
+    // the night is the router's call, and the words decide only when no model can tell.
+    const quick = COMMAND_NOTEBOOK.test(w.line);
     const routing: Promise<Routed | null> = minds.route && !quick ? minds.route(w.line, routeContext(trip)).catch(() => null) : Promise.resolve(null);
     const reading = quick ? Promise.resolve(null) : minds.read(w.line, m).catch(() => null);
     await w.given;
@@ -383,7 +384,7 @@ export async function roam(o: RoamOptions): Promise<Trip> {
     let isTry = kind === "try";
     if (!routed && !isTry) isTry = asksForRoll(line) || ((await table.wait("read", riskOf(line, m))) ?? riskyWords(line));
     const read: Read | null = !isTry ? null : heard && heard !== "none" && !isUse(heard) ? heard : calledRead(line);
-    const check0 = read ? withAbility(m, { ...read, line, trade: tradeOf(line) ?? undefined, grade: checkedGrade(read.grade, line, m, []) }) : null;
+    const check0 = read ? withAbility(m, { ...read, line, trade: read.trade !== undefined ? read.trade : tradeOf(line) ?? undefined, grade: checkedGrade(read.grade, line, m, [], read) }) : null;
     const check = check0 ? nameCheck(m, check0) : null;
 
     if (!check0 || !check) {

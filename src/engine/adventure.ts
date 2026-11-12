@@ -15,7 +15,7 @@ import { fromOldKnack, passive, storeAt, type Ability } from "./abilities.js";
 import type { Casebook, Clue, StoryKind } from "./clues.js";
 import type { ContentSettings } from "./content.js";
 import type { WorldKit } from "./kit.js";
-import type { Person as Npc, Visit } from "./people.js";
+import { moveAttitude, type Person as Npc, type Visit } from "./people.js";
 import type { Payoff, Project } from "./project.js";
 import type { Appointment, Schedule } from "./schedule.js";
 import type { Fellow } from "./seats.js";
@@ -572,6 +572,9 @@ export function attempt(t0: Trip, read: Read): Turn | null {
   // A thing you kept is used up when the try it helped works; one that failed you, you still have.
   const used = o.past && o.check.lever && t.kept.includes(o.check.lever.id) ? lootOf(adv, o.check.lever.id)! : null;
   if (used) trip.kept = trip.kept.filter((id) => id !== used.id);
+  // The one standing here turned against you (moment.ts): they are the one owner of how they regard you, so it is kept with them.
+  const here = o.turned && f.stop.person ? (t.people?.[f.stop.person.id] ?? f.stop.person) : null;
+  if (here) trip.people = { ...(t.people ?? {}), [here.id]: { ...here, attitude: moveAttitude(here.attitude, -o.turned!) } };
   const rivalGained = !!adv.rival && !o.past;
   if (rivalGained) trip.rival = t.rival + 1;
 

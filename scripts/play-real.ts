@@ -99,9 +99,11 @@ const table = {
 [${at()}] YOU (at the fork: ${stops.map((s, i) => `${i + 1}. ${s.name}`).join(" / ")}): ${line}`);
     const own = read?.(line);
     if (own) return own;
-    const options = Object.fromEntries(stops.map((s, i) => [String(i), stops.length > 2 ? `${i + 1}. ${s.name}, ${s.teaser}` : `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
+    // Keyed as the room keys them (game/roomtable.ts): what the player sees, never a hidden index.
+    const keys = stops.map((_, i) => (stops.length > 2 ? String(i + 1) : i ? "right" : "left"));
+    const options = Object.fromEntries(stops.map((s, i) => [keys[i]!, stops.length > 2 ? `place ${i + 1} on the map: ${s.name}, ${s.teaser}` : `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
     const k = await minds.pick?.(stops.length > 2 ? "Which place do you go to?" : "Which way do you go, left or right?", line, options).catch(() => null);
-    const id = k && k in options ? stops[Number(k)]!.id : (forkRead(line, stops) ?? stops[0]!.id);
+    const id = k && k in options ? stops[keys.indexOf(k)]!.id : (forkRead(line, stops) ?? stops[0]!.id);
     out(`    (fork: ${stops.find((s) => s.id === id)?.name}${k ? "" : ", by the words"})`);
     return id;
   },

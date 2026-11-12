@@ -229,21 +229,21 @@ const clean = (v: unknown, max: number): string => (typeof v === "string" ? v.re
 const list = (v: unknown, n: number, max: number): string[] => (Array.isArray(v) ? v.map((x) => clean(x, max)).filter((x) => x.length >= 3).slice(0, n) : []);
 
 /**
- * A big bad a model wrote (6.1), checked by code: a name, what it wants, six steps, its hands, three keys. Whatever is
- * missing or unfit comes from the stock one given, so a campaign always has a whole front.
+ * A big bad a model wrote (6.1), checked by code whole: a name, what it wants, six steps, two to four hands, three keys,
+ * every one plain (no note left in). Null when any of it is missing: a front is the model's whole or the stock one's, never
+ * a model's name on the stock one's steps.
  */
-export function checkFront(raw: unknown, stock: Front): Front {
+export function frontWhole(raw: unknown): Front | null {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const name = clean(r.name, 60);
   const wants = clean(r.wants, 160);
   const steps = list(r.steps, RINGS, 120);
   const hands = list(r.hands, 4, 80);
   const keys = list(r.keys, 3, 120);
-  return {
-    name: name.length >= 3 ? name : stock.name,
-    wants: wants.length >= 6 ? wants : stock.wants,
-    steps: steps.length === RINGS ? steps : stock.steps,
-    hands: hands.length ? hands : stock.hands,
-    keys: keys.length === 3 ? [keys[0]!, keys[1]!, keys[2]!] : stock.keys,
-  };
+  const all = [name, wants, ...steps, ...hands, ...keys];
+  if (name.length < 3 || wants.length < 6 || steps.length !== RINGS || !hands.length || keys.length !== 3 || all.some((x) => /[<>{}]/.test(x))) return null;
+  return { name, wants, steps, hands, keys: [keys[0]!, keys[1]!, keys[2]!] };
 }
+
+/** A model's big bad if it is whole (`frontWhole`), else the stock one given. */
+export const checkFront = (raw: unknown, stock: Front): Front => frontWhole(raw) ?? stock;

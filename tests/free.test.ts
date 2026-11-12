@@ -377,6 +377,11 @@ describe("a sitting in free form", () => {
     const ask = async (m: { role: string; content: string }[], role: string): Promise<string> => (role === "builder" && sent.push(m.map((x) => x.content).join("\n")), role === "builder" ? JSON.stringify(WRITTEN) : "");
     let saved: Trip | null = null;
     await sit({ card: MAREN, seed: "free-premise", table: tableFor(lines, log, d), minds, ask, started: (x) => (d.now = x), save: (t) => t && (saved = t) });
+    // The world's kit is written from what you asked for too (kitwriter.ts); the setup is the one ask that is not the kit.
+    const kits = sent.filter((x) => x.includes("THE KIT TO WRITE"));
+    expect(kits.length).toBeGreaterThan(0);
+    expect(kits[0]).toContain("isekai'd here and know nothing");
+    sent.splice(0, sent.length, ...sent.filter((x) => !x.includes("THE KIT TO WRITE")));
     // The place and the rumours are written from both, not from the card alone.
     expect(sent.length).toBe(1);
     expect(sent[0]).toContain("isekai'd here and know nothing");

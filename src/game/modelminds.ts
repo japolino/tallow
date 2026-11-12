@@ -86,7 +86,7 @@ ${lastLine}`, { line: lastLine })), "teller"), ms));
       const quick = readFromAnswers(await decided("reader", readQuestions(line, m)), m);
       if (quick !== undefined) return quick;
       try {
-        const r = parseRead(await within(ask(readMessages(line, m), "reader"), ms), m);
+        const r = parseRead(await within(ask(readMessages(line, m, { ...known, ...o.context?.() }.who), "reader"), ms), m);
         if (r === "none") return "none";
         if (r) return r;
         fell("reader", "answer did not check");
@@ -297,9 +297,11 @@ ${foe.name}`)), "teller"), ms));
         if (got) return got;
       }
       try {
-        const r = parsePick(await within(ask(pickMessages(question, text, options, task), "reader"), Math.min(ms, 20_000)), options);
+        const said = await within(ask(pickMessages(question, text, options, task), "reader"), Math.min(ms, 20_000));
+        const r = parsePick(said, options);
         if (r) return r;
-        fell("pick", "answer did not check");
+        // An honest "unclear" is an answer, not a failure: the rules decide, and nothing fell back.
+        if (!/"pick"\s*:\s*"unclear/i.test(said)) fell("pick", `answer did not check: ${said.replace(/\s+/g, " ").slice(0, 80)}`);
       } catch (e) {
         fell("pick", e);
       }

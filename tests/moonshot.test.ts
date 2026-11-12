@@ -183,12 +183,14 @@ describe("the campaign's last story", () => {
     expect(adv.finale!.edges).toBeGreaterThan(0);
   });
 
-  test("a model's big bad is checked: what is missing comes from the stock one", () => {
+  test("a model's big bad is checked whole: a half-written one is the stock one, never a name on stock steps", () => {
     const stock = stockFront(2, false);
-    const f = checkFront({ name: "the drowned king", wants: "the coast under the sea", steps: ["one"], keys: ["his true name", "x"] }, stock);
-    expect(f.name).toBe("the drowned king");
-    expect(f.steps).toEqual(stock.steps);
-    expect(f.keys).toEqual(stock.keys);
+    const half = checkFront({ name: "the drowned king", wants: "the coast under the sea", steps: ["one"], keys: ["his true name", "x"] }, stock);
+    expect(half).toEqual(stock);
+    const steps = ["the tides rise", "the fishers vanish", "the bells ring under water", "the harbour drowns", "the lords kneel", "the coast is his"];
+    const whole = { name: "the drowned king", wants: "the coast under the sea", steps, hands: ["the brine priests"], keys: ["his true name", "the bell that woke him", "the shell his heart is in"] };
+    expect(checkFront(whole, stock).name).toBe("the drowned king");
+    expect(checkFront({ ...whole, keys: ["<three things>", "b", "c"] }, stock)).toEqual(stock);
   });
 });
 

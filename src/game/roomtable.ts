@@ -89,9 +89,13 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       void ask();
     });
 
-  /** A written choice of card read by meaning first (opts.pick), and by its words when that cannot tell. */
+  /**
+   * A written choice of card read by meaning first (opts.pick), and by its words when that cannot tell. The options'
+   * keys are what the player sees ("left", "2"), never a hidden index, so a model answering the label is right.
+   */
   const byMeaning = (question: string, line: string, options: Record<string, string>, rules: () => number): number | Promise<number> =>
-    opts.pick ? opts.pick(question, line, options).then((k) => (k !== null && k in options ? Number(k) : rules()), rules) : rules();
+    opts.pick ? opts.pick(question, line, options).then((k) => (k !== null && k in options ? Object.keys(options).indexOf(k) : rules()), rules) : rules();
+  const SIDES = ["left", "right"] as const;
 
   const table: Table = {
     async margin(notes) {
@@ -188,7 +192,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       };
       // The narrator's hands hold two cards: more places than that (a hub) are picked on the map, by name or number.
       if (stops.length > 2) {
-        const options = Object.fromEntries(stops.map((s, i) => [String(i), `${i + 1}. ${s.name}, ${s.teaser}`]));
+        const options = Object.fromEntries(stops.map((s, i) => [String(i + 1), `place ${i + 1} on the map: ${s.name}, ${s.teaser}`]));
         const rules = (line: string): number => {
           const id = forkRead(line, stops);
           return id ? stops.findIndex((s) => s.id === id) : -1;
@@ -201,7 +205,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
         const id = forkRead(line, stops);
         return id ? stops.findIndex((s) => s.id === id) : -1;
       };
-      const options = Object.fromEntries(stops.map((s, i) => [String(i), `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
+      const options = Object.fromEntries(stops.map((s, i) => [SIDES[i] ?? String(i), `the card on the ${i ? "right" : "left"}: ${s.name}, ${s.teaser}`]));
       const picked = await choose((line) => (own(line) >= 0 ? own(line) : byMeaning("Which way do you go, left or right?", line, options, () => rules(line))), FORK_AGAIN);
       await desk.cards.unlay(picked);
       return stops[picked]!.id;
@@ -209,7 +213,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
 
     async offer(cards) {
       await desk.cards.offer(cards.map((c) => ({ id: c.id, kind: c.card, name: c.name, text: c.text })));
-      const options = Object.fromEntries(cards.map((c, i) => [String(i), `the card on the ${i ? "right" : "left"}: ${c.name}`]));
+      const options = Object.fromEntries(cards.map((c, i) => [SIDES[i] ?? String(i), `the card on the ${i ? "right" : "left"}: ${c.name}`]));
       const picked = await choose((line) => byMeaning("Which card do you keep, left or right?", line, options, () => pickRead(line, cards.map((c) => c.name))), LEVEL_AGAIN);
       await desk.cards.unoffer(picked);
       return picked;

@@ -189,7 +189,7 @@ describe("the builder's words", () => {
     const levers = (s: typeof s1, tag: string) => Object.fromEntries(s!.levers.map((l) => [l.way, `${tag} ${l.way} thing`]));
     const words = {
       stops: {
-        [s1!.id]: { situation: "You face the drowned bell-ringer on the stair. Everything here is new.", teaser: "a bell under water", levers: levers(s1, "brine") },
+        [s1!.id]: { face: "The Drowned Bell-Ringer", situation: "You face the drowned bell-ringer on the stair. Everything here is new.", teaser: "a bell under water", levers: levers(s1, "brine"), ...(s1!.reward ? { reward: "It washes up at your feet." } : {}), ...(s1!.person ? { person: { name: "Hollis", who: "the drowned bell-ringer", wants: "his bell rung again" } } : {}) },
         [s2!.id]: { situation: "A half-written stop.", levers: { [s2!.levers[0]!.way]: "only one thing" } },
       },
     };
@@ -209,10 +209,10 @@ describe("the builder's words", () => {
     expect(echoed.stops.find((s) => s.id === s1!.id)!.situation).toBe(s1!.situation);
   });
 
-  test("a stop's card shows the title the model wrote for it, else its kind's own, and no stock title is offered", () => {
+  test("a stop's card shows the title the model wrote for it; a stop without one is the made-up stop; no stock title is offered", () => {
     const a = road("rescue");
     const s = a.stops.find((x) => !x.climax)!;
-    const whole = (face?: string) => ({ stops: { [s.id]: { ...(face ? { face } : {}), situation: "You meet something new here, of this world.", levers: Object.fromEntries(s.levers.map((l) => [l.way, `new ${l.way}`])) } } });
+    const whole = (face?: string) => ({ stops: { [s.id]: { ...(face ? { face } : {}), situation: "You meet something new here, of this world.", teaser: "something new", levers: Object.fromEntries(s.levers.map((l) => [l.way, `new ${l.way}`])), ...(s.reward ? { reward: "It is yours." } : {}), ...(s.person ? { person: { name: "Sefa", who: "someone new", wants: "a favour" } } : {}) } } });
     const b = applyWords(a, MAREN, whole("The Hungry Pack"), "s").adv.stops.find((x) => x.id === s.id)!;
     expect(faceOf(b)).toBe("The Hungry Pack");
     expect(b.card).toBe(s.card);
