@@ -1,8 +1,122 @@
-# Tallow (working title)
+<p align="center">
+  <img src="docs/media/room-golden.jpg" alt="The room at golden hour: a hooded narrator across the table, a map with pieces on it, candles, a balance and a box of dice" width="100%">
+</p>
 
-A tabletop roleplaying game for Lumiverse, played in one 3D room: you sit at a table across from a shadowy narrator, with a map and pieces between you. The name and the extension id are placeholders.
+<h1 align="center">Tallow</h1>
 
-The design, starting with the gameplay loop, is in [docs/DESIGN.md](docs/DESIGN.md).
+<p align="center">
+  <b>A tabletop roleplaying game for <a href="https://github.com/prolix-oc/Lumiverse">Lumiverse</a>, played in one candlelit room.</b><br>
+  You sit across a table from a hooded narrator. You write what you do; it weighs it, you throw the die, and it writes what happened and hands the page back.
+</p>
+
+<p align="center">
+  <img alt="Lumiverse extension" src="https://img.shields.io/badge/Lumiverse-extension-8a5a2b">
+  <img alt="three.js" src="https://img.shields.io/badge/three.js-room-000000?logo=three.js">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white">
+  <img alt="Bun" src="https://img.shields.io/badge/Bun-built%20%26%20tested-f9f1e1?logo=bun&logoColor=black">
+  <img alt="18+" src="https://img.shields.io/badge/stories-18%2B-7a1f1a">
+</p>
+
+<p align="center">
+  <a href="#a-look-around">A look around</a> ·
+  <a href="#how-a-turn-plays">How a turn plays</a> ·
+  <a href="#how-a-fight-works">How a fight works</a> ·
+  <a href="#install-it-in-lumiverse">Install</a> ·
+  <a href="#run-the-preview">Preview</a> ·
+  <a href="docs/DESIGN.md">Design</a>
+</p>
+
+---
+
+There is no interface on the screen, only the room. Your character sheet is a stack of papers by your left hand, your history is a pile of pages by your right, your abilities are cards dealt face up in front of you, and the story's road is a map with pieces on it. The narrator is played by your own model, which builds an adventure for the character card you're chatting with. The dice, the rules and every number are code, seeded so a story can be replayed.
+
+The name is a working title.
+
+## A look around
+
+### The room
+
+The hours turn, the weather changes, and the candles burn down through the night. At dusk the narrator sets out new ones and lights them; by morning they're stubs.
+
+<p align="center">
+  <img src="docs/media/weather.webp" alt="A day and a night passing outside the window: clear, rain, a storm, fog, snow and wind, while the candles are lit and burn down" width="80%">
+</p>
+
+<table>
+  <tr>
+    <td><img src="docs/media/room-golden.jpg" alt="Golden hour"></td>
+    <td><img src="docs/media/room-night-rain.jpg" alt="Night, in the rain"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Golden hour</sub></td>
+    <td align="center"><sub>Night, in the rain</sub></td>
+  </tr>
+</table>
+
+### The die
+
+Every check is one twenty-sided die. Your hand takes it from the box, you shake it with the pointer and let it go, and you lean in to read it. The face is decided by seeded dice in code before the throw; the throw only shows it.
+
+<p align="center">
+  <img src="docs/media/dice.webp" alt="A hand takes a red die from the box, shakes it, throws it onto the map, and the view leans in to read a 17" width="80%">
+</p>
+
+### A turn at the table
+
+You write your line in a notebook, tear the page off and hand it over. The narrator says how it read you and loads the balance: its dark weights for how hard the thing is, your pale ones for what you bring. You throw, and it writes what happened under your line and hands the page back.
+
+<p align="center">
+  <img src="docs/media/turn.webp" alt="A line is written in the notebook and handed to the narrator, the balance is loaded, the die is thrown, and the page comes back with the narrator's writing under the line" width="80%">
+</p>
+
+### Your pages and your sheets
+
+The pages you've read pile up by your right hand. Pick the pile up and leaf through it: your thumb draws the front page out and tucks it in behind. Who you are, what you can do, who walks with you and what you carry lie in a second, red-ruled stack by your left hand, rewritten as they change.
+
+<p align="center">
+  <img src="docs/media/pages.webp" alt="The pile of pages picked up and leafed through, then the character sheets picked up and read" width="80%">
+</p>
+
+### Cards
+
+The road is dealt as cards, face down, and a stop's card is turned when you reach it. Your abilities, companions and the things you carry are dealt face up to your side. Click one to hold it up and read what it does; the arrow keys go to the next.
+
+<p align="center">
+  <img src="docs/media/cards.webp" alt="Three cards on the table, each picked up in turn and held up to be read" width="80%">
+</p>
+
+<details>
+<summary>The whole deck</summary>
+<p align="center"><img src="docs/media/deck.jpg" alt="Every kind of card's face, and the back" width="100%"></p>
+<p>Every card is drawn in code: an arched window over an engraved sky, a gold frame, a ribbon with the card's name, and on a card that does something, what it does. Nothing is copied from any deck.</p>
+</details>
+
+### Fights on a battle mat
+
+When a fight starts, the narrator unrolls a leather mat with squares on it. Before your turn, every enemy chalks what it's about to do and which square it will hit.
+
+<p align="center">
+  <img src="docs/media/mat-close.jpg" alt="The battle mat seen close: squares, pieces for both sides, and the enemies' moves chalked on the leather" width="80%">
+</p>
+
+## How a turn plays
+
+1. **Something stands in your way.** The narrator says what it is, and the stop's card is turned on the map.
+2. **You write what you do,** in your own words. There are no menus. A model reads what your line means; the engine decides what that's worth.
+3. **The check is named and weighed.** The narrator names the strength it calls for (Brawn, Grace, Charm, Guile, Wits or Sense) and loads the balance, so you can see how likely it is before you throw. If it read you wrong, write again.
+4. **You throw.** d20 + your strength + what helps, against how hard it is. Missing by a little is a partial: it works, at a cost.
+5. **The situation changes.** The narrator takes or gives counters (red stones for health, coins for supplies, pale seals for goodwill), writes the turn, and hands the page back. A try that fails is not a dead end: it costs something, closes the way you tried, and makes the ways that are left harder.
+
+A whole story is a road of such stops: forks where you choose a card, companions who join you, things you find, a rival, a clock running down, resting, and abilities to choose when you level up. There are seven kinds of story (a rescue, a heist, a mystery, a journey, a hunt, a romance, a night to survive), 25 stories within them, and a new road laid out by code for each.
+
+## How a fight works
+
+- **Where your abilities come from.** When you make your character you get a **trick**, which always works and needs no die, and a **gift**, which costs 1 grit (you have 2 + your level). Each level-up offers two ability cards and you keep one. In a fight each ability becomes a move: reach, bind, sweep, drain, ward, mend, mark, learn or edge.
+- **Your numbers.** Stamina is 4 + 2 × Brawn + level, and it's your health in a fight. Composure is 4 + 2 × Sense + level, and it stands in for Stamina in a battle of charm. Defense is 10 + Grace.
+- **A round.** The enemies chalk their next moves on the mat. If you step off a marked square, the blow misses. You write one line, and that line is your whole side's turn: the companions you name do what you say, and the rest act in character. An attack is a d20 + the strength that fits, against the target's Defense. The narrator throws for the enemies, in the open.
+- **The end.** The fight ends when one side is down. If you've been down for 3 rounds, you're dragged clear and lose. After 20 rounds, the side with more of its Stamina left wins.
+
+The full rules are in [docs/COMBAT.md](docs/COMBAT.md).
 
 ## Where it stands
 
@@ -41,7 +155,7 @@ Then, once, three optional ones; the game is whole without them:
 - **world_books**, so a few entries of the card's lorebook go into the adventure;
 - **embeddings**, so your embedding model picks the lorebook entries nearest the card.
 
-**Setting it up**: Tallow has its own tab in Lumiverse's drawer, "Tallow". It has a button to sit at the table, the permissions with a button to allow the missing ones, and the models: which of your connections each job uses (building the adventure, narrating, reading your lines, reading who you are) and whether it thinks first, plus your Decision and embedding connections. Anything left on "Auto" uses your default connection; the builder thinks first when its model can, and the rest answer straight away, so they are quick. Choices are kept in Tallow's user storage (`models.json`). The tab is outside the game: inside the room there is still nothing but the room.
+**Setting it up**: Tallow has its own tab in Lumiverse's drawer, "Tallow". It has a button to sit at the table and the models: which of your connections each job uses (**Building** the story and who you are, **Narrating** what happens, **Reading your lines** when the Decision model can't) and whether it thinks first, plus your Decision and embedding connections. Anything left on "Auto" uses your default connection; building thinks first when its model can, and the rest answer straight away, so they are quick. Choices are kept in Tallow's user storage (`models.json`). Permissions are asked by Lumiverse's own dialog when you sit down. The tab is outside the game: inside the room there is still nothing but the room.
 
 Open a chat with a character, then press "Sit at the table" in the Tallow tab, or in the ⋯ (Extras) menu under the message box. A card that is a world or a scenario rather than one person is told apart: the story is set there, and your companion is someone of that world. The ✕ at the top leaves the table. Without the generation permission, or if the model does not answer, the game still plays: a made-up adventure with the card's character in it, and plain stand-in lines.
 
@@ -65,7 +179,7 @@ Open http://localhost:4184/host to try the built extension (`dist/frontend.js`) 
 Nothing is on the screen but the room. You play with the things on the table.
 
 1. The narrator speaks: its words come up at the foot of the picture. A click, Space or Enter brings the rest at once.
-2. It hands you a page that says where you are (Wren Bridge), who you are and what you are good at. Read it, then click or press Enter to set it down. Pages you set down stay in a pile by your right hand; click the pile (or press the up arrow) to read them again, and use the arrow keys to turn to earlier ones.
+2. It hands you a page that says where you are (Wren Bridge), who you are and what you are good at. Read it, then click or press Enter to set it down. Pages you set down stay in a pile by your right hand; click the pile (or press the up arrow) to pick it up, and use the arrow keys to leaf back and forth. Your own sheets (who you are, what you can do, who walks with you, what you carry) are the red-ruled stack by your left hand; click it to read them the same way. Click a card on your side to hold it up and read it.
 3. In front of you are three piles of counters: red stones for health, coins for supplies, pale seals for goodwill. That is what you carry.
 4. Start typing, or click the notebook at your left hand. You lean in over it and your hand writes what you type. For example: "I offer to put her sums right if she lifts the bar". Enter tears the page off and hands it to the narrator. Escape shuts the notebook.
 5. The narrator says how it read your line and loads the balance at the left of the table: its dark weights for how hard the thing is, your pale ones for what you bring. You turn your head to it while it is loaded and back when the beam is at rest (a click turns you back sooner). The pan that sinks is the likelier end. If it read you wrongly, write again instead.
@@ -108,6 +222,12 @@ bun run shots
 ```
 
 takes a picture of the room in every state worth looking at (each hour, each kind of weather, the candles through the night, the hand, a throw, the narrator moving its piece and making its gestures, one moment played at the table, a phone held upright) into `.artifacts/room/`. Add words to take only the pictures whose names contain them: `bun run shots rain hand`.
+
+```
+bun run media
+```
+
+takes the pictures and moving pictures in this README into `docs/media/` (the moving ones are animated WebP, made from the frames with ffmpeg, which has to be on the PATH). Add words to take only some: `bun run media dice weather`.
 
 ```
 bun run pointer

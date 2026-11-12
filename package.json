@@ -13,6 +13,7 @@
     "adventure": "bun run scripts/adventure.ts",
     "battle": "bun run scripts/battle.ts",
     "shots": "bun run scripts/shots.ts",
+    "media": "bun run scripts/media.ts",
     "pointer": "bun run scripts/pointer.ts",
     "table": "bun run scripts/table.ts",
     "build": "bun run scripts/build.ts",
