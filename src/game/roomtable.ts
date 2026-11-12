@@ -211,6 +211,40 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       return stops[picked]!.id;
     },
 
+    async personas(list) {
+      let tick: (i: number) => void = () => {};
+      const ticked = new Promise<number>((r) => (tick = r));
+      // You look down at the paper until it is back in the narrator's hand.
+      let away: () => void = () => {};
+      desk.watchRoster(new Promise<void>((r) => (away = r)));
+      await desk.roster.lay(list);
+      desk.roster.choosing = tick;
+      // A box ticked, or a line written instead: whichever comes first. The paper goes back to the narrator before the
+      // game goes on, so its hand is free for what comes next.
+      return new Promise<{ ticked: number } | Written>((done) => {
+        let over = false;
+        void ticked.then(async (i) => {
+          if (over) return;
+          over = true;
+          desk.noLine();
+          desk.roster.tick(i);
+          await desk.roster.take();
+          away();
+          done({ ticked: i });
+        });
+        void desk.write().then(async (w) => {
+          if (over) return;
+          over = true;
+          desk.roster.choosing = null;
+          desk.lookBack();
+          away();
+          await w.given;
+          await desk.roster.take();
+          done(w);
+        });
+      });
+    },
+
     async offer(cards) {
       await desk.cards.offer(cards.map((c) => ({ id: c.id, kind: c.card, name: c.name, text: c.text })));
       const options = Object.fromEntries(cards.map((c, i) => [SIDES[i] ?? String(i), `the card on the ${i ? "right" : "left"}: ${c.name}`]));

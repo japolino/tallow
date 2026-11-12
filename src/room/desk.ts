@@ -23,6 +23,7 @@ import { Board } from "./board.js";
 import { BattleMat } from "./battlemat.js";
 import { LuckTray } from "./luck.js";
 import { AgainstSlips } from "./against.js";
+import { Roster } from "./roster.js";
 import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
 import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
 import { TableCards } from "./tablecards.js";
@@ -136,6 +137,8 @@ export class Desk {
   readonly luck: LuckTray;
   /** The narrator's slips against you (against.ts). */
   readonly against: AgainstSlips;
+  /** The paper of who you may be, your personas with a box each (roster.ts). */
+  readonly roster: Roster;
   readonly voice: Voice;
   readonly tracks: Tracks;
   /** Where the view should go (`k` of the way) while you write. The room blends it in. */
@@ -230,6 +233,8 @@ export class Desk {
     this.group.add(this.luck.group);
     this.against = new AgainstSlips(h.narrator, this.tracks, h.reduced);
     this.group.add(this.against.group);
+    this.roster = new Roster(h.narrator, this.tracks, h.reduced, h.camera);
+    this.group.add(this.roster.group);
     this.cards = new TableCards({
       narrator: h.narrator,
       tracks: this.tracks,
@@ -767,6 +772,12 @@ export class Desk {
     this.lookAt(V(-0.3, 0.34, 0.58), V(-0.64, 0.12, -0.2), 32, settled);
   }
 
+  /** Look down at the paper of who you may be until a box is ticked (`settled`). */
+  watchRoster(settled: Promise<void>): void {
+    const at = this.roster.middle;
+    this.lookAt(V(at.x, 0.44, at.z + 0.34), at.clone().add(V(0, 0, 0.01)), 30, settled, 0.2);
+  }
+
   /** Turn your head toward something (a card being turned, say) until `settled`, and `hold` seconds more. */
   lookAt(eye: Vector3, look: Vector3, fov: number, settled: Promise<void>, hold = 1.5): void {
     this.glance.eye.copy(eye);
@@ -1032,6 +1043,12 @@ export class Desk {
 
   /** True where a click would do something of the desk's, so the room can show it. */
   hot(e: { clientX: number; clientY: number }): boolean {
+    // A line of the paper of who you may be, while a box can be ticked.
+    if (this.roster.choosing) {
+      const i = this.roster.lineAt(e, this.h.host);
+      this.roster.hover = i;
+      if (i >= 0) return true;
+    }
     const on = this.over(e);
     this.cards.hover = on === "card0" ? 0 : on === "card1" ? 1 : -1;
     if (on === "card0" || on === "card1") return true;
@@ -1044,6 +1061,14 @@ export class Desk {
 
   /** A click in the room. Returns true if the desk used it. */
   click(e: { clientX: number; clientY: number }): boolean {
+    // Touching a line of the paper of who you may be ticks its box.
+    if (this.roster.choosing) {
+      const i = this.roster.lineAt(e, this.h.host);
+      if (i >= 0) {
+        this.roster.choosing(i);
+        return true;
+      }
+    }
     // Touching one of the two cards of a fork picks that road, whatever else is going on.
     const pick = this.cards.choosing ? this.over(e) : null;
     if (pick === "card0" || pick === "card1") {
@@ -1247,6 +1272,7 @@ export class Desk {
     this.mat.dispose();
     this.luck.dispose();
     this.against.dispose();
+    this.roster.dispose();
     this.cards.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();

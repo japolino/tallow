@@ -131,6 +131,11 @@ export interface Table {
   blackCandle?(c: { burned: number; lit: boolean } | null): void;
   /** Theatre of the mind (free form): the map and the pieces put away (true), or set out again for a story (false). */
   theatre?(on: boolean): void;
+  /**
+   * The player's personas on a paper (session.ts, whoYouAre), each with a box to tick, and a last box for someone new.
+   * Resolves with the box ticked (the list's length for someone new), or with a line written instead.
+   */
+  personas?(list: { name: string; title?: string }[]): Promise<{ ticked: number } | Written>;
   /** Your sheets (tell-adventure.ts, sheetPages), the stack by your left hand: written out again as they now stand. */
   sheets?(pages: { heading: string; his: string[] }[]): void;
 }

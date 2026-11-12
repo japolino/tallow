@@ -4,6 +4,13 @@
  */
 import { isChild } from "../engine/card/child.js";
 
+/** One of the player's personas: its name, who it is (its title and description, macros filled), and its title alone. */
+export interface Persona {
+  name: string;
+  who: string;
+  title?: string;
+}
+
 export interface CardInfo {
   name: string;
   description: string;
@@ -30,10 +37,10 @@ export interface CardInfo {
    */
   minor?: boolean;
   /**
-   * The player's own persona in Lumiverse (needs "personas"): who they already are, offered when the narrator asks who
-   * they are tonight (session.ts, whoYouAre). Never read into the card's words.
+   * The player's own personas in Lumiverse (needs "personas"), the active one first: who they already are, put on a
+   * paper when the narrator asks who they are tonight (session.ts, whoYouAre). Never read into the card's words.
    */
-  persona?: { name: string; who: string };
+  personas?: Persona[];
 }
 
 /* A card's words that say it is a world or a scenario, not a person. Strong ones decide alone. */

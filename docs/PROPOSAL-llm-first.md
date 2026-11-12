@@ -158,17 +158,18 @@ Testers said the stories felt pre-made: a card whose character hates you should 
 
 ### 1.12 Sitting down as your own persona (tester feedback)
 
-- The backend reads the active persona (new optional `personas` permission, read only). It fills the persona's macros and sends it with the card as `CardInfo.persona`.
-- When the narrator asks who you are, it offers "come as yourself, <name>".
-- The Decision model reads whether the line takes the offer (`PERSONA_TASK`), with the persona as context. The words (`takesPersona`) are only the fallback.
-- When taken, the persona's own description plus what was said at the table is what the hero reader and the builder get (`personaLine`).
+- The backend lists the player's personas (new optional `personas` permission, read only): the active one first, then the default, then the rest, up to 12. It fills each one's macros and sends them with the card as `CardInfo.personas`. A tester with no active persona was offered nothing at first; every persona is listed now.
+- In the room, when the narrator asks who you are, it lays a paper in front of you (`room/roster.ts`) with each persona on a line, a box by each, and a last box for someone new. Touching a line ticks its box and the narrator takes the paper back. Ticking someone new asks you to write who. Writing instead of ticking also works.
+- A written line is read for a persona by the Decision model (`PERSONA_TASK`), offered each persona by its number on the paper plus `new`, with the personas as context. The words (`personaRead`: a name or a number alone) are only the fallback. A table without the paper names the personas in the question and reads the line the same way.
+- When a persona is chosen, its own description plus anything said at the table is what the hero reader and the builder get (`personaLine`).
 - The permission prompt key moved to `tallow:asked-extras-2`, so players who already answered are asked once about the new extra.
 
 ### Tests
 
-There are 619 tests, all passing, and `tsc` is clean. New tests:
+There are 627 tests, all passing, and `tsc` is clean. New tests:
 
-- `tests/opening.test.ts`: legal openings per story, the model's answer mapped or refused, the first stop laid as the opening (roads and hubs), the hub count and map with an opening, the character joining once it is past, the builder told, and the persona offer, fallback and line.
+- `tests/opening.test.ts`: legal openings per story, the model's answer mapped or refused, the first stop laid as the opening (roads and hubs), the hub count and map with an opening, the character joining once it is past, and the builder told.
+- `tests/personas.test.ts`: the question with and without the paper, the persona options and the model's answer mapped or refused, the word fallback, the persona line, the paper's line layout, and whole sittings where a box is ticked, someone new is ticked, a line is written instead, or there is no paper.
 - `tests/llmfirst.test.ts`: the pick parser, stop stakes and the risk line, `turned`, takenOut with a chosen means plus its toll, reader hurts and trade, grades earned by id, chosen dread moves, and builder `hurt_by`.
 - `tests/kitwriter.test.ts`: the kit shape and its checks.
 

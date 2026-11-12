@@ -67,24 +67,44 @@ async function card(userId: string, characterId: string): Promise<CardInfo | nul
   }
   const looks = await seeing;
   if (looks) info.looks = looks;
-  const persona = await personaOf(userId, info.name);
-  if (persona) info.persona = persona;
+  const personas = await personasOf(userId, info.name);
+  if (personas.length) info.personas = personas;
   return info;
 }
 
-/** The player's active persona, to sit down as (game/card.ts, `persona`); null without one or the "personas" permission. */
-async function personaOf(userId: string, charName: string): Promise<CardInfo["persona"] | null> {
+/** How many of the player's personas are put on the paper (session.ts, whoYouAre). */
+const PERSONAS_MAX = 12;
+
+/**
+ * The player's personas, to sit down as (game/card.ts, `personas`): the active one first, then the default, then the
+ * rest as Lumiverse lists them. Empty without any or without the "personas" permission. Only read, never changed.
+ */
+async function personasOf(userId: string, charName: string): Promise<NonNullable<CardInfo["personas"]>> {
   try {
-    const p = (await spindle.personas.getActive(userId)) ?? (await spindle.personas.getDefault(userId));
-    const name = p?.name?.trim();
-    if (!p || !name) return null;
-    const who = [p.title, p.description].map((x) => (x ?? "").trim()).filter(Boolean).join(". ");
-    // Its macros as the game reads them: the player is the persona, the character the card's.
-    const filled = who.replace(/\{\{\s*user\s*\}\}|<USER>/gi, name).replace(/\{\{\s*char\s*\}\}|<BOT>/gi, charName).replace(/\{\{[^}]*\}\}/g, "").slice(0, 2000);
-    return { name: name.slice(0, 60), who: filled };
+    const [listed, active, fallback] = await Promise.all([
+      spindle.personas.list({ limit: 100, userId }).then((r) => r.data, () => []),
+      spindle.personas.getActive(userId).catch(() => null),
+      spindle.personas.getDefault(userId).catch(() => null),
+    ]);
+    const first = [active, fallback].filter((p): p is NonNullable<typeof p> => !!p);
+    const all = [...first, ...listed.filter((p) => !first.some((f) => f.id === p.id))];
+    const seen = new Set<string>();
+    const out: NonNullable<CardInfo["personas"]> = [];
+    for (const p of all) {
+      const name = p.name?.trim();
+      if (!name || seen.has(p.id)) continue;
+      seen.add(p.id);
+      // Its macros as the game reads them: the player is the persona, the character the card's.
+      const fill = (x: string): string => x.replace(/\{\{\s*user\s*\}\}|<USER>/gi, name).replace(/\{\{\s*char\s*\}\}|<BOT>/gi, charName).replace(/\{\{[^}]*\}\}/g, "").trim();
+      const title = fill(p.title ?? "");
+      const who = [title, fill(p.description ?? "")].filter(Boolean).join(". ").slice(0, 2000);
+      out.push({ name: name.slice(0, 60), who, ...(title ? { title: title.slice(0, 80) } : {}) });
+      if (out.length >= PERSONAS_MAX) break;
+    }
+    return out;
   } catch (err) {
-    spindle.log.info(`tallow: the persona could not be read (${text(err).slice(0, 120)})`);
-    return null;
+    spindle.log.info(`tallow: the personas could not be read (${text(err).slice(0, 120)})`);
+    return [];
   }
 }
 

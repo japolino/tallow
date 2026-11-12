@@ -1,7 +1,7 @@
 /**
  * The night opens from the card's first message (session.ts, openingFor): a model chooses among the openings the story's
  * shape allows, code lays the road with its first stop that trouble, and the card's own character, met hostile there,
- * walks with you only once it is past. And you may sit down as your own persona instead of someone new.
+ * walks with you only once it is past.
  */
 import { describe, expect, test } from "bun:test";
 import { RECIPES, recipeOf, type Recipe } from "../src/content/tropes.js";
@@ -10,7 +10,7 @@ import { hubDone, mapOf } from "../src/engine/adventure.js";
 import { FRIEND, layRoad, waysThrough, type RoadOptions } from "../src/engine/road.js";
 import { applyWords, buildMessages, openingSaid } from "../src/game/build.js";
 import type { CardInfo } from "../src/game/card.js";
-import { openingFor, openingOf, openingOptions, personaLine, takesPersona, whoAsk, WHO_ASK } from "../src/game/session.js";
+import { openingFor, openingOf, openingOptions } from "../src/game/session.js";
 
 const HOSTILE: CardInfo = {
   name: "Vesna",
@@ -146,23 +146,5 @@ describe("the opening is chosen by a model, among those the story allows", () =>
         expect(waysThrough(adv).length).toBeGreaterThan(0);
       }
     }
-  });
-});
-
-describe("you may sit down as your own persona", () => {
-  const persona = { name: "Kestrel", who: "A wandering cartographer with a bad knee and a good memory." };
-  test("the narrator offers it only when there is one", () => {
-    expect(whoAsk()).toBe(WHO_ASK);
-    expect(whoAsk(persona)).toContain("as yourself, Kestrel");
-  });
-  test("the words take it only when no model can tell", () => {
-    expect(takesPersona("as myself", persona)).toBe(true);
-    expect(takesPersona("Kestrel.", persona)).toBe(true);
-    expect(takesPersona("A one-eyed smuggler called Rook", persona)).toBe(false);
-  });
-  test("the persona is what is read into the hero, with what was said at the table", () => {
-    const line = personaLine(persona, "as myself, with my old compass");
-    expect(line.startsWith("Kestrel. A wandering cartographer")).toBe(true);
-    expect(line).toContain("with my old compass");
   });
 });
