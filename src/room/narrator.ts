@@ -122,8 +122,12 @@ interface Rig {
   shoulderAt: Vector3;
 }
 
-/** The colour of the narrator's cloth. */
-const CLOTH = 0x1c1a20;
+/** The colour of the narrator's cloth: the palette's soot (docs/ART.md). */
+const CLOTH = 0x16110e;
+/** The modelled cloth is the same soot; the shadow baked into its vertex colours only deepens the folds. */
+const CLOTH_BAKED = CLOTH;
+/** The narrator's skin: the palette's bone, in shadow. */
+const SKIN = 0x9e8e6c;
 
 /** One arm: a sleeve from the elbow, hidden in the mantle, to the hand, which can leave its place on the table to move a piece. */
 interface Arm {
@@ -189,6 +193,9 @@ export class Narrator {
   /** The round of each elbow of the plain arms built in code: hidden with them once the sculpted arms have loaded. */
   private elbows: Mesh[] = [];
   private cloth: MeshStandardMaterial;
+  private clothBaked: MeshStandardMaterial;
+  /** The sleeves: the same baked soot, without the rim of light the mantle needs against the wall (on a thin tube it lit the whole sleeve). */
+  private sleeveCloth: MeshStandardMaterial;
   /** Moments inside the clips that the room acts on: seconds into "slam" when the fist lands, into "light" when the wick takes. */
   private marks: Record<string, number> = { slam: 0.74, light: 0.5 };
   private impact = 0;
@@ -214,20 +221,25 @@ export class Narrator {
    */
   constructor(private reduced: boolean, models?: string) {
     // Dark, but not so dark that candlelight and daylight have nothing to show its folds by.
-    const cloth = (this.cloth = new MeshStandardMaterial({ color: CLOTH, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide }));
     const rim = { value: this.rim };
-    cloth.onBeforeCompile = (shader) => {
-      shader.uniforms.uRim = rim;
-      shader.fragmentShader =
-        "uniform vec3 uRim;\n" +
-        shader.fragmentShader.replace(
-          "#include <emissivemap_fragment>",
-          "#include <emissivemap_fragment>\n  { float rimF = 1.0 - abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance += uRim * rimF * rimF; }",
-        );
+    const rimmed = (m: MeshStandardMaterial, key: string): MeshStandardMaterial => {
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.uRim = rim;
+        shader.fragmentShader =
+          "uniform vec3 uRim;\n" +
+          shader.fragmentShader.replace(
+            "#include <emissivemap_fragment>",
+            "#include <emissivemap_fragment>\n  { float rimF = 1.0 - abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance += uRim * rimF * rimF; }",
+          );
+      };
+      m.customProgramCacheKey = () => key;
+      return m;
     };
-    cloth.customProgramCacheKey = () => "narrator-cloth-rim";
+    const cloth = (this.cloth = rimmed(new MeshStandardMaterial({ color: CLOTH, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide }), "narrator-cloth-rim"));
+    this.clothBaked = rimmed(new MeshStandardMaterial({ color: CLOTH_BAKED, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide, vertexColors: true }), "narrator-cloth-rim-baked");
     const voidMat = new MeshBasicMaterial({ color: 0x000000, fog: false });
-    this.mats.push(cloth, voidMat);
+    this.sleeveCloth = new MeshStandardMaterial({ color: CLOTH_BAKED, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide, vertexColors: true });
+    this.mats.push(cloth, this.clothBaked, this.sleeveCloth, voidMat);
 
     // The cloak: a turned shape with folds pressed into it, wider than it is deep.
     const prof = [
@@ -331,6 +343,11 @@ export class Narrator {
     });
   }
 
+  /** The cloth for a modelled part: the one that carries its baked shadow, if the model brought it. */
+  private clothOf(m: Mesh): MeshStandardMaterial {
+    return m.geometry.getAttribute("color") ? this.clothBaked : this.cloth;
+  }
+
   /** Swap the turned hood for the sculpted one: thick cloth round a hollow that takes no light. */
   private async loadHood(url: string): Promise<void> {
     const scene = await this.fetch(url, "hood");
@@ -343,7 +360,7 @@ export class Narrator {
       if (!m.isMesh) return;
       // The model marks its inside "void"; everything else is cloth.
       const inside = /void/i.test((m.material as Material | undefined)?.name ?? "") || /void/i.test(m.name);
-      m.material = inside ? dark : this.cloth;
+      m.material = inside ? dark : this.clothOf(m);
       m.castShadow = !inside;
       found = true;
     });
@@ -361,7 +378,7 @@ export class Narrator {
     scene.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
-      m.material = this.cloth;
+      m.material = this.clothOf(m);
       m.castShadow = true;
       found = true;
     });
@@ -382,8 +399,17 @@ export class Narrator {
       console.warn("tallow: the narrator's arms are not the model this room expects; keeping the plain shape.");
       return;
     }
-    const skin = new MeshStandardMaterial({ color: 0x8a8074, roughness: 0.58, envMapIntensity: 0.4 });
-    this.mats.push(skin);
+    // The sculpt's knuckles and tendons come in the model's normal map, and its own shadow in its vertex colours.
+    let made: MeshStandardMaterial | undefined;
+    file.scene.traverse((o) => {
+      const m = o as Mesh;
+      if (m.isMesh && !/cloth/i.test((m.material as Material | undefined)?.name ?? "")) made ??= m.material as MeshStandardMaterial;
+    });
+    const skin = new MeshStandardMaterial({ color: SKIN, roughness: 0.62, envMapIntensity: 0.4, normalMap: made?.normalMap ?? null });
+    if (made?.normalMap) this.mats.push(made);
+    const skinBaked = skin.clone();
+    skinBaked.vertexColors = true;
+    this.mats.push(skin, skinBaked);
     // The arm bones are placed here, so the clips keep only what they are for: the hand's place and the fingers.
     const clips = file.animations.map((c) => {
       const only = c.clone();
@@ -404,7 +430,7 @@ export class Narrator {
         if (!m.isMesh) return;
         // The model names its surfaces: "cloth" is the sleeve, anything else is skin.
         const cloth = /cloth/i.test((m.material as Material | undefined)?.name ?? "");
-        m.material = cloth ? this.cloth : skin;
+        m.material = cloth ? (m.geometry.getAttribute("color") ? this.sleeveCloth : this.cloth) : m.geometry.getAttribute("color") ? skinBaked : skin;
         m.castShadow = true;
         m.receiveShadow = !cloth;
         // Its bounds are those of the arm at rest; reaching, it leaves them.
@@ -464,7 +490,7 @@ export class Narrator {
 
   /** Two sleeves coming forward onto the table, and the hands at the end of them. */
   private buildArms(cloth: Material): void {
-    const skin = new MeshStandardMaterial({ color: 0x8d8376, roughness: 0.62 });
+    const skin = new MeshStandardMaterial({ color: SKIN, roughness: 0.62 });
     const nail = new MeshStandardMaterial({ color: 0x2a2420, roughness: 0.4 });
     this.mats.push(skin, nail);
     const seg = (from: Vector3, to: Vector3, r0: number, r1: number, mat: Material) => {

@@ -55,6 +55,9 @@ _steps = os.environ.get("TALLOW_STEPS")
 os.environ["TALLOW_STEPS"] = "1"
 sys.path.insert(0, HERE)
 import narrator_hand as sculpt  # noqa: E402
+import style  # noqa: E402
+
+HAND_TRIS = 3600  # docs/ART.md: the whole arm, hand and sleeve, within 5k; the sculpt's detail goes to a normal map
 
 if _steps is None:
     del os.environ["TALLOW_STEPS"]
@@ -704,7 +707,8 @@ def export(objs):
         use_selection=True,
         export_apply=False,
         export_yup=True,
-        export_texcoords=False,
+        export_texcoords=True,
+        export_vertex_color="ACTIVE",
         export_materials="EXPORT",
         export_skins=True,
         export_def_bones=False,
@@ -718,6 +722,7 @@ def export(objs):
     # Blender versions disagree about which of these exist; pass the ones this one knows.
     known = {p.identifier for p in bpy.ops.export_scene.gltf.get_rna_type().properties}
     bpy.ops.export_scene.gltf(**{k: v for k, v in wanted.items() if k in known})
+    style.quantize_glb(OUT)
 
 
 def main():
@@ -725,12 +730,26 @@ def main():
     place = Matrix.Translation(REST_AT) @ Matrix.Rotation(REST_YAW, 4, "Z")
     hand = sculpt.build()
     hand.data.transform(place)
+    # Keep the full sculpt to bake from, and thin the hand that is skinned and shipped.
+    high = hand.copy()
+    high.data = hand.data.copy()
+    high.name = "hand_high"
+    bpy.context.scene.collection.objects.link(high)
+    style.thin(hand, HAND_TRIS)
     J = joints(place)
     arm, at = build_rig(place, J)
     skin_hand(hand, arm, J, at)
     cloth = sleeve(arm, at)
     material(hand, "skin", (0.54, 0.5, 0.45, 1))
     material(cloth, "cloth", (0.02, 0.02, 0.03, 1))
+    # The sculpt's knuckles, tendons and creases, baked into a normal map on the thinned hand; then the hand's and
+    # the sleeve's own shadow into their vertex colours, at rest.
+    arm.data.pose_position = "REST"
+    bpy.context.view_layer.update()
+    style.normal_bake(high, hand, hand.data.materials[0], size=512, extrusion=0.0015, distance=0.005)
+    style.bake([hand, cloth], apply=False, ground=False, ao_distance=0.03, wear=0.0, cavity=0.4, floor=0.35)
+    bpy.data.objects.remove(high, do_unlink=True)
+    arm.data.pose_position = "POSE"
     P = Poser(arm)
     grip, marks = clips(P)
     # The marker for where the fingers close goes where the fitting found it.

@@ -419,7 +419,8 @@ class Room implements RoomHandle {
     this.die.place(BOX.clone().add(V(-0.02, 0.012 + DIE_REST, 0.01)));
     for (const p of opts.pieces) this.addPiece(p);
     const carved = opts.assets ? this.loadPieces(`${opts.assets.replace(/\/$/, "")}/models/pieces.glb`) : Promise.resolve();
-    this.ready = Promise.all([this.narrator.ready, carved]).then(() => undefined);
+    const modelled = opts.assets ? this.loadProps(`${opts.assets.replace(/\/$/, "")}/models/props.glb`) : Promise.resolve();
+    this.ready = Promise.all([this.narrator.ready, carved, modelled]).then(() => undefined);
     this.settlePieces();
 
     this.resizeObs = new ResizeObserver(() => this.resize());
@@ -613,7 +614,7 @@ class Room implements RoomHandle {
     }
 
     // A deep sill under each window.
-    const sillMat = new MeshStandardMaterial({ color: 0x2c2018, roughness: 0.85 });
+    const sillMat = new MeshStandardMaterial({ color: 0x3a2416, roughness: 0.8 }); // palette: dark oak
     const sillB = new Mesh(new BoxGeometry(b.w + 0.16, 0.05, WALL_T + 0.12), sillMat);
     sillB.position.set(b.cx, b.y0 - 0.025, b.z - WALL_T / 2 + 0.05);
     sillB.castShadow = sillB.receiveShadow = true;
@@ -646,9 +647,10 @@ class Room implements RoomHandle {
   /** Shelves of books against the back wall, to the right of the window, mostly lost in the dark. */
   private shelves(): void {
     const g = new Group();
-    const wood = new MeshStandardMaterial({ color: 0x241a12, roughness: 0.9 });
+    const wood = new MeshStandardMaterial({ color: 0x3a2416, roughness: 0.8 }); // palette: dark oak, as the modelled furniture
     const r = rng(8);
-    const spines = [0x4a1f1a, 0x1f2a3a, 0x3a3018, 0x23301f, 0x3a2430, 0x2a2420, 0x51361c];
+    // Stand-in spines until the modelled book rows arrive, in the palette's leather, ink, moss and oak.
+    const spines = [0x5a1f18, 0x1f2e4a, 0x52341f, 0x1c2a22, 0x3a130e, 0x2a211b, 0x6b4527];
     for (let row = 0; row < 4; row++) {
       const y = -0.2 + row * 0.44;
       const shelf = new Mesh(new BoxGeometry(1.5, 0.035, 0.26), wood);
@@ -665,6 +667,7 @@ class Room implements RoomHandle {
           book.rotation.z = r() < 0.12 ? 0.18 : 0;
           book.castShadow = true;
           g.add(book);
+          this.standIn("book_row", book);
         }
         x += w + 0.004;
       }
@@ -676,6 +679,7 @@ class Room implements RoomHandle {
     }
     g.position.set(1.42, 0, BACK.z + 0.14);
     this.scene.add(g);
+    this.anchor.set("shelves", g);
   }
 
   /**
@@ -838,16 +842,19 @@ class Room implements RoomHandle {
     top.position.set(0, -0.035, -0.1);
     top.castShadow = top.receiveShadow = true;
     this.scene.add(top);
+    this.standIn("table", top);
     const under = new Mesh(new BoxGeometry(1.7, 0.12, 1.05), new MeshStandardMaterial({ color: 0x1c120b, roughness: 0.9 }));
     under.position.set(0, -0.13, -0.1);
     under.castShadow = true;
     this.scene.add(under);
+    this.standIn("table", under);
     for (const sx of [-0.78, 0.78])
       for (const sz of [-0.62, 0.42]) {
         const leg = new Mesh(new BoxGeometry(0.09, 0.7, 0.09), new MeshStandardMaterial({ color: 0x1c120b, roughness: 0.9 }));
         leg.position.set(sx, -0.41, sz);
         leg.castShadow = true;
         this.scene.add(leg);
+        this.standIn("table", leg);
       }
 
     // The map: a sheet of parchment that does not quite lie flat.
@@ -888,6 +895,8 @@ class Room implements RoomHandle {
     const dish = new Mesh(new LatheGeometry([[0, 0.004], [0.1, 0.004], [0.125, 0.014], [0.13, 0.02], [0.122, 0.021], [0.1, 0.01], [0, 0.009]].map(([r, y]) => new Vector2(r, y)), 32), pewter);
     dish.castShadow = dish.receiveShadow = true;
     cluster.add(dish);
+    this.standIn("dish", dish);
+    this.anchor.set("dish", cluster);
     // The dish is raised a little in the middle, where the candles stand.
     const stand = new Group();
     stand.position.y = 0.009;
@@ -906,6 +915,8 @@ class Room implements RoomHandle {
     );
     holder.castShadow = true;
     stick.add(holder);
+    this.standIn("candlestick", holder);
+    this.anchor.set("candlestick", stick);
     const upper = new Group();
     upper.position.y = 0.132;
     stick.add(upper);
@@ -946,6 +957,8 @@ class Room implements RoomHandle {
     tome.position.set(0.72, 0, -0.14);
     tome.rotation.y = 0.24;
     this.scene.add(tome);
+    this.standIn("tome", ...tome.children);
+    this.anchor.set("tome", tome);
 
     // A few coins by the narrator's book.
     const gold = new MeshStandardMaterial({ color: 0xb08a34, roughness: 0.3, metalness: 1 });
@@ -956,6 +969,7 @@ class Room implements RoomHandle {
       coin.rotation.y = this.rnd() * 3;
       coin.castShadow = coin.receiveShadow = true;
       this.scene.add(coin);
+      this.standIn("coin", coin);
     }
   }
 
@@ -972,10 +986,12 @@ class Room implements RoomHandle {
     lining.rotation.x = -Math.PI / 2;
     lining.position.y = t + 0.0006;
     g.add(base, lining);
+    this.standIn("dice_box", base, lining);
     for (const [sx, sz, bw, bd] of [[0, d / 2 - t / 2, w, t], [0, -d / 2 + t / 2, w, t], [w / 2 - t / 2, 0, t, d], [-w / 2 + t / 2, 0, t, d]] as const) {
       const wall = new Mesh(new BoxGeometry(bw, h, bd), wood);
       wall.position.set(sx, h / 2, sz);
       g.add(wall);
+      this.standIn("dice_box", wall);
     }
     // Two more dice lying in it.
     for (const [x, z, color, turn] of [[0.045, -0.025, 0xd8c9a4, 0.7], [0.03, 0.035, 0x1c2c48, 2.1]] as const) {
@@ -990,6 +1006,107 @@ class Room implements RoomHandle {
     g.position.copy(BOX);
     g.rotation.y = -0.18;
     this.scene.add(g);
+    this.anchor.set("dice_box", g);
+  }
+
+  /** Code-built stand-ins for the modelled props, by the name of the prop that replaces them; and where some of those props go. */
+  private stands = new Map<string, Object3D[]>();
+  private anchor = new Map<string, Object3D>();
+
+  private standIn(name: string, ...objs: Object3D[]): void {
+    this.stands.set(name, [...(this.stands.get(name) ?? []), ...objs]);
+  }
+
+  /** Fetch the modelled props (models/props.py makes them) and put each in its place. Each that arrives hides its stand-in; if the file will not load, the stand-ins stay. */
+  private loadProps(url: string): Promise<void> {
+    return new Promise((done) => {
+      new GLTFLoader().load(
+        url,
+        (gltf) => {
+          if (!this.disposed) this.placeProps(gltf.scene);
+          done();
+        },
+        undefined,
+        () => {
+          console.warn("tallow: the modelled props did not load; keeping the plain ones.");
+          done();
+        },
+      );
+    });
+  }
+
+  private placeProps(src: Object3D): void {
+    src.traverse((o) => {
+      const m = o as Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = m.receiveShadow = true;
+      const mat = m.material as MeshStandardMaterial;
+      // Glass is the one thing the palette cannot do on its own: let the light, and what is behind it, through.
+      if (/^glass/.test(mat.name)) {
+        mat.transparent = true;
+        mat.opacity = 0.3;
+        mat.depthWrite = false;
+        m.castShadow = false;
+      }
+    });
+    const put = (name: string, parent: Object3D, x: number, y: number, z: number, turn = 0, o: { flip?: boolean; tall?: number } = {}): Object3D | null => {
+      const from = src.getObjectByName(name);
+      if (!from) return null;
+      // The file's own node keeps the offset and scale its packed vertices need (KHR_mesh_quantization); the carrier is what moves.
+      const it = new Group();
+      it.name = name;
+      it.add(from.clone());
+      it.position.set(x, y, z);
+      it.rotation.set(0, turn, 0);
+      it.scale.set(o.flip ? -1 : 1, o.tall ?? 1, 1);
+      parent.add(it);
+      for (const s of this.stands.get(name) ?? []) s.visible = false;
+      return it;
+    };
+    const at = (name: string) => this.anchor.get(name) ?? this.scene;
+    const scene = this.scene;
+
+    // In place of the plain ones: the table, the dish and the brass stick under the candles, the narrator's book, its coins, your dice box.
+    put("table", scene, 0, 0, -0.1);
+    put("dish", at("dish"), 0, 0, 0);
+    put("candlestick", at("candlestick"), 0, 0, 0);
+    put("tome", at("tome"), 0, 0, 0);
+    put("dice_box", at("dice_box"), 0, 0, 0);
+    for (const c of this.stands.get("coin") ?? []) {
+      const high = Math.round((c.position.y - 0.00125) / 0.0026);
+      put("coin", scene, c.position.x, high * 0.0034, c.position.z, c.rotation.y);
+    }
+
+    // On the table, out of the way of the map, your things and the narrator's dealing space, and inside the seat's view.
+    put("inkwell", scene, 0.86, 0, -0.64, -0.5);
+    put("tankard", scene, -0.89, 0, -0.62, 1.9);
+    put("bottle", scene, -0.53, 0, -0.69, 2.4);
+
+    put("scroll", scene, -0.8, 0, 0.36, 0.55);
+
+    // Round the room.
+    const floor = -0.76;
+    put("rug", scene, 0, floor, -0.15, 0.04);
+    put("chest", scene, -1.9, floor, 0.45, Math.PI / 2 + 0.06);
+    put("barrel", scene, -1.86, floor, -2.08, 0.4);
+    put("crate", scene, -1.24, floor, -2.2, 0.22);
+    put("coffer", scene, -1.22, floor + 0.399, -2.2, 0.36);
+    put("stool", scene, 1.36, floor, 0.22, -0.5);
+    put("candle_wheel", scene, -0.15, 1.75, -1.9, 0.3);
+    // Left of where the narrator sits, so they show against the window behind it.
+    put("lantern", scene, -0.58, BACK.y0, BACK.z - 0.06, -0.4);
+    put("hourglass", scene, -0.76, BACK.y0, BACK.z - 0.04, 0.3);
+    put("bottle", scene, LEFT.x - 0.1, LEFT.y0, LEFT.cz - 0.45, 0.8);
+    put("herb_jar", scene, LEFT.x - 0.08, LEFT.y0, LEFT.cz + 0.42, 0.2);
+
+    // The shelves: rows of bound books, with a few other things kept among them.
+    const sh = at("shelves");
+    const row = (i: number) => -0.2 + i * 0.44 + 0.0175;
+    for (const [i, x, flip, tall] of [[0, -0.45, false, 1], [0, 0.04, true, 0.94], [1, -0.48, true, 1.04], [1, 0.5, false, 0.96], [2, -0.1, false, 1], [2, 0.42, true, 1.06], [3, -0.4, true, 0.97], [3, 0.3, false, 1.03]] as const)
+      put("book_row", sh, x, row(i), 0.02, 0, { flip, tall });
+    put("jar", sh, 0.48, row(0), 0.03, 0.4);
+    put("skull", sh, 0.06, row(1), 0.04, -0.35);
+    put("scroll", sh, -0.54, row(2), 0.03, 0.08);
   }
 
   /** The carved figures, once they have loaded (models/pieces.py makes them). */
@@ -1018,6 +1135,18 @@ class Room implements RoomHandle {
     });
   }
 
+  /** A copy of a piece's material that multiplies in the shadow the carved figure carries in its vertex colours. */
+  private shadowed = new Map<Material, Material>();
+  private withShadow(mat: Material): Material {
+    let m = this.shadowed.get(mat);
+    if (!m) {
+      m = mat.clone();
+      (m as MeshStandardMaterial).vertexColors = true;
+      this.shadowed.set(mat, m);
+    }
+    return m;
+  }
+
   /** Stand the carved figure in a piece's place: a walker in a hat for you and your companions, a small hooded copy of the narrator for its own. */
   private carve(p: Piece): void {
     const src = this.carved?.getObjectByName(p.kind === "narrator" ? "shadow" : "traveller");
@@ -1033,7 +1162,8 @@ class Room implements RoomHandle {
       if (!m.isMesh) return;
       const name = (m.material as Material | undefined)?.name ?? "";
       const inside = /void|eyes/i.test(name);
-      m.material = /eyes/i.test(name) ? this.pieceEyes : inside ? this.pieceVoid : /band/i.test(name) ? p.mats.band : p.mats.body;
+      const painted = /band/i.test(name) ? p.mats.band : p.mats.body;
+      m.material = /eyes/i.test(name) ? this.pieceEyes : inside ? this.pieceVoid : m.geometry.getAttribute("color") ? this.withShadow(painted) : painted;
       m.castShadow = !inside;
       m.receiveShadow = !inside;
       found = true;
@@ -1058,11 +1188,11 @@ class Room implements RoomHandle {
     const mats =
       spec.kind === "narrator"
         ? {
-            body: new MeshPhysicalMaterial({ color: 0x17141c, roughness: 0.24, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.14 }),
+            body: new MeshPhysicalMaterial({ color: 0x16110e, roughness: 0.45, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.5 }),
             band: new MeshStandardMaterial({ color: 0x7a1410, roughness: 0.4, emissive: new Color(0x5a0806), emissiveIntensity: 0.25 }),
           }
         : {
-            body: new MeshPhysicalMaterial({ color: 0xe6d9ba, roughness: 0.34, clearcoat: 0.4, clearcoatRoughness: 0.4 }),
+            body: new MeshPhysicalMaterial({ color: 0xe6dabd, roughness: 0.55, clearcoat: 0 }),
             band: new MeshStandardMaterial({ color: spec.kind === "player" ? 0x244a9a : 0x2c6a3a, roughness: 0.35 }),
           };
     if (spec.kind === "narrator") {

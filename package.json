@@ -19,7 +19,7 @@
     "build": "bun run scripts/build.ts",
     "embed": "bun run scripts/embed.ts",
     "live": "bun run scripts/live.ts",
-    "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (narrator_cloak, narrator_hand, narrator_arm, narrator_hood, pieces)"
+    "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (props, narrator_cloak, narrator_arm, narrator_hood, pieces), then bun run embed. docs/ART.md has the style and the judge."
   },
   "dependencies": {
     "three": "0.171.0"

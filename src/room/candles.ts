@@ -54,9 +54,9 @@ function waxGlow(): CanvasTexture {
 
 export function candleKit(flame: Texture, halo: Texture): CandleKit & { dispose(): void } {
   const glow = waxGlow();
-  const wax = new MeshStandardMaterial({ color: 0xd9c9a6, roughness: 0.46, emissive: new Color(0xffffff), emissiveMap: glow, emissiveIntensity: 0 });
-  const run = new MeshStandardMaterial({ color: 0xcfbf9c, roughness: 0.42 });
-  const rim = new MeshStandardMaterial({ color: 0xe6d6b0, roughness: 0.34, emissive: new Color(0xff9a48), emissiveIntensity: 0 });
+  const wax = new MeshStandardMaterial({ color: 0xe3d3ae, roughness: 0.6, emissive: new Color(0xffffff), emissiveMap: glow, emissiveIntensity: 0 });
+  const run = new MeshStandardMaterial({ color: 0xd8c9a4, roughness: 0.55 });
+  const rim = new MeshStandardMaterial({ color: 0xeee2c4, roughness: 0.55, emissive: new Color(0xff9a48), emissiveIntensity: 0 });
   const wick = new MeshBasicMaterial({ color: 0x0a0806 });
   return {
     wax, run, rim, wick, flame, halo,

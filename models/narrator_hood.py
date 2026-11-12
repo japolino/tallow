@@ -18,16 +18,20 @@ The outside of the cloth carries the material "cloth"; the inside carries
 """
 import math
 import os
+import sys
 
 import bmesh
 import bpy
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.path.join(os.environ.get("TALLOW_ROOT", "D:/Lumiverse/tallow"), "models"))
+import style  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in globals() else os.environ.get("TALLOW_ROOT", "D:/Lumiverse/tallow")
 OUT = os.path.join(ROOT, "assets", "models", "narrator_hood.glb")
 
 AROUND = 40
 THICK = 0.024
-TARGET_TRIS = 9000
+TARGET_TRIS = 4000  # docs/ART.md: the hood's budget
 
 # The hood from the side, brim first: (how far back from the middle of the head, radius).
 # The first ring turns in a little, so the brim has a lip.
@@ -162,7 +166,11 @@ def export(o):
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
     o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="EXPORT", export_yup=True, export_texcoords=False)
+    style.bake([o], apply=False, ground=False, ao_distance=0.05, wear=0.0, cavity=0.35, floor=0.3)
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="EXPORT", export_yup=True, export_texcoords=False, export_vertex_color="ACTIVE")
+    style.quantize_glb(OUT)
     print(f"wrote {OUT}: {sum(len(p.vertices) - 2 for p in o.data.polygons)} triangles, {os.path.getsize(OUT) // 1024} KB")
 
 

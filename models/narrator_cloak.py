@@ -18,17 +18,21 @@ src/room/narrator.ts.
 """
 import math
 import os
+import sys
 
 import bmesh
 import bpy
 from mathutils import Vector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.path.join(os.environ.get("TALLOW_ROOT", "D:/Lumiverse/tallow"), "models"))
+import style  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in globals() else os.environ.get("TALLOW_ROOT", "D:/Lumiverse/tallow")
 OUT = os.path.join(ROOT, "assets", "models", "narrator_cloak.glb")
 
 FRAMES = int(os.environ.get("TALLOW_CLOTH_FRAMES", "70"))
 GRID = int(os.environ.get("TALLOW_CLOTH_GRID", "90"))
-TARGET_TRIS = 26000
+TARGET_TRIS = 9000  # docs/ART.md: the cloak's budget
 
 # Where the body is. Only the top of each arm is under the cloth: a stub hanging from the shoulder, a little
 # thicker than the sleeve that starts inside it (models/narrator_arm.py), so the sleeve's top never shows through.
@@ -176,7 +180,12 @@ def export(o):
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
     o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="NONE", export_yup=True, export_texcoords=False)
+    # The folds' own shadow, baked into the vertex colours (docs/ART.md); the room multiplies the cloth's colour by it.
+    style.bake([o], apply=False, ground=False, ao_distance=0.08, wear=0.0, cavity=0.35, floor=0.32)
+    bpy.ops.object.select_all(action="DESELECT")
+    o.select_set(True)
+    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="NONE", export_yup=True, export_texcoords=False, export_vertex_color="ACTIVE")
+    style.quantize_glb(OUT)
     print(f"wrote {OUT}: {sum(len(p.vertices) - 2 for p in o.data.polygons)} triangles, {os.path.getsize(OUT) // 1024} KB")
 
 

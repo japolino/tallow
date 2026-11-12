@@ -44,7 +44,7 @@ else:
 
 BODY, BAND, VOID, EYES = 0, 1, 2, 3
 AROUND = 20
-TARGET_TRIS = 4200
+TARGET_TRIS = 1500  # docs/ART.md: a playing piece's budget
 TAU = math.tau
 
 
@@ -248,7 +248,13 @@ def export(objs):
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
         o.select_set(True)
-    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="EXPORT", export_yup=True, export_texcoords=False)
+    narrator_hood.style.bake(objs, apply=False, ground=True, ao_distance=0.02, wear=0.25, cavity=0.4, floor=0.3)
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in objs:
+        o.select_set(True)
+    bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_materials="EXPORT", export_yup=True, export_texcoords=False, export_vertex_color="ACTIVE")
+    # room.ts places each figure by moving its node, so the positions stay as they are.
+    narrator_hood.style.quantize_glb(OUT, positions=False)
     print(f"wrote {OUT}: {os.path.getsize(OUT) // 1024} KB")
 
 

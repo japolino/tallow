@@ -7,7 +7,8 @@ Run it either way:
     blender --background --python models/narrator_hand.py
 or from a running Blender (it clears the scene first).
 
-Writes assets/models/narrator_hand.glb.
+Run alone, writes models/narrator_hand.glb beside this script for a look (the room does not load it: narrator_arm.py
+builds the shipped hand from this sculpt).
 
 How it is made: each finger is grown from a stick figure of its bones (every
 joint has a thickness, a skin is wrapped round the sticks), the palm and the
@@ -23,7 +24,7 @@ import os
 import bpy
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) if "__file__" in globals() else os.environ.get("TALLOW_ROOT", "D:/Lumiverse/tallow")
-OUT = os.path.join(ROOT, "assets", "models", "narrator_hand.glb")
+OUT = os.path.join(ROOT, "models", "narrator_hand.glb")
 TARGET_TRIS = 14000
 # How far the finished hand was lowered to sit on the table (set by build(); models/narrator_arm.py needs it
 # to know where the joints ended up).
