@@ -78,6 +78,34 @@ describe("what is left out by structure", () => {
     expect(sorted.blocks.find((b) => b.id === "card")!.content).toBe("{{description}}");
     expect(sorted.blocks.find((b) => b.id === "depth")!.role).toBe("user");
   });
+
+  test("a preset's variables go to the host with the block that defines them, even when that block's words do not", () => {
+    // As imported presets have them: every toggle on one empty heading, and the blocks below written around them.
+    const toggle = (name: string) => ({ id: `v-${name}`, name, label: name, type: "select", defaultValue: "0", options: [] }) as never;
+    const order = [
+      block("toggles", { marker: "category", content: "", variables: [toggle("toggle_mode"), toggle("toggle_length")] }),
+      block("rules", { content: "{{#if {{var::toggle_mode}}}}Write long.{{/if}}" }),
+      block("lore", { marker: "world_info_before", content: "", variables: [toggle("toggle_lore")] }),
+      block("silent", { marker: "category", content: "", enabled: false, variables: [toggle("toggle_off")] }),
+      block("history", { marker: "chat_history", content: "" }),
+      block("after", { content: "Keep to it.", position: "post_history", variables: [toggle("toggle_after")] }),
+    ];
+    const s = sortBlocks(order);
+    // Only blocks with words are kept for the story.
+    expect(s.kept.map((k) => k.id)).toEqual(["rules", "after"]);
+    // The host is handed the definitions under their own blocks' ids, in the preset's order, the wordless ones emptied.
+    const sent = s.blocks.filter((b) => b.variables?.length);
+    expect(sent.map((b) => [b.id, b.content, b.variables!.map((v) => v.name)])).toEqual([
+      ["toggles", "", ["toggle_mode", "toggle_length"]],
+      ["lore", "", ["toggle_lore"]],
+      ["after", "Keep to it.", ["toggle_after"]],
+    ]);
+    // A block that is off brings no variables, as in the host; switched on for this chat, it does.
+    expect(s.blocks.map((b) => b.id)).not.toContain("silent");
+    expect(sortBlocks(order, { silent: true }).blocks.map((b) => b.id)).toContain("silent");
+    // An emptied block is never kept as words: the host makes nothing of it.
+    expect(Object.keys(filled(s.blocks.map((b) => ({ type: "block", blockId: b.id, content: b.content }))))).toEqual(["rules", "after"]);
+  });
 });
 
 describe("what the host made of the blocks", () => {

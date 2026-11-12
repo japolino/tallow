@@ -79,64 +79,79 @@ const baseRole = (role: string): Message["role"] => (role === "user" || role ===
 /**
  * The first pass, by structure. `states` are the chat's own on and off switches over the preset's (the host's
  * `getActive`); a block that is off is simply not there, and is not listed as dropped.
+ *
+ * A preset's variables (its toggles and choices) are defined on a block, and the host reads them only from the blocks
+ * it is handed, under each block's own id. They are often all on one empty category header, or on a block whose words
+ * are left out here. Such a block still goes to the host, emptied of its words, so that every block that is kept is
+ * filled under the player's own settings and not as if nothing were set. As with the host, a block that is off
+ * brings no variables.
  */
 export function sortBlocks(order: readonly PromptBlockSnapshotDTO[], states: Record<string, boolean> = {}): Sorted {
   const kept: Kept[] = [];
   const blocks: PromptBlockDTO[] = [];
   const dropped: Dropped[] = [];
   let pastHistory = false;
+  // A block as the host is to fill it: a plain block before any history. Where it goes in a story is ours to say.
+  const plain = (b: PromptBlockSnapshotDTO, name: string, content: string, role: Message["role"]): PromptBlockDTO => ({
+    id: b.id,
+    name: b.name ?? name,
+    content,
+    role,
+    enabled: true,
+    position: "pre_history",
+    depth: 0,
+    marker: null,
+    isLocked: false,
+    color: null,
+    injectionTrigger: [],
+    group: null,
+    ...(b.variables?.length ? { variables: b.variables } : {}),
+  });
   for (const b of order) {
     if (!b || typeof b.id !== "string") continue;
-    if (b.marker === "chat_history") {
-      pastHistory = true;
-      continue;
-    }
+    if (b.marker === "chat_history") pastHistory = true;
     if (!(states[b.id] ?? b.enabled)) continue;
     const name = (b.name ?? "").trim().slice(0, 80) || "a block";
+    // Its words are not kept; its variables, if it defines any, still are.
+    const out = (why?: StructureReason): void => {
+      if (why) dropped.push({ name, why });
+      if (b.variables?.length) blocks.push(plain(b, name, "", "system"));
+    };
+    if (b.marker === "chat_history") {
+      out();
+      continue;
+    }
     const slot = b.marker ? CARD_SLOTS[b.marker] : undefined;
     const content = slot ?? b.content ?? "";
     if (b.marker && SLOTS.has(b.marker)) {
-      dropped.push({ name, why: "slot" });
+      out("slot");
       continue;
     }
     if (b.sealed) {
-      dropped.push({ name, why: "sealed" });
+      out("sealed");
       continue;
     }
     // A category header with nothing in it is only a heading in the editor.
-    if (!content.trim()) continue;
+    if (!content.trim()) {
+      out();
+      continue;
+    }
     const where: Where = pastHistory || b.position !== "pre_history" ? "after" : "before";
     const role = baseRole(b.role);
     if (b.injectionTrigger?.length && !b.injectionTrigger.includes("normal")) {
-      dropped.push({ name, why: "trigger" });
+      out("trigger");
       continue;
     }
     if (where === "after" && role === "assistant") {
-      dropped.push({ name, why: "prefill" });
+      out("prefill");
       continue;
     }
     if (LIVE.test(content)) {
-      dropped.push({ name, why: "chat" });
+      out("chat");
       continue;
     }
     kept.push({ id: b.id, name, where, role });
-    // Filled as a plain block before any history: where it goes in a story is ours to say (`where`), not the host's.
-    blocks.push({
-      id: b.id,
-      name: b.name ?? name,
-      content,
-      role,
-      enabled: true,
-      position: "pre_history",
-      depth: 0,
-      marker: null,
-      isLocked: false,
-      color: null,
-      injectionTrigger: [],
-      group: null,
-      ...(b.characterTagTrigger?.length ? { characterTagTrigger: b.characterTagTrigger } : {}),
-      ...(b.variables?.length ? { variables: b.variables } : {}),
-    });
+    blocks.push({ ...plain(b, name, content, role), ...(b.characterTagTrigger?.length ? { characterTagTrigger: b.characterTagTrigger } : {}) });
   }
   return { kept, blocks, dropped };
 }

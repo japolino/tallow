@@ -179,7 +179,7 @@ async function presetOf(userId: string, chatId: string): Promise<PresetSnapshot 
     const preset = active?.preset_id ? await spindle.presets.get(active.preset_id, userId) : null;
     if (!preset?.prompt_order?.length) return null;
     const sorted = sortBlocks(preset.prompt_order, active.block_states ?? {});
-    if (!sorted.blocks.length) return null;
+    if (!sorted.kept.length) return null;
     const vars = (preset.metadata as { promptVariables?: PromptVariableValuesDTO } | null)?.promptVariables;
     const made = await spindle.assemble({ blocks: sorted.blocks, chatId, ...(vars && typeof vars === "object" ? { promptVariables: vars } : {}) }, userId);
     const words = filled(made.breakdown ?? []);
