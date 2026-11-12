@@ -59,6 +59,9 @@ export function cardKind(id: string): CardKind {
   return k;
 }
 
+/** The title on a stop's card: the one written for this world, else its kind's own. */
+export const faceOf = (s: { card: string; face?: string }): string => s.face ?? cardKind(s.card).title;
+
 /** What the back of a stop's card says about it before it is turned: the family, in plain words. */
 export const FAMILY_SAYS: Record<CardFamily, string> = {
   person: "someone to get past",

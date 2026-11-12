@@ -11,7 +11,7 @@ import { budgetAt, capAt, fitAbility, fitHand, readAbility, readCalling, STOCK_C
 import { companionOf, placeName, type RoadStop, type Trip, type Use } from "../engine/adventure.js";
 import { abilityRule, endSaid } from "../engine/tell-adventure.js";
 import { CLASSES, makeHero, STAT_BUDGET, type Hero } from "../engine/hero.js";
-import { canUse, GRADES, leverLeft, ALL_STATS, STAT_MAX, STATS, WAYS, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
+import { canUse, COST_KINDS, GRADES, leverLeft, ALL_STATS, STAT_MAX, STATS, WAYS, type CostKind, type Grade, type Moment, type Outcome, type Read, type Stat, type Way } from "../engine/moment.js";
 import { SETUP_VERBS } from "../meaning/read.js";
 import type { Contest, ContestKind, ContestNames, Dial } from "../engine/contest.js";
 import { STAT_MEANS } from "../engine/tell.js";
@@ -73,10 +73,11 @@ export function readMessages(line: string, m: Moment): Message[] {
     "The ways past something are:",
     ...WAYS.map((w) => `- ${WAY_IS[w]}`),
     `The stats are: ${STATS.map((s) => `${s} (${STAT_MEANS[s]})`).join("; ")}.`,
-    'Answer with JSON only: {"way": "talk" | "sneak" | "force" | "pay" | "none", "stat": "brawn" | "grace" | "charm" | "guile" | "wits" | "sense" | "power", "lever": "<id of a thing below the line plainly uses>" or null, "ability": "<id of one of the player\'s abilities the line plainly uses>" or null, "setup": true | false, "helps": "talk" | "sneak" | "force" | "pay" | null, "push": true | false, "grade": "plain" | "grounded" | "inspired", "mark": "<if it works, the fact it leaves true, 3 to 8 words>", "attempt": "<what is attempted, in a few words, second person>"}.',
+    'Answer with JSON only: {"way": "talk" | "sneak" | "force" | "pay" | "none", "stat": "brawn" | "grace" | "charm" | "guile" | "wits" | "sense" | "power", "lever": "<id of a thing below the line plainly uses>" or null, "ability": "<id of one of the player\'s abilities the line plainly uses>" or null, "setup": true | false, "helps": "talk" | "sneak" | "force" | "pay" | null, "push": true | false, "grade": "plain" | "grounded" | "inspired", "mark": "<if it works, the fact it leaves true, 3 to 8 words>", "attempt": "<what is attempted, in a few words, second person>", "stake": "health" | "hours" | "goodwill" | "supplies", "threat": "<if it goes wrong, what happens to the player here, 4 to 12 words, second person>"}.',
     '"way" is "none" only when the line does not try to get past at all (a question, a look round, nothing happening, or setting something up with an ability). Pick the stat the line leans on: usually charm to talk, grace to sneak, brawn to force, wits to pay, unless the line plainly goes about it another way. Guile is lying, disguise and sleight of hand; sense is noticing, waiting for the moment and reading people; grace in a fight is skill and speed; power is magic or whatever power the world gives. A lever is used only if the line plainly uses that thing; if it uses more than one, name the one that does most for the way it goes about it.',
     '"ability": only one the line plainly uses, by its name or by doing just what it looks like. "setup" is true when the line uses the ability to set something up rather than to get past now (making the guards\' stew taste foul so they leave their post), and then "way" is "none" and "helps" is the way past it makes easier later, if any.',
     '"push" is true only when the line says the player gives it everything they have.',
+    '"stake" and "threat" are what a failure would bring down on the player in this scene, from who or what they are up against, not from the way they chose: a hungry pack or an armed guard who is crossed acts (health: they are hurt, grabbed, dragged down), a gate or a long way round holds them up (hours), people who are watching think less of them (goodwill), a thief or a toll takes what they carry (supplies). Failing to talk down someone dangerous is not wasted breath: the danger comes for them.',
     '"grade": "plain" when the line uses nothing particular; "grounded" when it uses something real that is here (a thing listed, a person, one of the abilities) in a way that fits; "inspired" when it ties two real things together, or uses something from earlier in the story, cleverly. Length is not effort: a long line that names nothing real is plain.',
   ].join("\n");
   const user = [
@@ -111,7 +112,9 @@ export function parseRead(text: string, m: Moment): Read | Use | null | "none" {
   const stat = ALL_STATS.includes(j.stat as Stat) ? (j.stat as Stat) : null;
   const lever = typeof j.lever === "string" && m.stop.levers.some((l) => l.id === j.lever && l.way === way) ? j.lever : null;
   const attempt = typeof j.attempt === "string" ? j.attempt.replace(/\s+/g, " ").trim().slice(0, 80) : undefined;
-  return { way, stat, lever, ...(attempt ? { attempt } : {}), ...(ability ? { ability: ability.id } : {}), ...(j.push === true ? { push: true } : {}), ...(grade ? { grade } : {}), ...(mark ? { mark } : {}) };
+  const stake = COST_KINDS.includes(j.stake as CostKind) ? (j.stake as CostKind) : null;
+  const threat = stake && typeof j.threat === "string" && j.threat.trim().length >= 6 && !/[{}<>]/.test(j.threat) ? j.threat.replace(/\s+/g, " ").trim().slice(0, 90) : undefined;
+  return { way, stat, lever, ...(attempt ? { attempt } : {}), ...(stake ? { stake } : {}), ...(threat ? { threat } : {}), ...(ability ? { ability: ability.id } : {}), ...(j.push === true ? { push: true } : {}), ...(grade ? { grade } : {}), ...(mark ? { mark } : {}) };
 }
 
 /* ------------------------------ the teller ------------------------------ */
@@ -156,6 +159,7 @@ export function tellMessages(o: Outcome, stop: RoadStop, note: string, more: boo
     "Write one to three short sentences, at most 60 words, in the second person and the present tense. Plain words, said aloud. No numbers, no dice, no stats, no game words, no markdown, no quotation marks around the whole answer.",
     "What you are told must be true is true. Say nothing that changes it: if the way is still blocked, do not let them past; if they are past, do not add a new obstacle. What was lost is exactly what you are told, nothing more or less. Do not say what they do next. Nothing sexual or explicit.",
     "What must be true is written in the game's own words (supplies, goodwill, health, a way closed). Say it as the story would: coins or food handed over, a reputation that suffers, a wound, a door that will not open now.",
+    "Whatever is lost happens in the scene, done by who or what stands there: lost health is someone or something here hurting, grabbing or knocking the player down; lost time is being held up, chased off or driven back; lost goodwill is someone turning on them or word getting about; lost supplies is something taken, spent or ruined. A try that fails is never only time wasted talking.",
   ].join("\n");
   const user = [
     ctx.world ? `The world of the story:\n${ctx.world}` : "",
@@ -164,6 +168,7 @@ export function tellMessages(o: Outcome, stop: RoadStop, note: string, more: boo
     ctx.with?.length ? `With them: ${ctx.with.join("; ")}.` : "",
     ctx.line ? `They wrote: "${ctx.line.replace(/"/g, "'").slice(0, 300)}"` : "",
     `What must be true: ${note}`,
+    !o.past && o.check?.threat ? `What was said would happen if it went wrong: ${o.check.threat}.` : "",
     more ? "This try worked, but it is not over: more stands in the way here." : "",
   ]
     .filter(Boolean)

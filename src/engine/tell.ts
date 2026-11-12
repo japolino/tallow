@@ -5,7 +5,7 @@
  * these, so what is tested by reading is what is shown.
  */
 import { options, PARTIAL, WAYS, STAT_MAX, TRY_HOURS, type Check, type Shut, type CostKind, type Moment, type Outcome, type Stat, type Tier, type Way } from "./moment.js";
-import { ALL_STATS } from "./moment.js";
+import { ALL_STATS, WAY_COST } from "./moment.js";
 import type { Effect, Position } from "./effect.js";
 
 export const WAY_NAME: Record<Way, string> = { talk: "Talk", sneak: "Sneak", force: "Force", pay: "Pay" };
@@ -46,6 +46,14 @@ export const RISK: Record<Way, string> = {
   sneak: "If it goes wrong you lose time: daylight you will not get back.",
   force: "If it goes wrong you get hurt: you lose health.",
   pay: "It costs supplies when it works, and more when it goes wrong.",
+};
+
+/** What a stake read from the scene puts at risk, said before the throw. */
+const STAKE_SAYS: Record<CostKind, string> = {
+  health: "you get hurt: you lose health",
+  hours: "it holds you up: you lose time",
+  goodwill: "it goes about: you lose goodwill",
+  supplies: "it costs you some of what you carry: you lose supplies",
 };
 
 /** What the die has to do, said without a pointless "plus 0". */
@@ -238,6 +246,8 @@ export function checkSaid(c: Check): string[] {
   if (c.bane) lines.push(c.edge ? `But ${c.bane.name}: that is against you, and it cancels your two dice. You throw one, as usual.` : `But ${c.bane.name}: that is against you. You throw two dice, and the worse one counts. Then my slip is used up.`);
   if (c.cold) lines.push("You have no goodwill left, so nobody much wants to hear you out: that is one step harder.");
   if (c.way === "pay") lines.push(`It asks ${c.price} of your supplies, and more if it goes badly.`);
+  else if (c.threat) lines.push(`If it goes wrong, ${c.threat.replace(/[.!]+$/, "").replace(/^(The|A|An|You|Your|They|Their|It|Its|He|His|She|Her|Someone|Something)\b/, (w) => w.toLowerCase())}: ${STAKE_SAYS[c.costs].split(": ")[1]}.`);
+  else if (c.costs !== WAY_COST[c.way]) lines.push(`If it goes wrong ${STAKE_SAYS[c.costs]}.`);
   else lines.push(RISK[c.way]);
   lines.push(...effectSaid(c));
   return lines;

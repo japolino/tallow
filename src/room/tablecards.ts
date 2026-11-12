@@ -66,6 +66,8 @@ export interface CardSpec {
   kind: string;
   /** A name written on its face. */
   name?: string;
+  /** The title on its ribbon, when it is not its kind's own. */
+  title?: string;
   /** What is written on it under the picture: what it is and what it does. */
   text?: string;
 }
@@ -86,7 +88,7 @@ class Card {
       this.textures.push(t);
       return t;
     };
-    const face = tex(cardFace(spec.kind, spec.name, spec.text));
+    const face = tex(cardFace(spec.kind, spec.name, spec.text, spec.title));
     const back = tex(cardBack(this.family));
     // A card gives back a little of its own light, so it can be made out in a dark room.
     const m = (t: CanvasTexture): MeshStandardMaterial => {

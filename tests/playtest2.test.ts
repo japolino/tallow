@@ -13,6 +13,7 @@ import { newSchedule } from "../src/engine/schedule.js";
 import { checkSaid } from "../src/engine/tell.js";
 import { handStat, worldArrive, worldBegin, worldFirst, worldLine, workedOn } from "../src/engine/world.js";
 import { applyWords, buildMessages, fallbackAdventure } from "../src/game/build.js";
+import { cardKind, faceOf } from "../src/engine/cards.js";
 import type { CardInfo } from "../src/game/card.js";
 import { inKit } from "../src/game/session.js";
 import { nameCheck } from "../src/engine/moment.js";
@@ -163,13 +164,61 @@ describe("the builder's words", () => {
     const world: CardInfo = { name: "Harrowmere", description: "A frontier of monster girls and men.", world: true };
     expect(applyWords(a, world, { friend: { name: "Tobiah Fenn", who: "a miller's son" } }, "s").adv.companions.find((x) => x.id === "friend")!.name).toBe("Tobiah Fenn");
     expect(applyWords(a, world, { friend: { who: "Tobiah Fenn, a miller's son who lost his sister" } }, "s").adv.companions.find((x) => x.id === "friend")!.name).toBe("Tobiah Fenn");
-    expect(buildMessages(world, a)[1]!.content).toContain('"name": "their name"');
+    expect(buildMessages(world, a)[1]!.content).toContain('"name": "<their name>"');
   });
 
   test("what the player asked for and the campaign so far go to the builder", () => {
     const user = buildMessages(MAREN, road("heist"), { asked: "a heist, to steal his heart-locket", campaign: "Steward Vesper wants the grimoire." })[1]!.content;
     expect(user).toContain("a heist, to steal his heart-locket");
     expect(user).toContain("THE CAMPAIGN SO FAR");
+  });
+
+  test("the model invents each stop: none of the made-up stops' words are shown to it", () => {
+    const a = road("rescue");
+    const user = buildMessages(MAREN, a)[1]!.content;
+    for (const s of a.stops) {
+      expect(user).not.toContain(s.situation.slice(0, 40));
+      for (const l of s.levers) expect(user).not.toContain(`"${l.name}"`);
+    }
+    expect(user).toContain("<a thing really there that helps");
+  });
+
+  test("a stop the model wrote whole is its own, with its things to use; a stop half written stays the made-up one", () => {
+    const a = road("rescue");
+    const [s1, s2] = a.stops.filter((s) => !s.climax && s.levers.length >= 2);
+    const levers = (s: typeof s1, tag: string) => Object.fromEntries(s!.levers.map((l) => [l.way, `${tag} ${l.way} thing`]));
+    const words = {
+      stops: {
+        [s1!.id]: { situation: "You face the drowned bell-ringer on the stair. Everything here is new.", teaser: "a bell under water", levers: levers(s1, "brine") },
+        [s2!.id]: { situation: "A half-written stop.", levers: { [s2!.levers[0]!.way]: "only one thing" } },
+      },
+    };
+    const b = applyWords(a, MAREN, words, "s").adv;
+    const t1 = b.stops.find((s) => s.id === s1!.id)!;
+    expect(t1.situation).toContain("drowned bell-ringer");
+    expect(t1.teaser).toBe("a bell under water");
+    for (const l of t1.levers) {
+      expect(l.name).toBe(`brine ${l.way} thing`);
+      expect(l.words).toContain("brine");
+    }
+    const t2 = b.stops.find((s) => s.id === s2!.id)!;
+    expect(t2.situation).toBe(s2!.situation);
+    expect(t2.levers.map((l) => l.name)).toEqual(s2!.levers.map((l) => l.name));
+    // A note sent back as it is counts as unwritten.
+    const echoed = applyWords(a, MAREN, { stops: { [s1!.id]: { situation: "<what stands in the way here>", levers: levers(s1, "x") } } }, "s").adv;
+    expect(echoed.stops.find((s) => s.id === s1!.id)!.situation).toBe(s1!.situation);
+  });
+
+  test("a stop's card shows the title the model wrote for it, else its kind's own, and no stock title is offered", () => {
+    const a = road("rescue");
+    const s = a.stops.find((x) => !x.climax)!;
+    const whole = (face?: string) => ({ stops: { [s.id]: { ...(face ? { face } : {}), situation: "You meet something new here, of this world.", levers: Object.fromEntries(s.levers.map((l) => [l.way, `new ${l.way}`])) } } });
+    const b = applyWords(a, MAREN, whole("The Hungry Pack"), "s").adv.stops.find((x) => x.id === s.id)!;
+    expect(faceOf(b)).toBe("The Hungry Pack");
+    expect(b.card).toBe(s.card);
+    expect(faceOf(applyWords(a, MAREN, whole(), "s").adv.stops.find((x) => x.id === s.id)!)).toBe(cardKind(s.card).title);
+    const user = buildMessages(MAREN, a)[1]!.content;
+    for (const x of a.stops.filter((y) => !y.climax)) expect(user).not.toContain(`"${cardKind(x.card).title}"`);
   });
 });
 

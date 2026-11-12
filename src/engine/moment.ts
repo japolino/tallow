@@ -197,6 +197,10 @@ export interface Read {
   line?: string;
   /** A companion or another player sets the try up: +1 on the gap, when someone is with you. */
   help?: boolean;
+  /** What a failure costs here, judged from who or what the player is up against: a hungry pack's is health, a clerk's goodwill. The way's own cost when not said. */
+  stake?: CostKind | null;
+  /** What happens to the player here if it goes wrong, in a few words ("the pack drags you down"). */
+  threat?: string;
 }
 
 /** Whether an ability can be used now: not used up here or in this story, and the store can pay for it. */
@@ -264,8 +268,10 @@ export interface Check {
   target: number;
   /** The real chances, counted face by face. */
   odds: { success: number; partial: number; fail: number };
-  /** What this way puts at risk. */
+  /** What a failure here puts at risk: what the reader judged from the scene, else the way's own. */
   costs: CostKind;
+  /** What happens to the player if it goes wrong, as the reader saw it in the scene. */
+  threat?: string;
   /** What paying asks, in supplies. 0 for the other ways. */
   price: number;
   /** Talking with no goodwill left: nobody wants to hear you out, so it is a step harder. */
@@ -356,7 +362,8 @@ export function nameCheck(m: Moment, read: Read): Check | null {
     difficulty,
     target,
     odds: { success: o.success, partial, fail: Math.max(0, 1 - o.success - partial) },
-    costs: WAY_COST[read.way],
+    costs: stakeOf(read),
+    ...(read.threat && read.way !== "pay" ? { threat: read.threat } : {}),
     price: read.way === "pay" ? Math.max(0, Math.round(here.price ?? 0)) : 0,
     ...(cold ? { cold } : {}),
     attempt: clip(read.attempt ?? "", ATTEMPT_MAX),
@@ -385,6 +392,11 @@ export function nameCheck(m: Moment, read: Read): Check | null {
 export function options(m: Moment): { way: Way; shut: ReturnType<typeof shut>; check: Check | null }[] {
   return WAYS.map((way) => ({ way, shut: shut(m, way), check: nameCheck(m, { way }) }));
 }
+
+export const COST_KINDS: readonly CostKind[] = ["goodwill", "hours", "health", "supplies"];
+
+/** What a failure costs: the stake read from the scene, else the way's own. Paying always risks supplies, since its price is in them. */
+export const stakeOf = (read: Pick<Read, "way" | "stake">): CostKind => (read.way !== "pay" && read.stake && COST_KINDS.includes(read.stake) ? read.stake : WAY_COST[read.way]);
 
 /** What a result costs. Paying costs its price when it works; any way costs more when it only half works, and costs something when it fails. */
 export function costOf(tier: Tier, price: number): number {

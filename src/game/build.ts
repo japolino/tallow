@@ -11,7 +11,6 @@
  */
 import { CITY_COURTSHIP, COURTSHIP, NIGHT_RESCUE, RESCUE } from "../content/adventures.js";
 import { partOf, type Adventure, type Companion, type RoadStop } from "../engine/adventure.js";
-import { cardKind } from "../engine/cards.js";
 import { KEYS } from "../engine/clues.js";
 import { ageFrom } from "../engine/content.js";
 import { STATS, WAYS, type CoreStat, type Stat, type Way } from "../engine/moment.js";
@@ -88,14 +87,51 @@ export function wordsOf(adv: Adventure): Words {
     companions: Object.fromEntries(adv.companions.map((c) => [c.id, { name: c.name, who: c.who }])),
     loot: Object.fromEntries(adv.loot.map((l) => [l.id, l.name])),
   };
-  if (partOf(adv) === "friend") w.friend = { name: "their name", who: "who they are, in a line", good_at: "charm", likes: "talk", dislikes: "force", age: "adult, elder, young-adult or minor: how old they are written as" };
+  if (partOf(adv) === "friend") w.friend = { name: "<their name>", who: "<who they are, in a line>", good_at: "charm", likes: "talk", dislikes: "force", age: "adult, elder, young-adult or minor: how old they are written as" };
   if (adv.courted) w.courted = { who: adv.courted.who };
   if (adv.rival) w.rival = { name: adv.rival.name, who: adv.rival.who, lost: adv.rival.lost };
   const people = adv.stops.filter((s) => s.person);
-  if (people.length) w.people = Object.fromEntries(people.map((s) => [s.id, { name: s.person!.name, who: "who they are, in a line", wants: s.person!.wants ?? "", age: "adult, elder, young-adult or minor: how old they are written as" }]));
+  if (people.length) w.people = Object.fromEntries(people.map((s) => [s.id, { name: s.person!.name, who: "<who they are, in a line>", wants: s.person!.wants ?? "", age: "adult, elder, young-adult or minor: how old they are written as" }]));
   if (adv.clues?.length) w.clues = Object.fromEntries(adv.clues.map((c) => [c.id, c.text]));
   if (adv.appointments?.length) w.moves = Object.fromEntries(adv.appointments.map((a) => [a.id, a.what]));
   return w;
+}
+
+/** The key a stop's thing to use is written under: its way, when the stop has one thing for that way, else its id. */
+export const leverKey = (s: RoadStop, l: RoadStop["levers"][number]): string => (s.levers.filter((x) => x.way === l.way).length === 1 ? l.way : l.id);
+
+/**
+ * The adventure as a model is asked to write it: the made-up words for everything but the stops, and for each stop a
+ * note of what to write. The made-up stops are not shown, so nothing stock is copied into the card's world.
+ */
+export function designOf(adv: Adventure): Omit<Words, "stops"> & { stops: Record<string, Record<string, unknown>> } {
+  // Each note is in angle brackets, which no written value may have: a note sent back as it is counts as unwritten.
+  const w = wordsOf(adv);
+  const lootName = new Map(adv.loot.map((l) => [l.id, l]));
+  const stops = Object.fromEntries(
+    adv.stops.map((s) => {
+      const levers = Object.fromEntries(s.levers.map((l) => [leverKey(s, l), `<a thing really there that helps ${WAY_WORD[l.way]}, in a few words>`]));
+      const won = s.reward?.loot ? `the thing loot.${s.reward.loot} comes to you` : s.reward?.joins ? `companions.${s.reward.joins} joins you` : "";
+      return [
+        s.id,
+        {
+          face: "<the title on its card, 1 to 4 words>",
+          situation: "<what stands in the way here, 2 to 4 sentences, naming each thing under levers>",
+          teaser: "<a few words about this stop itself, seen from the road: said at a fork, before its card is turned>",
+          levers,
+          ...(s.reward ? { reward: `<a sentence or two: how, once past, ${won || "what is won comes to you"}>` } : {}),
+        },
+      ];
+    }),
+  );
+  const companions = Object.fromEntries(adv.companions.map((c) => [c.id, { name: "<their name>", who: `<who they are, in a line: someone of this world, best at ${c.stat}, who likes getting past by ${WAY_WORD[c.likes]} and dislikes ${WAY_WORD[c.dislikes]}>` }]));
+  const loot = Object.fromEntries(adv.loot.map((l) => [l.id, `<a thing of this world that helps ${WAY_WORD[lootName.get(l.id)!.way]} once, in a few words>`]));
+  const places = Object.fromEntries(adv.places.map((p) => [p.id, "<a place of this world, in a few words>"]));
+  const out: Omit<Words, "stops"> & { stops: Record<string, Record<string, unknown>> } = { ...w, places, stops, companions, loot };
+  if (w.people) out.people = Object.fromEntries(Object.entries(w.people).map(([id, p]) => [id, { ...p, name: "<their name>", wants: "<one thing they want now, a few words, that the player could do for them>" }]));
+  if (w.clues) out.clues = Object.fromEntries(Object.keys(w.clues).map((id) => [id, "<the fact, a line long>"]));
+  if (w.moves) out.moves = Object.fromEntries(Object.keys(w.moves).map((id) => [id, "<what the other side does then, a line>"]));
+  return out;
 }
 
 /** What is fixed about the people, the clues and the other side's clock, for the words to fit. */
@@ -127,10 +163,10 @@ function factsOf(adv: Adventure): string {
       const ways = WAYS.filter((w) => s.ways[w])
         .map((w) => `${WAY_WORD[w]} ${DIFF[s.ways[w]!.difficulty]}${w === "pay" ? ` (the price is ${s.ways[w]!.price ?? 0} supplies: say what is paid for)` : ""}`)
         .join(", ");
-      const levers = s.levers.map((l) => `"${l.id}" helps ${WAY_WORD[l.way]}`).join("; ");
+      const levers = s.levers.map((l) => `one that helps ${WAY_WORD[l.way]} (under "${leverKey(s, l)}")`).join("; ");
       const reward = s.reward?.loot ? ` Getting past gives the thing "${s.reward.loot}".` : s.reward?.joins ? ` Getting past, "${s.reward.joins}" joins you.` : "";
       const here = adv.courted && (s.card === adv.courted.card || (s.climax && partOf(adv) === "courted")) ? " The one being courted is here, and is the person in the way." : "";
-      return `- ${s.id}: ${s.kind === "fight" ? "a fight" : s.kind === "person" ? "a person in the way" : "an obstacle"}${s.climax ? ", THE LAST STOP" : ""}. Its card is "${cardKind(s.card).title}": what stands here should fit that card.${here} Ways: ${ways}. Things there: ${levers || "none"}.${reward}`;
+      return `- ${s.id}: ${s.kind === "fight" ? "a fight" : s.kind === "person" ? "a person in the way" : "an obstacle"}${s.climax ? ", THE LAST STOP" : ""}.${here} Ways: ${ways}. Things there to invent: ${levers || "none"}.${reward}`;
     })
     .join("\n");
 }
@@ -158,11 +194,12 @@ export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: Table
       : `${card.name} is the card's character, and the one the player is courting tonight. Write "courted" for them: "who" is one line about them. ${adv.rival ? " Whoever stands against the player is in the rival: invent them." : ""}`;
   const system = [
     `You write the words of a short tabletop adventure. The rules and every number are fixed already; you only write the words, in the world of a ${card.world ? "card that describes a world or scenario" : "character card"}.`,
-    "You are given the adventure as it is written for a made-up world, as JSON. Rewrite every value for the card's world and people, and keep every key exactly as it is. Do not add or remove keys.",
-    "Every name must be new and belong to the card's world. Keep the same shape of story: the same kinds of stops in the same places, the same things to use at each, the same rewards. Move it all into the card's own setting: a modern card gets a modern road, a strange world its own kind of trouble.",
+    "You are given the adventure as JSON: its keys, and words for a made-up world, or a note of what to write where the stops are yours. Write every value for the card's world and people, and keep every key exactly as it is. Do not add or remove keys.",
+    "Every name must be new and belong to the card's world. The shape of the story is fixed: which stops there are and where, whether each is a person in the way, an obstacle or a fight, how hard each way is there and what it costs, and what is won. What each stop is, is yours to invent: who or what stands there, and what there is to use, made from the card's world, what the player asked for and who they are. A modern card gets a modern road, a strange world its own kind of trouble, a dungeon its own floors and traps.",
     'A "reward" is said after the player gets past, however they did it (kind words, a bribe, a theft, a fight): say how the thing comes to them in words that fit any of those, such as finding it, being left with it, or taking it, never only a kind handing-over.',
-    "The keys are only labels. A thing keyed \"furnace\" or \"fiddle\" can become anything in the card's world that helps the same way; only its value, what it is called, is shown.",
-    'Each "situation" is 2 to 4 short sentences, in the second person ("you"), saying what stands in the way and naming every thing there to use (its value under "levers" is what it is called, in a few words). If paying is a way at that stop, the situation says what is paid for and how much, in supplies.',
+    'Under "levers", each stop has one thing for each way it can be got past, keyed by the way ("talk", "sneak", "force", "pay"): write something that is really there in your scene and plainly helps that way, named in a few words (to talk, something they care about or a sore point; to sneak, a way round or something to hide behind; to force, something weak or something to use; to pay, what can be bought or bargained with). Make every stop its own, no two alike, and nothing stock (a toll bar, an official with keys on the desk and a hidden debt, a guide who wants paying) unless this world plainly has it.',
+    `Each stop's "face" is the title on its card, turned over when the player arrives: 1 to 4 words, most often "The" and what stands there, in this world's words ("The Drowned Bell-Ringer", "The Rent Collector", "The Hungry Pack").`,
+    'Each "situation" is 2 to 4 short sentences, in the second person ("you"), saying what stands in the way and naming every thing there to use (its value under "levers" is what it is called). If paying is a way at that stop, the situation says what is paid for and how much, in supplies.',
     "The stops in your way are about the job, never about the player's own feelings. Nobody in them is a child unless the card says so, and no romance involves anyone the card says is a child. Nothing sexual or explicit, and nothing hateful, whatever the card has: leave all of that out. A courtship is about winning a heart, told as a fairy tale would tell it.",
     "Use the card's own world as fully as you can. Put the stops at places the card (or its lore) names, or places that plainly belong there. Make the people in the way the card's own people, factions and kinds of folk. Let the job grow out of the card's own troubles, scenario and history. Make the things to use and to win things of that world: its magic or machines, its customs, its money, its beasts. Never a plain village or a plain road when the card has places and people of its own.",
     '"{friend}" in the words stands for the companion (or the one courted): write their name in its place.',
@@ -178,7 +215,7 @@ export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: Table
     ...(!card.world && foreignName(card.name) ? [`The card writes the name "${card.name}" in another script. Add a key "called": the name in English letters, and use it everywhere.`] : []),
     `WHAT IS FIXED AT EACH STOP (do not change it, write words that fit it):\n${factsOf(adv)}`,
     ...(adv.clues?.length || adv.appointments?.length ? [`THE PEOPLE, WHAT THERE IS TO FIND OUT, AND THE OTHER SIDE'S CLOCK (each clue is one plain fact, a line long, true unless it says it is a lie; the facts must fit together into one story the player can piece out):\n${worldFacts(adv)}`] : []),
-    `THE ADVENTURE TO REWRITE (keep the keys):\n${JSON.stringify(wordsOf(adv), null, 1)}`,
+    `THE ADVENTURE TO WRITE (keep the keys; the stops are yours to invent):\n${JSON.stringify(designOf(adv), null, 1)}`,
   ].join("\n\n");
   return [
     { role: "system", content: system },
@@ -252,16 +289,26 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
     stops: base.stops.map((s): RoadStop => {
       const ws = obj(stops[s.id]);
       const lv = obj(ws.levers);
+      // A stop is the model's whole or not at all: its scene and every thing to use in it, or the made-up stop, so the
+      // things the scene names are the things the reader can pick.
+      of += 3 + s.levers.length;
+      const situation = plain(ws.situation, 900);
+      const levers = s.levers.map((l) => plain(lv[leverKey(s, l)] ?? lv[l.id], 60));
+      const whole = situation !== null && levers.every((x) => x !== null);
+      const reward = s.reward ? { reward: { ...s.reward, says: take(ws.reward, 400, s.reward.says) } } : {};
+      if (!whole) return { ...s, name: names.get(s.id)!, ...reward };
+      const teaser = plain(ws.teaser, 120)?.replace(/[\s.;]+$/, "") || null;
+      used += 1 + s.levers.length + (teaser ? 1 : 0);
+      const face = plain(ws.face, 40);
+      if (face) used++;
       return {
         ...s,
+        ...(face ? { face } : {}),
         name: names.get(s.id)!,
-        situation: take(ws.situation, 900, s.situation),
-        teaser: take(ws.teaser, 120, s.teaser),
-        levers: s.levers.map((l) => {
-          const name = take(lv[l.id], 60, l.name);
-          return { ...l, name, words: name === l.name ? l.words : wordsFor(name) };
-        }),
-        ...(s.reward ? { reward: { ...s.reward, says: take(ws.reward, 400, s.reward.says) } } : {}),
+        situation,
+        teaser: teaser ?? s.teaser,
+        levers: s.levers.map((l, i) => ({ ...l, name: levers[i]!, words: wordsFor(levers[i]!) })),
+        ...reward,
       };
     }),
     companions: base.companions.map((c) => ({ ...c, name: take(obj(comps[c.id]).name, 30, c.name), who: take(obj(comps[c.id]).who, 200, c.who) })),

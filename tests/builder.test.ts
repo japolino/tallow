@@ -104,10 +104,10 @@ describe("a hero from your own words", () => {
 });
 
 describe("an adventure built for a card", () => {
-  test("the model is asked for words only, with every stop's card and the clock", () => {
+  test("the model is asked for words only, with a card title to write at every stop, and the clock", () => {
     const [sys, user] = buildMessages(MAREN, "courtship");
     expect(sys!.content).toContain("keep every key exactly as it is");
-    expect(user!.content).toContain('Its card is "The Beloved"');
+    expect(user!.content).toContain('"face": "<the title on its card');
     expect(user!.content).toContain("The one being courted is here");
     expect(user!.content).toContain("THE CLOCK: it starts at 2:00 pm and is lost at 12:00 am (midnight)");
     expect(user!.content).not.toContain('"called"');
@@ -239,5 +239,20 @@ describe("the reader and the teller", () => {
     expect(msgs[1]!.content).toContain("With them: Maren, a lamplighter.");
     expect(parseTell('Narrator: "The bar lifts, and you are through."')).toBe("The bar lifts, and you are through.");
     expect(parseTell("ok")).toBeNull();
+  });
+});
+
+describe("the reader judges what a failure brings down", () => {
+  test("its stake and threat are kept when they check, and dropped when they do not", async () => {
+    const { parseRead: parseReader } = await import("../src/game/prompts.js");
+    const { startMoment } = await import("../src/engine/moment.js");
+    const { BRIDGE, YOU } = await import("../preview/mock.js");
+    const m = startMoment(BRIDGE, YOU, "t");
+    const r = parseReader('{"way":"talk","stat":"charm","stake":"health","threat":"the pack closes in and bites"}', m) as { stake?: string; threat?: string };
+    expect(r.stake).toBe("health");
+    expect(r.threat).toBe("the pack closes in and bites");
+    const bad = parseReader('{"way":"talk","stake":"soul","threat":"x"}', m) as { stake?: string; threat?: string };
+    expect(bad.stake).toBeUndefined();
+    expect(bad.threat).toBeUndefined();
   });
 });

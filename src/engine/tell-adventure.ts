@@ -4,7 +4,7 @@
  * so what is read in the script is what is said in the room.
  */
 import { companionOf, FALL_HOURS, HEALTH_MAX, hubDone, lootOf, placeName, withParty, REST_HEALS, REST_HOURS, type Adventure, type Companion, type Arrival, type Rested, type RoadStop, type Trip, type Turn, type Used } from "./adventure.js";
-import { cardKind, FAMILY_SAYS } from "./cards.js";
+import { cardKind, faceOf, FAMILY_SAYS } from "./cards.js";
 import { coming, contestKind, type Contest, type ContestKind, type Dial, type Round } from "./contest.js";
 import { shapeOf, storeAt, type Ability } from "./abilities.js";
 import { DELAY_HOURS, DREAD_SPEND, type Move } from "./dread.js";
@@ -128,9 +128,8 @@ const has = (name: string): string => (many(name) ? "have" : "has");
 
 /** On arriving at a stop: the road behind you, the card turned, and what stands there. */
 export function arriveSaid(a: Arrival): string[] {
-  const k = cardKind(a.stop.card);
   const holds = Math.max(1, a.stop.holds ?? 1);
-  const lines = [`The road to ${a.stop.name} takes ${span(a.hours)}. It is ${clock(a.trip.sheet.hour)}.`, `I turn the card: ${k.title}.`, KIND_SAYS[a.stop.kind], a.stop.situation];
+  const lines = [`The road to ${a.stop.name} takes ${span(a.hours)}. It is ${clock(a.trip.sheet.hour)}.`, `I turn the card: ${faceOf(a.stop)}.`, KIND_SAYS[a.stop.kind], a.stop.situation];
   if (a.trip.facing && a.trip.facing.moment.trouble > 0) lines.push("Word of you got here first, after your rest: every way is one step harder.");
   if (holds > 1) lines.push(a.stop.kind === "fight" ? "This will come to a fight." : "This will be a contest, a back-and-forth, not one try.");
   const left = Math.floor((a.trip.adv.deadline.hour - a.trip.sheet.hour) / TRY_HOURS + 1e-9);
@@ -141,7 +140,7 @@ export function arriveSaid(a: Arrival): string[] {
 /** The page a stop's card comes with. */
 export function stopPage(a: Arrival): { heading: string; his: string[] } {
   const holds = Math.max(1, a.stop.holds ?? 1);
-  return { heading: `${a.stop.name}: ${cardKind(a.stop.card).title}`, his: [a.stop.situation, ...(holds > 1 ? ["It comes to a contest."] : [])] };
+  return { heading: `${a.stop.name}: ${faceOf(a.stop)}`, his: [a.stop.situation, ...(holds > 1 ? ["It comes to a contest."] : [])] };
 }
 
 /* ------------------------------ contests (contest.ts) ------------------------------ */
@@ -474,7 +473,7 @@ export function forkRead(line: string, stops: RoadStop[]): string | null {
   const left = /\b(left|first|former)\b/.test(l), right = /\b(right|second|latter|other)\b/.test(l);
   if (left !== right) return stops[left ? 0 : 1]?.id ?? null;
   const words = (s: string) => s.toLowerCase().replace(/[^a-z' ]/g, " ").split(/\s+/).filter((w) => w.length > 3 && !["the", "where", "someone", "which", "their", "there", "with", "that", "this"].includes(w));
-  const score = stops.map((s) => [...words(s.name), ...words(s.teaser), ...words(cardKind(s.card).title)].filter((w) => l.includes(w)).length);
+  const score = stops.map((s) => [...words(s.name), ...words(s.teaser), ...words(faceOf(s))].filter((w) => l.includes(w)).length);
   const best = Math.max(...score);
   if (best === 0 || score.filter((n) => n === best).length > 1) return null;
   return stops[score.indexOf(best)]!.id;

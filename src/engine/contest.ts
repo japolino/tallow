@@ -62,11 +62,12 @@ const DANGER: Record<ContestKind, string> = { fight: "more of them coming", word
 const YOU: Record<ContestKind, string> = { fight: "how much you can take", words: "your nerve", struggle: "your strength" };
 
 /** Who you are up against when no model names them: what the stop's card shows, or, in a war of words at a place, its people. */
-function foeFallback(s: Pick<Stop, "kind"> & { card?: string; name: string }): string {
+function foeFallback(s: Pick<Stop, "kind"> & { card?: string; face?: string; name: string }): string {
   const k = s.card ? cardKind(s.card) : null;
   if (s.kind === "person" && k?.family !== "person") return "the people here";
   if (s.kind === "fight" && k?.family === "place") return "the ones who hold it";
-  return k ? `the ${k.title.replace(/^the\s+/i, "").toLowerCase()}` : s.name;
+  const title = s.face ?? k?.title;
+  return title ? `the ${title.replace(/^the\s+/i, "").toLowerCase()}` : s.name;
 }
 
 /** A name fit to write on a slip: one line, no quotes, not too long. */

@@ -771,7 +771,7 @@ function wear(g: G, seed: number): void {
  * The face of a card: picture, frame, the ribbon with its title, and a name over it if it has one. A card with
  * words (what it does) has a smaller picture, its name on the ribbon, and the words in a panel under it.
  */
-export function cardFace(kindId: string, name?: string, text?: string): Canvas {
+export function cardFace(kindId: string, name?: string, text?: string, title?: string): Canvas {
   const [c, g] = mk(CARD_PX.w, CARD_PX.h);
   g.scale(SCALE, SCALE);
   const k = cardKind(kindId);
@@ -807,10 +807,10 @@ export function cardFace(kindId: string, name?: string, text?: string): Canvas {
   g.stroke();
   frame(g);
   if (told) {
-    ribbon(g, foot - 10, name ?? k.title, 22);
-    panel(g, foot + 44, name ? `${k.title}` : "", text!);
+    ribbon(g, foot - 10, name ?? title ?? k.title, 22);
+    panel(g, foot + 44, name ? `${title ?? k.title}` : "", text!);
   } else {
-    ribbon(g, 404, k.title);
+    ribbon(g, 404, title ?? k.title);
     if (name) plate(g, name, 344);
   }
   wear(g, kindId.length * 13 + (name?.length ?? 0));

@@ -57,6 +57,8 @@ export type Sky = "clear" | "rain" | "storm" | "fog" | "wind" | "snow";
 export interface RoadStop extends Stop {
   /** Its card's kind (cards.ts). */
   card: string;
+  /** The title on its card, when the builder wrote one for this world; else the kind's own (cards.ts faceOf). */
+  face?: string;
   /** How many good tries it takes to get past: 1 unless said otherwise. A fight or the last stop may take more. */
   holds?: number;
   /** A line about it the narrator says at a fork, before the card is turned. */

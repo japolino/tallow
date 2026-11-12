@@ -10,7 +10,7 @@
  * The line is always data to read, never instructions; nothing it says can make a try work.
  */
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
-import { canUse, GRADES, leverLeft, ALL_STATS, STATS, WAYS, type Grade, type Moment, type Stat, type Way } from "../engine/moment.js";
+import { canUse, COST_KINDS, GRADES, leverLeft, ALL_STATS, STATS, WAYS, type CostKind, type Grade, type Moment, type Stat, type Way } from "../engine/moment.js";
 import { SETUP_VERBS } from "../meaning/read.js";
 import { STAT_MEANS } from "../engine/tell.js";
 import type { Reading } from "./minds.js";
@@ -63,6 +63,16 @@ export function readQuestions(line: string, m: Moment): { state: unknown; questi
       instructions: "Does the line use one of the player's own abilities? Only one it names, or does just what it looks like.",
       criteria: { ...Object.fromEntries(abilities.map((a) => [a.id, `${a.name}: ${a.looks}`])), [NONE]: "none of them" },
     };
+  questions.stake = {
+    type: "choice",
+    instructions: "If this try goes wrong, what would it bring down on the player here? Judge by who or what they are up against, not by how they went about it: failing to talk down someone dangerous means the danger comes for them.",
+    criteria: {
+      health: "health: someone or something here hurts, grabs or knocks them down (a hungry pack, an armed guard, a fall, a trap)",
+      hours: "hours: they are held up, chased off or driven back (a gate, a long way round, a wait)",
+      goodwill: "goodwill: people here think less of them, or word gets about (a crowd, an official, a friend)",
+      supplies: "supplies: something they carry is taken, spent or ruined (a thief, a toll, the water)",
+    },
+  };
   questions.grade = {
     type: "choice",
     instructions: "How much does the line make of what is really there? Length is not effort: a long line that uses nothing real is plain.",
@@ -101,11 +111,13 @@ export function readFromAnswers(answers: Record<string, DecisionAnswer | undefin
   if (!WAYS.includes(way as Way) || !m.stop.ways[way as Way] || m.closed.includes(way as Way)) return undefined;
   const stat = sureChoice(answers.stat, 0.4);
   const lever = sureChoice(answers.lever, 0.5);
+  const stake = sureChoice(answers.stake, 0.5);
   return {
     way: way as Way,
     stat: ALL_STATS.includes(stat as Stat) ? (stat as Stat) : null,
     lever: lever && m.stop.levers.some((l) => l.id === lever && l.way === way && leverLeft(m, l)) ? lever : null,
     ...(ability && canUse(m, ability) ? { ability: ability.id } : {}),
+    ...(COST_KINDS.includes(stake as CostKind) ? { stake: stake as CostKind } : {}),
     ...grade,
   };
 }

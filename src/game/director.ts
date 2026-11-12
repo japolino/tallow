@@ -12,7 +12,7 @@
  */
 import { offerRoom, stockOffer, type Ability } from "../engine/abilities.js";
 import { ahead, arrive, placeOf, withParty, type Loot, attempt, companionOf, hoursTo, lootOf, placeName, ponder, prefers, rest, startTrip, takeAbility, tripNow, useAbility, weary, withAbility, withContest, yieldContest, type Adventure, type RoadStop, type Sky, type Trip } from "../engine/adventure.js";
-import { cardKind } from "../engine/cards.js";
+import { cardKind, faceOf } from "../engine/cards.js";
 import { coming, contestKind, foeNamed, renamed, yieldRead, yieldSure, type Contest, type ContestNames } from "../engine/contest.js";
 import { ASK_ROUND, BLOW_RULE, blowLine, contestNote, contestSaid, takenOutOf, dangerSaveSaid, luckAsk, luckNote, luckSaid, saveAsk, saveSaid, yieldSaid } from "../engine/tell-adventure.js";
 import { canLuck, luckRead, throwLuck, type LuckAsk } from "../engine/luck.js";
@@ -402,7 +402,7 @@ export function direct(adv: Adventure, sheet: Sheet, seed: string, bare: Table, 
     await table.say(backSaid(trip));
     if (facing && trip.facing) {
       const standing = table.ways?.(wayStates(trip.facing.moment));
-      await table.page({ heading: `${facing.name}: ${cardKind(facing.card).title}`, his: [facing.situation, ...firstPage(trip).his.slice(1)] });
+      await table.page({ heading: `${facing.name}: ${faceOf(facing)}`, his: [facing.situation, ...firstPage(trip).his.slice(1)] });
       await standing;
       if (matHere()) {
         // The mat is laid out again as it stood (atBattle).

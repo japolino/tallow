@@ -167,7 +167,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       at = "road";
       contest = false;
       mood();
-      return desk.cards.deal(stops.map((s) => ({ id: s.id, kind: s.card })));
+      return desk.cards.deal(stops.map((s) => ({ id: s.id, kind: s.card, ...(s.face ? { title: s.face } : {}) })));
     },
     turn: (stop) => {
       at = "place";
