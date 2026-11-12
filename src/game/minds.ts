@@ -15,6 +15,8 @@ import { lookSaid } from "../engine/tell.js";
 import type { LineRead, Person } from "../engine/people.js";
 import type { ContentSettings } from "../engine/content.js";
 import { askLike, rulesReading } from "../meaning/read.js";
+import type { SceneLine } from "../engine/hand.js";
+import type { SceneContext } from "./scenewriter.js";
 
 /**
  * What a written line comes to: a try (a read), an ability used without a try (a use), a question or a look that
@@ -104,6 +106,17 @@ export interface Minds {
    * settings, "same" when it changes nothing, or null when no model can tell and the words decide (contentFromLine).
    */
   content?(line: string, s: ContentSettings): Promise<ContentSettings | "same" | null>;
+  /**
+   * In a story of scenes (engine/hand.ts): what a written line is: a try (the stat it leans on, the thing it uses, how
+   * much it risks and what happens if it goes wrong), a line that risks nothing, a die named for a try that waits, or
+   * stopping. Null when no model can say, and the words decide (scenewriter.ts, rulesSceneLine).
+   */
+  sceneLine?(line: string, ctx: SceneContext): Promise<SceneLine | null>;
+  /**
+   * In a story of scenes: tell a beat of it (its opening, a line that risks nothing, what a spent die came to) from the
+   * note of what must be true. Empty when no model can, and code's own words stand.
+   */
+  sceneTell?(at: { name: string; situation: string }, note: string, wrote?: string): Promise<string>;
 }
 
 /**

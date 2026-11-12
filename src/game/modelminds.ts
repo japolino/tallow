@@ -20,6 +20,10 @@ import { contentMessages, parseContentChange, parsePick, pickFromAnswers, pickMe
 import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, ROAM_TELL, readMessages, riskMessages, tellMessages, VOICED_TELL, type Ask, type Message, type TellContext } from "./prompts.js";
 import { refused } from "../engine/content.js";
 import { laid, type Keeper, type Told, type Voice } from "./voice.js";
+import { parseSceneLine, sceneLineMessages, sceneTellMessages } from "./scenewriter.js";
+
+/** How long a scene's telling may run without a preset, in characters. */
+const SCENE_TELL = 900;
 
 export interface ModelMindsOptions {
   /** Give up on a model after this long and use the stand-in (ms). */
@@ -222,6 +226,36 @@ ${note}`, { voiced: !!v })));
         fell("battle tell", "empty answer");
       } catch (e) {
         fell("battle tell", e);
+      }
+      return "";
+    },
+    async sceneLine(line, ctx) {
+      lastLine = line;
+      const c = { ...ctx, who: ctx.who ?? { ...known, ...o.context?.() }.who };
+      // The line's whole reading is one answer, kept whole or asked once more: there is no stock reading worth having.
+      for (let i = 0; i < 2; i++) {
+        try {
+          const r = parseSceneLine(await within(ask(sceneLineMessages(line, c), "reader"), ms), c);
+          if (r) return r;
+          fell("scene line", "answer did not check");
+        } catch (e) {
+          fell("scene line", e);
+        }
+      }
+      return null;
+    },
+    async sceneTell(at, note, wrote) {
+      const told: Told = { at, ...(wrote ? { wrote } : {}), must: note };
+      for (let i = 0; i < 2; i++) {
+        try {
+          const v = await voiceNow();
+          const s = await narrated(v, sceneTellMessages(at, note, wrote, await scene(`${at.situation}
+${wrote ?? ""}`, { voiced: !!v })), SCENE_TELL);
+          if (s) return kept(told, s);
+          fell("scene tell", "empty answer");
+        } catch (e) {
+          fell("scene tell", e);
+        }
       }
       return "";
     },

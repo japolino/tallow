@@ -29,15 +29,23 @@ import { cardText, courtable, looksLikeWorld, unmacro, type CardInfo, type Perso
 import { KIND, MINOR, SETTING } from "./decisions.js";
 import { campaignBy, contentBy, someoneNewBy } from "./meaning.js";
 import { abilityCard, direct, type Director, type Table, type Written } from "./director.js";
+import { sceneAdventure } from "../engine/hand.js";
+import { directScenes } from "./scenes.js";
+import { writeScenes } from "./scenewriter.js";
 import { roam } from "./free.js";
 import { pickBy, type Minds } from "./minds.js";
 import { firstJson, freeWorldMessages, frontMessages, type Ask } from "./prompts.js";
 
 /** Who you are at this card's table, kept from one story (and one sitting) to the next. */
+/** How a story of scenes is kept among the stories played: this, and its title. */
+const SCENES_PLAYED = "scenes: ";
+/** Said when no story of scenes could be written, and one is drawn from the deck instead. */
+const NO_SCENES_SAID = "No story of my own comes to me for that tonight. I will draw one from the deck instead.";
+
 export interface Kept {
   /** Who you are, with the stats and knacks you have earned. */
   hero: Hero;
-  /** The stories played with this card, oldest first (their ids in content/tropes.ts). */
+  /** The stories played with this card, oldest first: their ids in content/tropes.ts, or "scenes: " and the title of one a model wrote. */
   played: string[];
   /** Things kept from the last story won, still yours at the start of the next. */
   carry: Loot[];
@@ -437,7 +445,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     await table.sweep?.();
     const grown: Hero = { ...hero, abilities: t.abilities.map((a) => ({ ...a })), level: t.level };
     const projects = (t.projects ?? []).filter((p) => !p.id.startsWith("favour:") && p.filled < p.segments);
-    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}), ...(projects.length ? { projects } : {}) };
+    const next: Kept = { hero: grown, played: [...(kept0?.played ?? []), t.adv.scenes ? `${SCENES_PLAYED}${t.adv.title}` : t.adv.trope].slice(-12), carry, ...(campaign ? { campaign } : {}), ...(payoffs.length ? { payoffs } : {}), ...(projects.length ? { projects } : {}) };
     o.keep?.(next);
     return next;
   };
@@ -508,8 +516,52 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
 
   /** A story was left in the middle of it, for tonight (director.ts, `left`): the sitting ends there. */
   let leftOff = false;
+
+  /**
+   * A story of scenes, played with a hand of dice (engine/hand.ts, docs/DESIGN.md 3.3): the whole story is a model's,
+   * written for this card, this player and what they asked for while they say who they are, and checked whole by code
+   * (scenewriter.ts). No recipe is drawn and no road laid. When no story comes back that checks, who you are is
+   * handed back and a road story is played instead (playStory).
+   */
+  const playScenes = async (askedFor: string, someoneNew: boolean): Promise<{ trip: Trip } | { hero: Hero }> => {
+    const world = await setting;
+    const modern = world === "now" ? true : world === "then" ? false : undefined;
+    const seed = stories ? `${o.seed}:${stories}` : o.seed;
+    const kitP = writeKit(o.ask, cardText(card, 3000), content ?? DEFAULT_CONTENT, () => kitFor(card, modern ?? modernCard(card), content), { asked: askedFor, ...(modern !== undefined ? { modern } : {}) });
+    const before = (kept?.played ?? []).filter((p) => p.startsWith(SCENES_PLAYED)).map((p) => p.slice(SCENES_PLAYED.length));
+    const writing: { p?: ReturnType<typeof writeScenes> } = {};
+    // Written once you have said who you are, from that and from what you asked for, while your words are read into your sheet.
+    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before }, content ?? DEFAULT_CONTENT)));
+    const hero = await whoYouAre(someoneNew, start);
+    const story = await table.wait("deal", writing.p ?? start(hero.who));
+    if (!story) return { hero };
+    const kit = await kitP;
+    const adv = sceneAdventure(story, { seed, who: hero.who, kit, ...(content ? { content } : {}) });
+    o.built?.(adv);
+    const d = directScenes(adv, inKit({ ...hero.sheet, ...START }, kit), seed, table, o.minds, { abilities: hero.abilities ?? [], level: hero.level ?? 1, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(o.save ? { save: o.save } : {}) });
+    o.started?.(d);
+    last = await d.done;
+    // Left for tonight in the middle of it: kept as it stood (scenes.ts saved it).
+    if (d.left) {
+      leftOff = true;
+      return { trip: last };
+    }
+    kept = await after(last, hero, kept);
+    stories++;
+    return { trip: last };
+  };
+
   /** A story of a kind, drawn, built and played, and what came of it kept (the stories, and a thread pulled in free form). */
   const playStory = async (answer: Family | "any", askedFor: string, someoneNew: boolean, longGame: boolean): Promise<Trip> => {
+    // With a model to write it, a story is one of scenes, its own from end to end. A campaign keeps to road stories
+    // for now, and so does a table with no model, or one whose model gave no story that checks.
+    let known: Hero | null = null;
+    if (o.ask && !longGame && !kept?.campaign) {
+      const got = await playScenes(askedFor, someoneNew);
+      if ("trip" in got) return got.trip;
+      known = got.hero;
+      await table.say([NO_SCENES_SAID]);
+    }
     const { recipe, fromAsk } = await recipeFor(answer, askedFor);
     await table.say([fromAsk ? askedSaid(recipe) : drawnSaid(recipe, answer === "any")]);
     // The road is laid out and the building starts now, and runs while you write who you are and while the narrator shuffles.
@@ -542,7 +594,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       opened = openingFor(o.minds, card, recipe, who, askedFor).then((op) => (op ? laid(op) : base));
       return (building.p = Promise.all([briefed, kitP, opened]).then(([brief, kit, road]) => buildAdventure(o.ask, card, road, seed, modern, { asked: askedFor, kit: kitLines(kit).join(" "), hurts: kit.hurts, ...(who ? { who } : {}), ...(brief ? { campaign: brief } : {}) }).then((adv) => fitted(adv, kit))).then((adv) => (o.built?.(adv), adv)));
     };
-    const hero = await whoYouAre(someoneNew, startBuild);
+    const hero = known ?? (await whoYouAre(someoneNew, startBuild));
     const build = building.p ?? startBuild(hero.who);
     const carry = kept && !someoneNew ? kept.carry : [];
     if (frontAsked) {
@@ -668,7 +720,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       o.built?.(t.adv);
       // The black candle stands where it stood when you got up from the table.
       if (kept?.campaign) table.blackCandle?.({ burned: kept.campaign.burned, lit: false });
-      const d = direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
+      // A story of scenes is taken up by its own director, with the dice as they lay.
+      const d = t.adv.scenes ? directScenes(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, ...(o.save ? { save: o.save } : {}) }) : direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
       o.started?.(d);
       last = await d.done;
       if (d.left) {

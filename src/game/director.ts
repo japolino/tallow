@@ -138,6 +138,13 @@ export interface Table {
   personas?(list: { name: string; title?: string }[]): Promise<{ ticked: number } | Written>;
   /** Your sheets (tell-adventure.ts, sheetPages), the stack by your left hand: written out again as they now stand. */
   sheets?(pages: { heading: string; his: string[] }[]): void;
+  /**
+   * A story of scenes (engine/hand.ts): the dice of your hand lie before you as this list says. `thrown` throws them
+   * afresh; else the ones no longer in the list are taken away.
+   */
+  hand?(dice: readonly number[], thrown?: boolean): Promise<void>;
+  /** Wait for the player to touch one of the dice of the hand (its place in the list), or to write a line instead. */
+  pickDie?(dice: readonly number[]): Promise<number | Written>;
 }
 
 export type Stage = "start" | "fork" | "road" | "write" | "given" | "check" | "throw" | "told" | "camp" | "over";
@@ -152,7 +159,7 @@ export interface Director {
 }
 
 /** Thrown to leave a story where it stands, for tonight (the "stop" kind of line). */
-class LeftOff extends Error {}
+export class LeftOff extends Error {}
 
 /** Said when the player stops in the middle of a story. */
 export const LEFT_SAID = ["Then we stop here for tonight, in the middle of it. I leave everything where it lies: the cards, the clock, the stones.", "When you sit down again, we go on from this very place."];
