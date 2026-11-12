@@ -117,6 +117,11 @@ export interface Stop {
   position?: Position;
   /** Hidden things here, each seen by a hero good enough at one stat (margin.ts). */
   notices?: Notice[];
+  /**
+   * What failing each way here brings down on you, written by the builder with the scene in view (build.ts): its kind and
+   * what happens. Said before the throw; a line that goes about it some other way can be judged its own stake.
+   */
+  fails?: Partial<Record<Way, { stake: CostKind; threat: string }>>;
 }
 
 /** What the player carries from stop to stop. */
@@ -157,6 +162,11 @@ export interface Moment {
   used?: readonly string[];
   /** Steps a sway has made talking easier here. */
   warm?: number;
+  /**
+   * Who stands here, when someone does (people.ts): goodwill a failure loses is lost with them, a step colder each, and
+   * not with the whole world. Word gets about only where nobody stands.
+   */
+  person?: string;
   /** Edges on your side of the gap for every try here, from outside the scene: the keys you hold at the end of a story (clues.ts). */
   edges?: number;
   /** The stats a fight is won with in this world (kit.ts, kitFight): force leans on these instead of Brawn. */
@@ -195,6 +205,8 @@ export interface Read {
   trade?: Trade | null;
   /** The line as written, so code can check which of a foe's weaknesses it really uses. */
   line?: string;
+  /** The foe's weaknesses a reader says the line uses (its `hurtBy` tags); code keeps only real ones. The line's words when not said. */
+  hurts?: readonly string[];
   /** A companion or another player sets the try up: +1 on the gap, when someone is with you. */
   help?: boolean;
   /** What a failure costs here, judged from who or what the player is up against: a hungry pack's is health, a clerk's goodwill. The way's own cost when not said. */
@@ -345,7 +357,8 @@ export function nameCheck(m: Moment, read: Read): Check | null {
   const o = edge && !bane ? d20OddsBest(add, target, PARTIAL) : bane && !edge ? d20OddsWorst(add, target, PARTIAL) : d20Odds(add, target, PARTIAL);
   // Effect and position (effect.ts): what a try that works can do, and how bad it is if it goes wrong.
   const foe = m.stop.foe;
-  const hurts = foe && read.line ? hurtsUsed(read.line, foe) : [];
+  // The weaknesses the reader said the line uses, kept only if the foe has them; the words only when no reader said.
+  const hurts = !foe ? [] : read.hurts ? [...new Set(read.hurts.filter((h) => foe.hurtBy?.includes(h)))] : read.line ? hurtsUsed(read.line, foe) : [];
   const edges = hurts.length + (lever?.edge ? 1 : 0) + (m.edges ?? 0);
   const gap = gapOf({ stat: add, gear: m.sheet.gear?.[read.way] ?? 0, edges, help: !!read.help && (m.company ?? 0) > 0 }, foe, read.way);
   const start = positionOf(gap, m.stop.position, !!m.ambush);
@@ -362,8 +375,8 @@ export function nameCheck(m: Moment, read: Read): Check | null {
     difficulty,
     target,
     odds: { success: o.success, partial, fail: Math.max(0, 1 - o.success - partial) },
-    costs: stakeOf(read),
-    ...(read.threat && read.way !== "pay" ? { threat: read.threat } : {}),
+    costs: stakeOf(read, m.stop),
+    ...(threatOf(read, m.stop) ? { threat: threatOf(read, m.stop)! } : {}),
     price: read.way === "pay" ? Math.max(0, Math.round(here.price ?? 0)) : 0,
     ...(cold ? { cold } : {}),
     attempt: clip(read.attempt ?? "", ATTEMPT_MAX),
@@ -395,8 +408,27 @@ export function options(m: Moment): { way: Way; shut: ReturnType<typeof shut>; c
 
 export const COST_KINDS: readonly CostKind[] = ["goodwill", "hours", "health", "supplies"];
 
-/** What a failure costs: the stake read from the scene, else the way's own. Paying always risks supplies, since its price is in them. */
-export const stakeOf = (read: Pick<Read, "way" | "stake">): CostKind => (read.way !== "pay" && read.stake && COST_KINDS.includes(read.stake) ? read.stake : WAY_COST[read.way]);
+/**
+ * What a failure costs: the stake read from this line's approach, else what failing that way at this stop brings (the
+ * builder's, written with the scene), else the way's own as a last fallback. Paying always risks supplies, since its
+ * price is in them.
+ */
+export const stakeOf = (read: Pick<Read, "way" | "stake" | "threat">, stop?: Pick<Stop, "fails">): CostKind => {
+  if (read.way === "pay") return "supplies";
+  const built = stop?.fails?.[read.way]?.stake;
+  const fromStop = built && COST_KINDS.includes(built) ? built : null;
+  // A line's own stake wins when it says what would happen (the line faces something else), or when the stop has none;
+  // a bare pick of a kind, with nothing said, does not beat the stake the builder wrote with the scene.
+  if (read.stake && COST_KINDS.includes(read.stake) && (read.threat || !fromStop)) return read.stake;
+  return fromStop ?? WAY_COST[read.way];
+};
+/** What was said would happen if it went wrong: the line's, else the stop's for that way (with the stop's stake). Paying has none. */
+export const threatOf = (read: Pick<Read, "way" | "threat" | "stake">, stop?: Pick<Stop, "fails">): string | undefined => {
+  if (read.way === "pay") return undefined;
+  if (read.threat) return read.threat;
+  const f = stop?.fails?.[read.way];
+  return f && stakeOf(read, stop) === f.stake ? f.threat : undefined;
+};
 
 /** What a result costs. Paying costs its price when it works; any way costs more when it only half works, and costs something when it fails. */
 export function costOf(tier: Tier, price: number): number {
@@ -418,6 +450,8 @@ export interface Outcome {
   cost: { kind: CostKind; amount: number; lost: number };
   /** Goodwill won by a result better than anyone hoped for. */
   goodwillWon: number;
+  /** Steps colder the one standing here turned (`Moment.person`): goodwill lost with them, not with the world. */
+  turned?: number;
   /** Hours that passed: the try itself, and any time the result cost. */
   hours: number;
   /** The way that closed, on a failure. */
@@ -469,7 +503,10 @@ export function resolve(m: Moment, read: Read): Outcome | null {
   if (check.storeCost) sheet.store = Math.max(0, (sheet.store ?? 0) - check.storeCost);
   let lost = amount;
   let hours = TRY_HOURS;
+  // Goodwill lost in front of someone is lost with them: they turn colder, and talking them round gets harder.
+  const turned = check.costs === "goodwill" && m.person && amount > 0 ? Math.min(2, amount) : 0;
   if (check.costs === "hours") hours += amount;
+  else if (turned) lost = turned;
   else {
     lost = Math.min(sheet[check.costs], amount);
     sheet[check.costs] -= lost;
@@ -488,7 +525,7 @@ export function resolve(m: Moment, read: Read): Outcome | null {
     tries: m.tries + 1,
     over: past ? "past" : null,
     used: check.ability && check.ability.often !== "always" ? [...(m.used ?? []), check.ability.id] : m.used ?? [],
-    warm: (m.warm ?? 0) + (check.ability?.does === "sway" ? check.ability.much : 0),
+    warm: (m.warm ?? 0) + (check.ability?.does === "sway" ? check.ability.much : 0) - turned,
     inspired: !!m.inspired || check.inspired,
     ...(check.bane ? { against: (m.against ?? []).filter((a) => a.id !== check.bane!.id) } : {}),
   };
@@ -502,6 +539,7 @@ export function resolve(m: Moment, read: Read): Outcome | null {
     tier,
     past,
     cost: { kind: check.costs, amount, lost },
+    ...(turned ? { turned } : {}),
     goodwillWon,
     hours,
     closed: past || m.stubborn || !m.stop.ways[check.way] ? null : check.way,

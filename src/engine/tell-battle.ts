@@ -257,9 +257,11 @@ export function rollAsk(b: Battle, e: Extract<BattleEvent, { e: "roll" }>): stri
 }
 
 /** What the end of a fight comes to, said. */
-export function battleOverSaid(b: Battle, o: { cleared: boolean; taken: unknown; gaveIn: boolean; wounds: number; climax: boolean }): string[] {
+export function battleOverSaid(b: Battle, o: { cleared: boolean; taken: unknown; gaveIn: boolean; wounds: number; climax: boolean; says?: string }): string[] {
   const out: string[] = [];
   if (o.cleared) out.push(b.over === "parley" ? "They put up their weapons and talk. You are past them." : b.overHow === "broken" ? "They break and run. The way is yours." : b.overHow === "surrender" ? "They throw down their weapons. The way is yours." : "The last of them falls. The way is yours.");
+  // What is won there (a thing, or someone who walks on with you) is said, as it is past any other stop.
+  if (o.cleared && o.says) out.push(o.says);
   else if (o.taken === "end") out.push("You go down at the last of it, and the story goes their way.");
   else if (o.taken) out.push(b.overHow === "carried" ? "They carry you off the mat. You come to later, somewhere beyond, with less than you had." : "You go down. You come to later, beyond this place, with less than you had.");
   else if (o.gaveIn) out.push(o.climax ? "You give in, at the last of it, and the story goes their way." : b.over === "fled" ? "You get away from them, with nothing to show for it." : "You give in. They let you go, with nothing.");

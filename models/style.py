@@ -764,6 +764,16 @@ def quantize_glb(path, positions=True):
                 scale = {5126: 1.0, 5123: 65535.0, 5121: 255.0}[ct]
                 if ct != 5121:
                     put(at[ck], np.round(col / scale * 255).astype(np.uint8), 5121, col.shape[1])
+            # Skin weights as normalized bytes. Each vertex's four must still add up to exactly 255, so the rounding
+            # error goes onto its heaviest weight.
+            wk = "WEIGHTS_0"
+            if wk in at and accs[at[wk]]["componentType"] == 5126:
+                w = read(at[wk]).astype(np.float64)
+                w /= np.maximum(w.sum(1, keepdims=True), 1e-9)
+                q = np.floor(w * 255 + 0.5).astype(np.int32)
+                top = q.argmax(1)
+                q[np.arange(len(q)), top] += 255 - q.sum(1)
+                put(at[wk], np.clip(q, 0, 255).astype(np.uint8), 5121, 4)
     # Animation: drop every channel that only ever holds its node's rest value (scale 1, a bone's own offset) - the
     # mixer then leaves that property alone, which is the same thing - and pack rotations into int16.
     rest = {"translation": [0, 0, 0], "rotation": [0, 0, 0, 1], "scale": [1, 1, 1]}

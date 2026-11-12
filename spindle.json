@@ -11,7 +11,8 @@
     "decisions",
     "embeddings",
     "world_books",
-    "images"
+    "images",
+    "personas"
   ],
   "entry_backend": "dist/backend.js",
   "entry_frontend": "dist/frontend.js",

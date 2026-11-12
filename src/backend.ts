@@ -67,7 +67,25 @@ async function card(userId: string, characterId: string): Promise<CardInfo | nul
   }
   const looks = await seeing;
   if (looks) info.looks = looks;
+  const persona = await personaOf(userId, info.name);
+  if (persona) info.persona = persona;
   return info;
+}
+
+/** The player's active persona, to sit down as (game/card.ts, `persona`); null without one or the "personas" permission. */
+async function personaOf(userId: string, charName: string): Promise<CardInfo["persona"] | null> {
+  try {
+    const p = (await spindle.personas.getActive(userId)) ?? (await spindle.personas.getDefault(userId));
+    const name = p?.name?.trim();
+    if (!p || !name) return null;
+    const who = [p.title, p.description].map((x) => (x ?? "").trim()).filter(Boolean).join(". ");
+    // Its macros as the game reads them: the player is the persona, the character the card's.
+    const filled = who.replace(/\{\{\s*user\s*\}\}|<USER>/gi, name).replace(/\{\{\s*char\s*\}\}|<BOT>/gi, charName).replace(/\{\{[^}]*\}\}/g, "").slice(0, 2000);
+    return { name: name.slice(0, 60), who: filled };
+  } catch (err) {
+    spindle.log.info(`tallow: the persona could not be read (${text(err).slice(0, 120)})`);
+    return null;
+  }
 }
 
 /** Each card's lore as last read, for finding the entries nearest a scene. */

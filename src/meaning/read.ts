@@ -95,9 +95,15 @@ export function earnedGrade(line: string, m: Moment, also: readonly string[] = [
   return n >= 2 ? "inspired" : n === 1 ? "grounded" : "plain";
 }
 
-/** A reader's grade, held to what code finds in the line: never more than it earns. With no reader's grade, what it earns. */
-export function checkedGrade(said: Grade | null | undefined, line: string, m: Moment, also: readonly string[] = []): Grade {
-  const earned = earnedGrade(line, m, also);
+/**
+ * A reader's grade, held to what is really there: never more than it earns. What it earns is the real things code finds
+ * in the line's words, or the real things the reader named by id and code checked (a lever here, an ability the player
+ * has), whichever is more, so a line that uses a thing without repeating its name is not marked down for it.
+ */
+export function checkedGrade(said: Grade | null | undefined, line: string, m: Moment, also: readonly string[] = [], named?: { lever?: string | null; ability?: string | null; use?: string }): Grade {
+  const ids = [named?.lever && m.stop.levers.some((l) => l.id === named.lever), (named?.ability ?? named?.use) && (m.abilities ?? []).some((a) => a.id === (named.ability ?? named.use))].filter(Boolean).length;
+  const byIds: Grade = ids >= 2 ? "inspired" : ids === 1 ? "grounded" : "plain";
+  const earned = GRADES[Math.max(GRADES.indexOf(earnedGrade(line, m, also)), GRADES.indexOf(byIds))]!;
   if (!said || !GRADES.includes(said)) return earned;
   return GRADES[Math.min(GRADES.indexOf(said), GRADES.indexOf(earned))]!;
 }

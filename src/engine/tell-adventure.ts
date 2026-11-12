@@ -219,15 +219,58 @@ const TAKEN_MEANS: Record<Exclude<TakenOut, "killed">, string> = {
   exiled: "driven out, and told never to come back",
 };
 
-/**
- * What being taken out means here: one of the world's own (kit.ts, `takenOut`, already held to the content settings),
- * drawn by the seed, never death. `follow` (the dice decide, content.ts): the teller shows what follows, the winners'
- * way; without it, the teller says it and stops, and what follows is the player's.
- */
-export function takenOutOf(kit: Pick<WorldKit, "takenOut"> | undefined, seed: string, follow: boolean): { means: Exclude<TakenOut, "killed">; follow: boolean } {
+/** The ways being taken out can go in a world (kit.ts, `takenOut`, already held to the content settings), never death. */
+export function takenPool(kit: Pick<WorldKit, "takenOut"> | undefined): Exclude<TakenOut, "killed">[] {
   const pool = (kit?.takenOut ?? []).filter((x): x is Exclude<TakenOut, "killed"> => x !== "killed");
-  const list = pool.length ? pool : (["wounded", "captured"] as const);
-  return { means: list[Math.floor(seededRng(`taken:${seed}`)() * list.length)]!, follow };
+  return pool.length ? pool : ["wounded", "captured"];
+}
+
+/** Each way of losing, as a choice for the Decision model. */
+export const TAKEN_CHOICE: Record<Exclude<TakenOut, "killed">, string> = {
+  wounded: "wounded: beaten and left hurt",
+  captured: "captured: taken prisoner, and what they carry taken off them",
+  claimed: "claimed: the winners take what they want of them, as winners do in this world",
+  shamed: "shamed: humiliated in front of everyone, and driven off",
+  exiled: "exiled: driven out, and told never to come back",
+};
+
+/**
+ * What being taken out means here: one of the world's own (`takenPool`). `chosen` is what a model judged fits the scene
+ * and who won; the seed draws one only when no model answered or its answer is not in the pool. `follow` (the dice
+ * decide, content.ts): the teller shows what follows, the winners' way; without it, the teller says it and stops.
+ */
+export function takenOutOf(kit: Pick<WorldKit, "takenOut"> | undefined, seed: string, follow: boolean, chosen?: string | null): { means: Exclude<TakenOut, "killed">; follow: boolean } {
+  const list = takenPool(kit);
+  const picked = list.find((x) => x === chosen);
+  return { means: picked ?? list[Math.floor(seededRng(`taken:${seed}`)() * list.length)]!, follow };
+}
+
+/**
+ * What losing that way costs, on top of being taken out (code's amounts; the model only chose which): wounded leaves you
+ * at 1 health; captured takes the last thing you kept off you, or holds you two hours more; shamed costs a goodwill as
+ * word gets about; claimed and exiled cost two hours more. Not at the last place, where the story is over anyway.
+ */
+export function takenToll(t: Trip, means: Exclude<TakenOut, "killed">): { trip: Trip; said: string } {
+  const sheet = { ...t.sheet };
+  if (means === "wounded") {
+    const lost = Math.max(0, sheet.health - 1);
+    sheet.health = Math.min(sheet.health, 1);
+    return { trip: { ...t, sheet }, said: lost ? `They leave you hurt: you are down to 1 health.` : "They leave you hurt." };
+  }
+  if (means === "captured") {
+    const last = t.kept[t.kept.length - 1];
+    const thing = last ? lootOf(t.adv, last) : null;
+    if (thing) return { trip: { ...t, kept: t.kept.slice(0, -1) }, said: `They took ${thing.name} off you before you got free.` };
+    sheet.hour += 2;
+    return { trip: { ...t, sheet }, said: `They held you ${span(2)} before you got free. It is ${clock(sheet.hour)}.` };
+  }
+  if (means === "shamed") {
+    const lost = Math.min(1, sheet.goodwill);
+    sheet.goodwill -= lost;
+    return { trip: { ...t, sheet }, said: lost ? "Word of it gets about: you lose 1 goodwill." : "Word of it gets about." };
+  }
+  sheet.hour += 2;
+  return { trip: { ...t, sheet }, said: `${means === "exiled" ? "The way back is barred to you: the long way round" : "It is a long while before you are let go"} costs ${span(2)}. It is ${clock(sheet.hour)}.` };
 }
 
 /** What the teller must keep true about a round of a contest, added to what it is told of the try. */

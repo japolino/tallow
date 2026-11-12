@@ -77,7 +77,11 @@ describe("the builder rewrites them for the card's world", () => {
     const a = road("rescue");
     const s = a.stops.find((x) => x.person)!;
     const c = a.clues![0]!;
-    const b = applyWords(a, MAREN, { people: { [s.id]: { name: "Old Garrow", who: "an old man who keeps the toll", wants: "his boat back" } }, clues: { [c.id]: "They keep her in the salt cellar under the abbey." } }, "s").adv;
+    // The person is part of their stop: written with it, whole, or not at all. The clues and moves are one case.
+    const stop = { face: "The Toll", situation: "An old man keeps the toll here.", teaser: "a toll", levers: Object.fromEntries(s.levers.map((l) => [l.way, `toll ${l.way}`])), ...(s.reward ? { reward: "It is yours." } : {}), person: { name: "Old Garrow", who: "an old man who keeps the toll", wants: "his boat back" } };
+    const clues = Object.fromEntries(a.clues!.map((x) => [x.id, x.id === c.id ? "They keep her in the salt cellar under the abbey." : `A fact about ${x.id}.`]));
+    const moves = Object.fromEntries((a.appointments ?? []).map((x) => [x.id, `The other side moves (${x.id}).`]));
+    const b = applyWords(a, MAREN, { stops: { [s.id]: stop }, clues, moves }, "s").adv;
     const p = b.stops.find((x) => x.id === s.id)!.person!;
     expect(p.name).toBe("Old Garrow");
     expect(p.wants).toBe("his boat back");

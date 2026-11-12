@@ -159,6 +159,9 @@ export function changeLines(o: Outcome, third = false): string[] {
   const { kind, amount, lost } = o.cost;
   if (kind === "hours") {
     lines.push(amount > 0 ? `It takes ${span(o.hours)}: ${span(TRY_HOURS)} for the try and ${span(amount)} lost. It is now ${clock(s.hour)}.` : `It takes ${span(o.hours)}. It is now ${clock(s.hour)}.`);
+  } else if (o.turned) {
+    lines.push(`${o.next.person ?? "The one here"} turns against ${you}: ${o.turned > 1 ? "two steps" : "a step"} colder, and harder to talk round.`);
+    lines.push(`It takes ${span(o.hours)}. It is now ${clock(s.hour)}.`);
   } else {
     if (lost > 0) lines.push(`${You} lose ${lost} ${COST_NAME[kind]} (${left(s[kind])}).`);
     else if (amount > 0) lines.push(`${You} had no ${COST_NAME[kind]} left to lose.`);
@@ -212,7 +215,7 @@ export const HOLD = "The die is in your hand. Move the pointer to shake it, then
 /** The table of ways as it stands: every way, open or not, in a fixed order. */
 export function wayLines(m: Moment): string[] {
   if (m.over) return [];
-  return options(m).map((o) => (o.check ? `${optionLine(o.check)} ${RISK[o.way]}` : shutLine(o.way, o.shut!, m.stop.ways[o.way]?.price ?? 0)));
+  return options(m).map((o) => (o.check ? `${optionLine(o.check)} ${riskSaid(o.check)}` : shutLine(o.way, o.shut!, m.stop.ways[o.way]?.price ?? 0)));
 }
 
 /** What is said when the moment is over. `next` is the stop after this one; `other` is where the other road goes. */
@@ -246,11 +249,20 @@ export function checkSaid(c: Check): string[] {
   if (c.bane) lines.push(c.edge ? `But ${c.bane.name}: that is against you, and it cancels your two dice. You throw one, as usual.` : `But ${c.bane.name}: that is against you. You throw two dice, and the worse one counts. Then my slip is used up.`);
   if (c.cold) lines.push("You have no goodwill left, so nobody much wants to hear you out: that is one step harder.");
   if (c.way === "pay") lines.push(`It asks ${c.price} of your supplies, and more if it goes badly.`);
-  else if (c.threat) lines.push(`If it goes wrong, ${c.threat.replace(/[.!]+$/, "").replace(/^(The|A|An|You|Your|They|Their|It|Its|He|His|She|Her|Someone|Something)\b/, (w) => w.toLowerCase())}: ${STAKE_SAYS[c.costs].split(": ")[1]}.`);
-  else if (c.costs !== WAY_COST[c.way]) lines.push(`If it goes wrong ${STAKE_SAYS[c.costs]}.`);
-  else lines.push(RISK[c.way]);
+  else lines.push(riskSaid(c));
   lines.push(...effectSaid(c));
   return lines;
+}
+
+/**
+ * What a try puts at risk, said before the throw: what failing brings down on you here (the line's or the stop's stake,
+ * and what was said would happen), else the way's own.
+ */
+export function riskSaid(c: Check): string {
+  if (c.way === "pay") return RISK.pay;
+  if (c.threat) return `If it goes wrong, ${c.threat.replace(/[.!]+$/, "").replace(/^(The|A|An|You|Your|They|Their|It|Its|He|His|She|Her|Someone|Something)\b/, (w) => w.toLowerCase())}: ${STAKE_SAYS[c.costs].split(": ")[1]}.`;
+  if (c.costs !== WAY_COST[c.way]) return `If it goes wrong ${STAKE_SAYS[c.costs]}.`;
+  return RISK[c.way];
 }
 
 const EFFECT_SAID: Record<Effect, string> = {

@@ -7,6 +7,7 @@
  *
  * Pure: a trip in, a trip and some lines out. Every number is decided here, by code and a seeded die.
  */
+import { DREAD_MAX } from "./dread.js";
 import { STAT_MEANS } from "./tell.js";
 import { clockTo, companionOf, placeName, type Companion, type RoadStop, type Trip } from "./adventure.js";
 import { ageFrom } from "./content.js";
@@ -154,7 +155,8 @@ export function worldArrive(t: Trip, stop: RoadStop, since?: number): Told {
   if (p && trip.facing) {
     // Their feeling makes talking them round easier or harder for the whole visit (moment.ts reads it as warmth).
     const warm = -ATTITUDE_STEP[p.attitude];
-    trip = { ...trip, visits: { ...(trip.visits ?? {}), [stop.id]: newVisit(p.id) }, facing: { ...trip.facing, moment: { ...trip.facing.moment, warm: (trip.facing.moment.warm ?? 0) + warm } } };
+    // Who stands here goes with the moment: goodwill a failure loses here is lost with them (moment.ts, resolve).
+    trip = { ...trip, visits: { ...(trip.visits ?? {}), [stop.id]: newVisit(p.id) }, facing: { ...trip.facing, moment: { ...trip.facing.moment, warm: (trip.facing.moment.warm ?? 0) + warm, person: p.name } } };
     lines.push(`${p.name} ${ATTITUDE_SAID[p.attitude]}.`);
   }
   if (trip.schedule) {
@@ -245,7 +247,8 @@ export function worldClock(t: Trip, from: number, to: number): Told {
   // What happens out of sight is not told, but you feel the other side has moved.
   if (r.events.some((e) => e.a.where !== here && !e.known && !away.some((f) => f.at === e.a.where))) lines.push("Somewhere out of sight, the other side moves. You will find out what it did when you get there.");
   const dread = r.events.filter((e) => e.a.front).length;
-  return { trip: { ...t, schedule, ...(dread ? { dread: (t.dread ?? 0) + dread } : {}) }, lines };
+  // The bowl holds DREAD_MAX at most, whoever fills it: the other side's moves and your own failures alike.
+  return { trip: { ...t, schedule, ...(dread ? { dread: Math.min(DREAD_MAX, (t.dread ?? 0) + dread) } : {}) }, lines };
 }
 
 /** A seeded d20 plus a stat against a target, as a tier: for the throws the world makes on its own (a project, laying slips together). */

@@ -29,6 +29,11 @@ export interface CardInfo {
    * the Decision model or the reader; with the card's words (card/child.ts) it keeps them from ever being courted.
    */
   minor?: boolean;
+  /**
+   * The player's own persona in Lumiverse (needs "personas"): who they already are, offered when the narrator asks who
+   * they are tonight (session.ts, whoYouAre). Never read into the card's words.
+   */
+  persona?: { name: string; who: string };
 }
 
 /* A card's words that say it is a world or a scenario, not a person. Strong ones decide alone. */

@@ -22,7 +22,16 @@ import type { Recipe } from "../content/tropes.js";
 export interface RoadOptions {
   /** A card set in our own times: city names and things. */
   modern?: boolean;
+  /**
+   * How the card's first message opens the night, when a model read that it puts trouble in your way at once
+   * (session.ts, openingFor): the road's first stop is then that kind, met head on before anything else. `them` when it
+   * is the card's own character who stands there; in a story they walk with you in, they fall in only once it is past.
+   */
+  opening?: { kind: "fight" | "person"; them: boolean };
 }
+
+/** The id the card's own character has in a rescue, as a companion (build.ts). */
+export const FRIEND = "friend";
 
 /** Names for a rival who is one person, before a model names them. */
 const RIVAL_NAMES = ["Corvin", "Mallory", "Severin", "Ysolde", "Garrick", "Lisette", "Anselm", "Rhoswen"];
@@ -102,8 +111,11 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
     if (kind === "person") people++;
     return c;
   };
-  const slots: string[][] = stretches.map((s) => {
-    const a = drawKind();
+  // The opening, when there is one, is the first stretch: one stop, of the kind the card's first message calls for.
+  // On a hub it is a place of its own, met on the way in, before any of the hub's places can be gone to.
+  const opens = !!opts.opening && (hub || stretches[0] === "one");
+  const slots: string[][] = stretches.map((s, i) => {
+    const a = opens && !hub && i === 0 ? opts.opening!.kind : drawKind();
     const first = drawCard(a);
     if (s === "one") return [first];
     // The two sides of a fork are different kinds of trouble where they can be: that is the choice.
@@ -111,11 +123,14 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
   });
   // At least one person to deal with on the road, when the story has people in it.
   if (!people && weights.person > 0) {
-    const flat = slots.flat();
-    const swap = flat.find((c) => STOP_KINDS[c]!.kind !== "person") ?? flat[0]!;
+    // Never the opening: its kind is the one the card's first message called for.
+    const flat = slots.flat().slice(opens && !hub ? 1 : 0);
+    const swap = flat.find((c) => STOP_KINDS[c]!.kind !== "person") ?? flat[0];
     const fresh = pick(rng, ROAD_CARDS.person.filter((x) => !used.has(x)));
-    for (const s of slots) s.forEach((c, i) => c === swap && (s[i] = fresh));
+    if (swap) for (const s of slots) s.forEach((c, i) => c === swap && (s[i] = fresh));
   }
+
+  const openCard = opens && hub ? drawCard(opts.opening!.kind) : null;
 
   /* ---- the places, and where they lie on the sheet ---- */
   const words = shuffled(rng, opts.modern ? PLACE_WORDS.now : PLACE_WORDS.old);
@@ -142,6 +157,7 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
     }
   });
   places.push({ id: endCard, name: named(STOP_KINDS[endCard]!.named[era]), u: hub ? 0.5 : 0.9, v: 0.13 });
+  if (openCard) places.push({ id: openCard, name: named(STOP_KINDS[openCard]!.named[era]), u: 0.66, v: 0.44 });
 
   /* ---- the roads ---- */
   const roads: [string, string, number][] = [];
@@ -150,8 +166,11 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
   if (hub) {
     const spokes = slots.map(([id]) => id!);
     for (const id of [...spokes, endCard]) legs.set(id, pick(rng, [0.5, 0.5, 0.75]));
-    for (const a of ["start", ...spokes])
-      for (const b of [...spokes, endCard]) if (a !== b) roads.push([a, b, (a === "start" ? 0 : legs.get(a)!) + legs.get(b)!]);
+    // With an opening, the way in is through it: the hub's places are gone out to from there, as from the hub.
+    const gate = openCard ?? "start";
+    if (openCard) roads.push(["start", openCard, 0.5]);
+    for (const a of [gate, ...spokes])
+      for (const b of [...spokes, endCard]) if (a !== b) roads.push([a, b, (a === gate ? 0 : legs.get(a)!) + legs.get(b)!]);
   } else {
     let prev = ["start"];
     for (const ids of [...slots, [endCard]]) {
@@ -214,13 +233,20 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
       ...(foe ? { foe } : {}),
     };
   };
-  const roadStops = slots.flat().map((c) => stopOf(c, false));
+  const roadStops = [...(openCard ? [openCard] : []), ...slots.flat()].map((c) => stopOf(c, false));
   const end = stopOf(endCard, true);
+  if (opens) {
+    const first = roadStops[0]!;
+    first.opening = opts.opening!.them ? "them" : "others";
+    // The card's own character, met hostile at the start of a story they walk in: they walk with you once it is past.
+    if (opts.opening!.them && recipe.part === "friend") first.reward = { joins: FRIEND, says: "When it is over, {friend} falls in beside you, and walks on with you." };
+  }
 
   /* ---- what can be won, and who may walk on with you ---- */
   const loot: Loot[] = [];
   const companions: Companion[] = [];
-  const order = shuffled(rng, roadStops);
+  // The opening wins nothing of its own: who is met there may walk on with you (build.ts), and that is its reward.
+  const order = shuffled(rng, roadStops).filter((s) => !s.opening);
   const kinds = shuffled(rng, LOOT_KINDS);
   for (const s of order.slice(0, Math.min(recipe.loot, kinds.length, order.length))) {
     const lk = kinds[loot.length]!;
@@ -257,8 +283,8 @@ export function layRoad(recipe: Recipe, seed: string, opts: RoadOptions = {}): A
   if (hub) {
     // A careful round of a hub: the places it takes, out and back (the dearer of them, as you cannot know which are
     // cheap before you go), then the end.
-    const rounds = roadStops.map((s) => cost(s.id) + 2 * legs.get(s.id)!).sort((a, b) => b - a);
-    way = rounds.slice(0, needs).reduce((x, y) => x + y, 0) + legs.get(endCard)! + cost(endCard);
+    const rounds = roadStops.filter((s) => s.id !== openCard).map((s) => cost(s.id) + 2 * legs.get(s.id)!).sort((a, b) => b - a);
+    way = rounds.slice(0, needs).reduce((x, y) => x + y, 0) + legs.get(endCard)! + cost(endCard) + (openCard ? 0.5 + cost(openCard) : 0);
   } else {
     const longest = new Map<string, number>([["start", 0]]);
     for (const [a, b, h] of roads) longest.set(b, Math.max(longest.get(b) ?? 0, (longest.get(a) ?? 0) + h + cost(b)));
@@ -309,7 +335,9 @@ export function waysThrough(adv: Adventure): string[][] {
   const climax = new Set(adv.stops.filter((s) => s.climax).map((s) => s.id));
   // A place is gone to once; a hub's end only once enough of its places are done.
   const walk = (at: string, path: string[]): void => {
-    const next = adv.roads.filter(([a, b]) => a === at && !path.includes(b) && !(adv.hub && climax.has(b) && path.length < adv.hub.needs)).map(([, b]) => b);
+    // The opening is not one of a hub's places.
+    const done = path.filter((id) => !adv.stops.find((x) => x.id === id)?.opening).length;
+    const next = adv.roads.filter(([a, b]) => a === at && !path.includes(b) && !(adv.hub && climax.has(b) && done < adv.hub.needs)).map(([, b]) => b);
     if (!next.length) out.push(path);
     for (const b of next) if (out.length < 2000) walk(b, [...path, b]);
   };

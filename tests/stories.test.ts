@@ -118,7 +118,7 @@ describe("a road laid out for a story", () => {
     const world = fallbackAdventure(layRoad(recipeOf("admirer")!, "a"), VALE, "a");
     expect(world.courted!.name).not.toBe("Thornvale");
     expect(JSON.stringify(world)).not.toContain("{friend}");
-    const named = applyWords(layRoad(recipeOf("escort")!, "a"), VALE, { friend: { name: "Edda", who: "a ferrywoman", good_at: "wits", likes: "talk", dislikes: "force" }, goal: "Get {friend} to the high bridge by dawn." }, "a").adv;
+    const named = applyWords(layRoad(recipeOf("escort")!, "a"), VALE, { friend: { name: "Edda", who: "a ferrywoman", good_at: "wits", likes: "talk", dislikes: "force" }, goal: "Get {friend} to the high bridge by dawn.", title: "The High Bridge", won: "{friend} crosses.", deadline: { lost: "Dawn, and the bridge is up." } }, "a").adv;
     expect(named.companions.find((c) => c.id === FRIEND)!.name).toBe("Edda");
     expect(named.goal).toBe("Get Edda to the high bridge by dawn.");
   });
