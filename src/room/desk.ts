@@ -21,6 +21,7 @@ import { WayBlocks } from "./ways.js";
 import { DreadBowl } from "./dread.js";
 import { Board } from "./board.js";
 import { BattleMat } from "./battlemat.js";
+import { HandDice } from "./handdice.js";
 import { LuckTray } from "./luck.js";
 import { AgainstSlips } from "./against.js";
 import { Roster } from "./roster.js";
@@ -135,6 +136,8 @@ export class Desk {
   readonly mat: BattleMat;
   /** The narrator's own die, in its tray (luck.ts). */
   readonly luck: LuckTray;
+  /** Your hand of dice, lying on the map to be spent (handdice.ts). */
+  readonly dice: HandDice;
   /** The narrator's slips against you (against.ts). */
   readonly against: AgainstSlips;
   /** The paper of who you may be, your personas with a box each (roster.ts). */
@@ -231,6 +234,8 @@ export class Desk {
     this.group.add(this.mat.group);
     this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
     this.group.add(this.luck.group);
+    this.dice = new HandDice(this.tracks, h.reduced);
+    this.group.add(this.dice.group);
     this.against = new AgainstSlips(h.narrator, this.tracks, h.reduced);
     this.group.add(this.against.group);
     this.roster = new Roster(h.narrator, this.tracks, h.reduced, h.camera);
@@ -1023,6 +1028,20 @@ export class Desk {
     return best;
   }
 
+  /** Which die of your hand the pointer is over, while one may be spent, or -1. */
+  private dieAt(e: { clientX: number; clientY: number }): number {
+    if (!this.dice.choosing) return -1;
+    let best = -1, near = 0.05;
+    this.dice.at().forEach((at, i) => {
+      const d = this.far(e, at);
+      if (d < near) {
+        near = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
   /** What the pointer is over that a click would use. */
   private over(e: { clientX: number; clientY: number }): "book" | "pile" | "sheaf" | "box" | "card0" | "card1" | null {
     if (this.cards.choosing) {
@@ -1049,6 +1068,9 @@ export class Desk {
       this.roster.hover = i;
       if (i >= 0) return true;
     }
+    // A die of your hand, while one may be spent.
+    this.dice.hover = this.cards.looking ? -1 : this.dieAt(e);
+    if (this.dice.hover >= 0) return true;
     const on = this.over(e);
     this.cards.hover = on === "card0" ? 0 : on === "card1" ? 1 : -1;
     if (on === "card0" || on === "card1") return true;
@@ -1079,6 +1101,12 @@ export class Desk {
     if (this.cards.looking) {
       const i = this.sideCard(e);
       void (i >= 0 && i !== this.cards.lookingAt ? this.cards.look(i) : this.cards.unlook());
+      return true;
+    }
+    // Touching a die of your hand spends it, with the notebook open or shut.
+    const die = this.dieAt(e);
+    if (die >= 0) {
+      this.dice.pick(die);
       return true;
     }
     if ((this.mode === "idle" || this.mode === "writing") && !this.voice.speaking) {
@@ -1173,6 +1201,7 @@ export class Desk {
     const to = (now: number, want: number, rate: number): number => (still || Math.abs(want - now) < 0.002 ? want : now + (want - now) * Math.min(1, dt * rate));
     this.tracks.update(t);
     this.luck.update(t);
+    this.dice.update(t);
     this.counters.update(dt);
     this.voice.update(t, dt);
 
@@ -1271,6 +1300,7 @@ export class Desk {
     this.board.dispose();
     this.mat.dispose();
     this.luck.dispose();
+    this.dice.dispose();
     this.against.dispose();
     this.roster.dispose();
     this.cards.dispose();

@@ -81,14 +81,19 @@ KNUCKLES = Vector((0.001, -0.092, 0.031))
 
 FINGER_NAMES = ["index", "middle", "ring", "little"]
 
-# The sleeve: how thick at the shoulder, the elbow and the cuff, and how far short of the wrist it stops.
-SLEEVE_R = (0.085, 0.066, 0.045)
+# The sleeve: a robe's, wide and slack. How thick at the shoulder, the elbow and the cuff, and how far short of the
+# wrist it stops.
+SLEEVE_R = (0.085, 0.07, 0.056)
 CUFF_BACK = 0.03
 # The table's far edge, in front of the figure: the sleeve lies flat on the wood beyond it.
 TABLE_EDGE_Y = -0.4
-CUFF_FLARE = 1.14
+# The cuff opens into a bell over its last few centimetres.
+CUFF_FLARE = 1.38
+CUFF_BELL = 0.09
 ELBOW_ROUND = 0.07
-SLEEVE_AROUND = 24
+SLEEVE_AROUND = 32
+# Lying along the forearm, the cloth slumps: wider than it is tall.
+SLUMP = (1.12, 0.84)
 
 # How wide a thing the fingers close on, and how thick a fingertip is (bone to skin).
 PINCH_GAP = 0.021  # the hood of the narrator's own piece
@@ -217,17 +222,28 @@ def bind(obj, arm):
     obj.parent = arm
 
 
+def crease(x):
+    """A fold seen in section: broad, soft crests and narrow, sharp valleys between them (about -1..1)."""
+    return 2.0 * abs(math.sin(x)) ** 0.45 - 1.15
+
+
 def sleeve(arm, at):
     """
-    A tube of cloth from the shoulder, round the elbow, to a loose cuff just short of the wrist, with folds pressed
-    into it. Each ring of it is shared between a bone and that bone's end, so the room can lengthen the arm and the
-    cloth stretches evenly along it; near the elbow it is shared across the joint, so the bend is round.
+    A robe's sleeve from the shoulder, round the elbow, to a wide cuff just short of the wrist. The cloth slumps
+    where it lies along the forearm, bunches into folds at the elbow and over the wrist, and opens into a bell with
+    a rolled hem. Each ring is shared between a bone and that bone's end, so the room can lengthen the arm and the
+    cloth stretches evenly; near the elbow it is shared across the joint, so the bend is round.
+
+    Each vertex also carries `_hang` (0..1): how freely it hangs. The room lets that much of the cloth fall under
+    gravity, whichever way the arm is turned, and swing behind the arm as it moves (narrator.ts).
     """
+    from mathutils import noise
+
     S, E, W = SHOULDER, at["elbow"], at["wrist"]
     d1, d2 = (E - S).normalized(), (W - E).normalized()
     l1, l2 = (E - S).length, (W - E).length
     cuff = l2 - CUFF_BACK
-    # The middle line: down the upper arm, round the elbow, along the forearm. Each sample: (point, which part, how far along it).
+    # The middle line: down the upper arm, round the elbow, along the forearm. Each sample: (point, part, how far along it).
     line = []
     for i in range(9):
         k = i / 8 * (l1 - ELBOW_ROUND)
@@ -237,45 +253,86 @@ def sleeve(arm, at):
         u = i / 6
         p = a * (1 - u) ** 2 + E * 2 * u * (1 - u) + b * u * u
         line.append((p, 0 if u < 0.5 else 1, 1.0 if u < 0.5 else 0.0))
-    for i in range(17):
-        k = ELBOW_ROUND + i / 16 * (cuff - ELBOW_ROUND)
+    for i in range(29):
+        k = ELBOW_ROUND + i / 28 * (cuff - ELBOW_ROUND)
         line.append((E + d2 * k, 1, k / l2))
     n = len(line)
     run = [0.0]
     for i in range(1, n):
         run.append(run[-1] + (line[i][0] - line[i - 1][0]).length)
+    total = run[-1]
     bend_at = next(run[i] for i in range(n) if line[i][1] == 1)
-    verts, faces, weights = [], [], []
+    up = Vector((0, 0, 1))
+    verts, faces, weights, hang = [], [], [], []
     side = Vector((1, 0, 0))
+    rings = []
+    tan = Vector((0, -1, 0))
     for i, (p, part, along) in enumerate(line):
         tan = (line[min(n - 1, i + 1)][0] - line[max(0, i - 1)][0]).normalized()
         side = (side - tan * side.dot(tan)).normalized()
         other = tan.cross(side)
-        s = run[i] / run[-1]
-        r = SLEEVE_R[0] + (SLEEVE_R[1] - SLEEVE_R[0]) * min(1, run[i] / bend_at) if part == 0 else SLEEVE_R[1] + (SLEEVE_R[2] - SLEEVE_R[1]) * (run[i] - bend_at) / (run[-1] - bend_at)
-        # The cuff hangs open a little.
-        r *= 1 + (CUFF_FLARE - 1) * max(0.0, 1 - (run[-1] - run[i]) / 0.035) ** 2
-        # Folds: a few long ones running down the arm, and the cloth bunching where it lies along the forearm.
-        bunch = 1 + (0.035 * math.sin(run[i] * 95) if part == 1 else 0.02 * math.sin(run[i] * 60))
+        if other.dot(up) < 0:
+            other = -other
+        if part == 0:
+            r = SLEEVE_R[0] + (SLEEVE_R[1] - SLEEVE_R[0]) * min(1, run[i] / bend_at)
+        else:
+            r = SLEEVE_R[1] + (SLEEVE_R[2] - SLEEVE_R[1]) * (run[i] - bend_at) / (total - bend_at)
+        to_cuff = total - run[i]
+        bell = max(0.0, 1 - to_cuff / CUFF_BELL) ** 1.6
+        r *= 1 + (CUFF_FLARE - 1) * bell
+        # Where the cloth bunches: round the elbow, and over the wrist where the forearm pushes it back.
+        squeeze = math.exp(-((run[i] - bend_at) / 0.07) ** 2) + 0.8 * math.exp(-((to_cuff - 0.13) / 0.06) ** 2)
         # How much of this ring belongs across the elbow.
         across = 0.5 * max(0.0, 1 - abs(run[i] - bend_at) / 0.1)
         if part == 0:
             w = {"upper_arm": (1 - along) * (1 - across), "upper_arm_end": along * (1 - across), "forearm": across}
         else:
             w = {"forearm": (1 - along) * (1 - across), "forearm_end": along * (1 - across), "upper_arm_end": across}
+        fore = 0.0 if part == 0 else min(1.0, (run[i] - bend_at) / (total - bend_at))
+        slump_x = 1 + (SLUMP[0] - 1) * fore
+        slump_z = 1 + (SLUMP[1] - 1) * fore
+        ring = []
         for j in range(SLEEVE_AROUND):
             ang = j / SLEEVE_AROUND * math.tau
-            fold = 1 + 0.05 * math.sin(ang * 3 + s * 14) + 0.035 * math.sin(ang * 7 - s * 23 + 1)
-            at_ring = p + (side * math.cos(ang) + other * math.sin(ang)) * r * fold * bunch
-            # Where the forearm lies on the table the cloth lies on the wood, not in it.
-            if at_ring.y < TABLE_EDGE_Y:
-                at_ring.z = max(at_ring.z, 0.003)
-            verts.append(at_ring)
+            c, sn = math.cos(ang), math.sin(ang)
+            # Long folds hanging down the arm, and rings of bunched cloth that wander round it where it is squeezed.
+            fold = 0.09 * crease(ang * 2.5 + 0.8 * math.sin(run[i] * 9))
+            fold += (0.015 + 0.17 * squeeze) * crease(run[i] * 55 + 1.7 * math.sin(ang * 2 + run[i] * 6))
+            # And the unevenness of real cloth: slow swells, and a finer rumple.
+            q = p + side * c * 0.05 + other * sn * 0.05
+            fold += 0.08 * noise.noise(q * 14) + 0.03 * noise.noise(q * 45)
+            rr = r * (1 + fold)
+            # The top of a slack sleeve sags; its sides spread.
+            v = p + side * c * rr * slump_x + other * sn * rr * (slump_z if sn > 0 else 1.0)
+            # Where the forearm lies on the table, the cloth lies on the wood, not in it.
+            if v.y < TABLE_EDGE_Y:
+                v.z = max(v.z, 0.003)
+            ring.append(v)
+            # Free to hang: more toward the cuff, most on the underside.
+            under = max(0.0, -sn)
+            hang.append(fore ** 1.4 * (0.3 + 0.7 * under) * (0.6 + 0.4 * bell))
             weights.append(w)
-        if i:
+        # The hem: the bottom of the cuff a little longer than the top, so it drapes over the back of the wrist.
+        if i == n - 1:
             for j in range(SLEEVE_AROUND):
-                k = (j + 1) % SLEEVE_AROUND
-                faces.append(((i - 1) * SLEEVE_AROUND + j, (i - 1) * SLEEVE_AROUND + k, i * SLEEVE_AROUND + k, i * SLEEVE_AROUND + j))
+                sn = math.sin(j / SLEEVE_AROUND * math.tau)
+                ring[j] = ring[j] + tan * (0.012 * max(0.0, -sn) - 0.006 * max(0.0, sn) + 0.004 * math.sin(j * 1.9))
+        verts.extend(ring)
+        rings.append(ring)
+    # A rolled hem: the cloth turns back inside the cuff, so its edge has a thickness.
+    last = rings[-1]
+    mid = sum(last, Vector()) / len(last)
+    for back, shrink in ((0.004, 0.93), (0.018, 0.9)):
+        for j, v in enumerate(last):
+            verts.append(mid + (v - mid) * shrink - tan * back)
+            weights.append(weights[(n - 1) * SLEEVE_AROUND + j])
+            hang.append(hang[(n - 1) * SLEEVE_AROUND + j])
+    rows = n + 2
+    for i in range(1, rows):
+        for j in range(SLEEVE_AROUND):
+            k = (j + 1) % SLEEVE_AROUND
+            faces.append(((i - 1) * SLEEVE_AROUND + j, (i - 1) * SLEEVE_AROUND + k, i * SLEEVE_AROUND + k, i * SLEEVE_AROUND + j))
+    assert len(verts) == len(weights) == len(hang) == rows * SLEEVE_AROUND
     me = bpy.data.meshes.new("sleeve")
     me.from_pydata(verts, [], faces)
     bm = bmesh.new()
@@ -285,6 +342,9 @@ def sleeve(arm, at):
     bm.free()
     for p in me.polygons:
         p.use_smooth = True
+    attr = me.attributes.new("_hang", "FLOAT", "POINT")
+    for i, h in enumerate(hang):
+        attr.data[i].value = h
     o = bpy.data.objects.new("sleeve", me)
     bpy.context.collection.objects.link(o)
     groups = {name: o.vertex_groups.new(name=name) for name in ("upper_arm", "upper_arm_end", "forearm", "forearm_end")}
@@ -709,6 +769,7 @@ def export(objs):
         export_yup=True,
         export_texcoords=False,
         export_vertex_color="ACTIVE",
+        export_attributes=True,
         export_materials="EXPORT",
         export_skins=True,
         export_def_bones=False,

@@ -1,6 +1,7 @@
 /** Messages between Tallow's frontend (the room) and its backend (the card and the models). */
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
 import type { CardInfo } from "../game/card.js";
+import type { PresetSnapshot } from "../game/preset.js";
 import type { Message, Role } from "../game/prompts.js";
 import type { ModelsPatch, ReasoningPick } from "../meaning/models.js";
 
@@ -24,7 +25,10 @@ export interface ModelsState {
 
 export type ToBackend =
   | { type: "card"; id: string; characterId: string }
-  | { type: "ask"; id: string; role: Role; messages: Message[] }
+  /** `parameters`: the settings of the story's preset (game/preset.ts), for a narration written under it. */
+  | { type: "ask"; id: string; role: Role; messages: Message[]; parameters?: Record<string, unknown> }
+  /** The chat's preset as it is now, as a story keeps it (game/preset.ts); null when there is none, or it cannot be read. */
+  | { type: "preset"; id: string; chatId: string }
   /** Small typed questions for the Decision model; answered with null when there is none or it failed. */
   | { type: "decide"; id: string; what: string; state: unknown; questions: Record<string, DecisionQuestion>; ms: number }
   /** The drawer: read the model choices, or change one. */
@@ -35,6 +39,7 @@ export type ToBackend =
 export type ToFrontend =
   | { type: "card"; id: string; card: CardInfo | null }
   | { type: "answer"; id: string; text: string }
+  | { type: "preset"; id: string; snapshot: PresetSnapshot | null }
   | { type: "decided"; id: string; answers: Record<string, DecisionAnswer | undefined> | null }
   | { type: "models"; id: string; state: ModelsState }
   | { type: "lore"; id: string; entries: string[] }

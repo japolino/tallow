@@ -159,18 +159,24 @@ A model passes when every score is at least 7 and the mean is at least 8. Verdic
 | File | Script | What it holds | Tris | Baked | Size |
 |---|---|---|---|---|---|
 | `props.glb` | `props.py` | 23 props: table, dish, candlestick, coin, tome, dice box, book row, inkwell, tankard, bottle, scroll, hourglass, lantern, herb jar, jar, skull, coffer, chest, barrel, crate, stool, rug, candle wheel | 40,904 in all | AO, cavity and wear in `COLOR_0`; base colour from the embedded palette | 1,550 KB |
-| `narrator_arm.glb` | `narrator_arm.py` | Hand and sleeve, 22 bones, 18 clips | 10,440 (the hand 9,000) | AO and cavity in `COLOR_0`, at rest; no normal map | 632 KB |
+| `narrator_arm.glb` | `narrator_arm.py` | Hand and robe sleeve, 22 bones, 18 clips | 11,816 (the hand 9,000) | AO and cavity in `COLOR_0`, at rest; `_hang` per vertex for the cloth; no normal map | 727 KB |
 | `narrator_cloak.glb` | `narrator_cloak.py` | The simulated mantle | 8,999 | AO and cavity in `COLOR_0`; no normal map | 240 KB |
 | `narrator_hood.glb` | `narrator_hood.py` | The hood and its void | 4,000 | AO and cavity in `COLOR_0` | 92 KB |
 | `pieces.glb` | `pieces.py` | `traveller` and `shadow` | 1,500 each | AO and wear in `COLOR_0` | 105 KB |
 
-All of them add up to about **2.62 MB, over the 2.5 MB budget by about 120 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 632 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py` and thins it to 9,000 triangles. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
+All of them add up to about **2.71 MB, over the 2.5 MB budget by about 210 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 727 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py` and thins it to 9,000 triangles. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
 
 ### How the pipeline differs from Part 2
 
 - **Palette.** The texture is `models/palette.png`. It is embedded inside `props.glb`, not shipped as its own file.
 - **The hand is geometry, not a normal map.** Thinned to 3,600 triangles with the sculpt baked to a normal map, the hand read as a mottled lump. It ships at 9,000 triangles instead. The sculpt's palm sits below the long bones, so the four tendons and the knuckles stand out of the back of the hand, and a knob of wrist bone stands at the cuff. The budget in Part 2 (5,000 for the whole arm) gave way to that.
 - **Skin weights** are stored as normalized bytes by `quantize_glb`.
+- **The sleeve is a robe's.** It slumps where it lies, bunches into folds at the elbow and over the wrist, and opens into a bell with a rolled hem. Each vertex carries `_hang`, how freely it hangs.
+- **Cloth that moves.** `narrator.ts` runs a very plain simulation in the vertex shaders:
+  - the mantle is pushed out of a capsule round each upper arm and the start of each forearm, so the arms never come through it;
+  - a sleeve's loose cloth falls under gravity whichever way the arm is turned, trails behind the forearm on an under-damped spring, and lies on the wood where it reaches the table.
+
+  Shadows are cast from the cloth as modelled.
 - **Quantization.** After export, `style.quantize_glb` repacks every file with `KHR_mesh_quantization`:
   - normals as int8, UVs as uint16 and colours as uint8;
   - positions as int16, with the dequantizing offset and scale written onto the node (skipped for skinned meshes and for `pieces.glb`, whose nodes `room.ts` moves itself);

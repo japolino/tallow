@@ -25,8 +25,13 @@ export interface Message {
 /** Which ask it is, so the host can send it to the right connection. */
 export type Role = "builder" | "hero" | "reader" | "teller";
 
+/** What may go with an ask: the settings a story's preset has for the model (preset.ts), for a narration under it. */
+export interface AskOptions {
+  parameters?: Record<string, unknown>;
+}
+
 /** Ask a model. Resolves with its text; rejects if it could not be asked. */
-export type Ask = (messages: Message[], role: Role) => Promise<string>;
+export type Ask = (messages: Message[], role: Role, opts?: AskOptions) => Promise<string>;
 
 /** The first JSON object in a model's text (inside a code fence or not), or null. */
 export function firstJson(text: string): unknown {
@@ -141,7 +146,28 @@ export interface TellContext {
   world?: string;
   /** What the game allows in this story (content.ts, contentRules), in place of the default "nothing sexual". */
   content?: string;
+  /**
+   * The story is told under the player's own preset (voice.ts): how long and in what style is the preset's to say, and
+   * the game's own short plain voice is left out. The rules of what must be true stay as they are.
+   */
+  voiced?: boolean;
 }
+
+/** How long a narration may run under a preset, in characters: the preset sets the length, this only stops a runaway. */
+export const VOICED_TELL = 4000;
+/** How much of the player's line a narrator of a story reads. */
+export const TELL_LINE = 2000;
+
+/**
+ * How a narration is to be written: the game's own manner, or, under a preset, the preset's. `own` is the job's usual
+ * sentence (its length and its plain voice); `what` is what the job asks for, kept either way.
+ */
+const manner = (ctx: TellContext, own: string, what = ""): string =>
+  ctx.voiced
+    ? `${what}${what ? " " : ""}Write it at the length and in the style, person and tense that the instructions above set out; where they set none, in the second person and the present tense, a paragraph or two. Prose only: no numbers, no dice, no stats, no game words, no lists, no headings, no markdown.`
+    : own;
+/** The same for a short beat, which stays short under a preset too: only the voice is the preset's. */
+const plainly = (ctx: TellContext): string => (ctx.voiced ? "In the voice and style set out above, but kept this short." : "Plain words, said aloud.");
 
 /** The default limits in a system message, swapped for what the story's content settings allow, when it has them. */
 const DEFAULT_LIMITS = /Nothing sexual or explicit, no gore\.|Nothing sexual or explicit\.|No gore, nothing sexual\./g;
@@ -167,7 +193,7 @@ export function fellowMessages(brief: string, m: Moment, ctx: TellContext = {}):
 export function tellMessages(o: Outcome, stop: RoadStop, note: string, more: boolean, ctx: TellContext = {}): Message[] {
   const system = [
     "You are the narrator of a tabletop game, a quiet voice across a table in a dark room. You say what happened after a die was thrown.",
-    "Write one to three short sentences, at most 60 words, in the second person and the present tense. Plain words, said aloud. No numbers, no dice, no stats, no game words, no markdown, no quotation marks around the whole answer.",
+    manner(ctx, "Write one to three short sentences, at most 60 words, in the second person and the present tense. Plain words, said aloud. No numbers, no dice, no stats, no game words, no markdown, no quotation marks around the whole answer.", "Say what happened, and what the place and the people in it are like as it does."),
     "What you are told must be true is true. Say nothing that changes it: if the way is still blocked, do not let them past; if they are past, do not add a new obstacle. What was lost is exactly what you are told, nothing more or less. Do not say what they do next. Nothing sexual or explicit.",
     "What must be true is written in the game's own words (supplies, goodwill, health, a way closed). Say it as the story would: coins or food handed over, a reputation that suffers, a wound, a door that will not open now.",
     "Whatever is lost happens in the scene, done by who or what stands there: lost health is someone or something here hurting, grabbing or knocking the player down; lost time is being held up, chased off or driven back; lost goodwill is someone turning on them or word getting about; lost supplies is something taken, spent or ruined. A try that fails is never only time wasted talking.",
@@ -177,7 +203,7 @@ export function tellMessages(o: Outcome, stop: RoadStop, note: string, more: boo
     `At ${stop.name}: ${stop.situation}`,
     ctx.who ? `The player: ${ctx.who}` : "",
     ctx.with?.length ? `With them: ${ctx.with.join("; ")}.` : "",
-    ctx.line ? `They wrote: "${ctx.line.replace(/"/g, "'").slice(0, 300)}"` : "",
+    ctx.line ? `They wrote: "${ctx.line.replace(/"/g, "'").slice(0, TELL_LINE)}"` : "",
     `What must be true: ${note}`,
     !o.past && o.check?.threat ? `What was said would happen if it went wrong: ${o.check.threat}.` : "",
     more ? "This try worked, but it is not over: more stands in the way here." : "",
@@ -215,7 +241,7 @@ export function answerMessages(line: string, m: Moment, ctx: TellContext = {}, n
   const levers = m.stop.levers.filter((l) => leverLeft(m, l) && open.includes(l.way));
   const system = [
     "You are the narrator of a tabletop game, a quiet voice across a table in a dark room. The player has asked you something about the scene, or looked round, instead of trying to get past.",
-    "Answer in one to three short sentences, at most 60 words, in the second person and the present tense, from what is in the situation below. You may say what someone seems to feel or want, and you may point at one of the things there that could be used. Plain words, said aloud. No numbers, no dice, no game words, no markdown.",
+    manner(ctx, "Answer in one to three short sentences, at most 60 words, in the second person and the present tense, from what is in the situation below. You may say what someone seems to feel or want, and you may point at one of the things there that could be used. Plain words, said aloud. No numbers, no dice, no game words, no markdown.", "Answer from what is in the situation below. You may say what someone seems to feel or want, and you may point at one of the things there that could be used."),
     "Nothing changes because of your answer: nobody moves aside, nothing opens, they are not past. Do not invent a new way through or a new thing to use. Do not say whether a try would work. If the answer is not in the situation, say it is hard to tell from here. Nothing sexual or explicit.",
   ].join("\n");
   const user = [
@@ -224,7 +250,7 @@ export function answerMessages(line: string, m: Moment, ctx: TellContext = {}, n
     ctx.who ? `The player: ${ctx.who}` : "",
     ctx.with?.length ? `With them: ${ctx.with.join("; ")}.` : "",
     `Things there that could be used: ${levers.length ? levers.map((l) => l.name).join("; ") : "none left"}.`,
-    `They wrote: "${line.replace(/"/g, "'").slice(0, 400)}"`,
+    `They wrote: "${line.replace(/"/g, "'").slice(0, TELL_LINE)}"`,
     note ? `What must be true, and must be shown: ${note}` : "",
   ]
     .filter(Boolean)
@@ -248,7 +274,7 @@ export const ROAM_TELL = 1000;
 export function roamMessages(line: string, m: Moment, ctx: TellContext = {}, note?: string): Message[] {
   const system = [
     "You are the narrator of a tabletop roleplaying game, a quiet voice across a table in a dark room. There is no set story tonight: the player is free in the world and does as they like.",
-    "Say what happens next, in the second person and the present tense: two to six sentences, at most 140 words, and more of it when they have written more. Plain words, said aloud. No numbers, no dice, no game words, no markdown.",
+    manner(ctx, "Say what happens next, in the second person and the present tense: two to six sentences, at most 140 words, and more of it when they have written more. Plain words, said aloud. No numbers, no dice, no game words, no markdown.", "Say what happens next."),
     "Answer what the player did, first and directly: if they speak to someone, that person answers them; if they go to someone or after something, they find it, or find out where it is. Never steer them elsewhere or toward what you would rather they did: the night goes where they take it.",
     "Take up what they wrote, all of it: what they say is heard and answered in kind, what they do is seen and has its effect, the details they give matter. Never pass it over, and never say that nothing comes of it.",
     "Keep to what the player wrote: do not act or speak for them beyond it, and do not decide their feelings. You may bring in what belongs in the place: people going about their business, small details, someone who answers them, a thing they could use. The people in it have wants of their own and may say no. Leave the scene open, ending on something the player can answer or act on.",
@@ -323,7 +349,7 @@ export function parseRisk(text: string): boolean | null {
 export function moveMessages(m: Moment, note: string, ctx: TellContext = {}): Message[] {
   const system = [
     "You are the narrator of a tabletop game, a quiet voice across a table in a dark room. Something has just turned against the player at the place they have come to, because of what went wrong for them earlier. It is already decided; you only show it.",
-    "Tell it in one or two short sentences, at most 45 words, in the second person and the present tense, from what is in the situation below. Plain words, said aloud. No numbers, no dice, no game words, no markdown.",
+    `Tell it in one or two short sentences, at most 45 words, in the second person and the present tense, from what is in the situation below. ${plainly(ctx)} No numbers, no dice, no game words, no markdown.`,
     "Show only what you are told happens. Do not invent a way through, do not say the player is past or turned back, and do not make it worse than you are told. Nothing sexual or explicit, no gore.",
   ].join("\n");
   const user = [
@@ -431,7 +457,7 @@ export function epilogueMessages(t: Trip, ctx: TellContext = {}): Message[] {
   const won = t.over === "won";
   const system = [
     "You are the narrator of a tabletop game, a quiet voice across a table in a dark room. A story has just ended, and you say what became of everyone afterwards: the days after, not the night itself.",
-    "Two or three short sentences, at most 70 words, in the second person. Plain words, said aloud, in the world of the story. No numbers, no dice, no game words, no markdown.",
+    manner(ctx, "Two or three short sentences, at most 70 words, in the second person. Plain words, said aloud, in the world of the story. No numbers, no dice, no game words, no markdown.", "Tell it in the world of the story."),
     won ? "It was won: give it a quiet, warm ending that fits what was done and who was helped." : "It was lost: give it a quiet ending, sad or bittersweet, with a little hope left in it. Do not undo the loss.",
     "Do not ask the player anything, and do not start a new story. Nothing sexual or explicit.",
   ].join("\n");

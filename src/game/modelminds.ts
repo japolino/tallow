@@ -17,7 +17,13 @@ import { RISK_OPTIONS, RISK_QUESTION } from "../engine/free.js";
 import type { Minds } from "./minds.js";
 import { standIns } from "./minds.js";
 import { contentMessages, parseContentChange, parsePick, pickFromAnswers, pickMessages, pickQuestions, readFromAnswers, readQuestions, type Decide } from "./decisions.js";
-import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, ROAM_TELL, readMessages, riskMessages, tellMessages, type Ask, type TellContext } from "./prompts.js";
+import { answerMessages, roamMessages, blowMessages, contestMessages, epilogueMessages, fellowMessages, heroMessages, luckMessages, moveMessages, parseContest, parseLuck, offerMessages, parseHero, parseOffer, parseRead, parseRisk, parseTell, rated, ROAM_TELL, readMessages, riskMessages, tellMessages, VOICED_TELL, type Ask, type Message, type TellContext } from "./prompts.js";
+import { refused } from "../engine/content.js";
+import { laid, type Keeper, type Told, type Voice } from "./voice.js";
+import { parseSceneLine, sceneLineMessages, sceneTellMessages } from "./scenewriter.js";
+
+/** How long a scene's telling may run without a preset, in characters. */
+const SCENE_TELL = 900;
 
 export interface ModelMindsOptions {
   /** Give up on a model after this long and use the stand-in (ms). */
@@ -35,7 +41,15 @@ export interface ModelMindsOptions {
   lore?: (text: string) => Promise<string[]>;
   /** Told whenever a stand-in had to answer, and why. */
   onFallback?: (job: string, why: string) => void;
+  /**
+   * The story's voice (voice.ts): the player's preset as it was when the story began, and the story so far. With it
+   * the narrator's prose is written under the preset, as one conversation that grows; without it, as the game's own.
+   */
+  voice?: Keeper;
 }
+
+/** A narration under a preset may be long: it is given longer before the stand-in answers. */
+const VOICED_MS = 120_000;
 
 const within = <T>(p: Promise<T>, ms: number): Promise<T> =>
   new Promise<T>((done, fail) => {
@@ -48,7 +62,7 @@ const within = <T>(p: Promise<T>, ms: number): Promise<T> =>
 
 export function modelMinds(ask0: Ask, o: ModelMindsOptions = {}): Minds & { hero(line: string, hour?: number, world?: string): Promise<Hero> } {
   // Every message goes out with the story's content settings in place of the default limits (content.ts).
-  const ask: Ask = (messages, role) => ask0(rated(messages, { ...known, ...o.context?.() }.content), role);
+  const ask: Ask = (messages, role, opts) => ask0(rated(messages, { ...known, ...o.context?.() }.content), role, opts);
   const plain = standIns(0);
   const ms = o.timeoutMs ?? 60_000;
   const fell = (job: string, why: unknown): void => o.onFallback?.(job, why instanceof Error ? why.message : String(why));
@@ -66,6 +80,22 @@ export function modelMinds(ask0: Ask, o: ModelMindsOptions = {}): Minds & { hero
     const add = near.filter((e) => e && !(base.world ?? "").includes(e.slice(0, 80))).map((e) => `Lore: ${e}`).join("\n");
     return add ? { ...base, world: [base.world, add].filter(Boolean).join("\n") } : base;
   };
+  /** The story's voice, when it has one. Asked for before a narrator's job is written, so the job knows which it is. */
+  const voiceNow = async (): Promise<Voice | null> => (o.voice ? await o.voice.now().catch(() => null) : null);
+  /**
+   * A narrator's job, asked: under the story's voice when it has one (the job's own rules and facts last, with the
+   * story's content settings in them), else as it is. The answer is made fit to say, or null.
+   */
+  const narrated = async (v: Voice | null, job: Message[], max?: number): Promise<string | null> => {
+    if (!v) return parseTell(await within(ask(job, "teller"), ms), max);
+    const text = await within(ask0(laid(v, rated(job, { ...known, ...o.context?.() }.content)), "teller", v.snapshot.parameters ? { parameters: v.snapshot.parameters } : undefined), Math.max(ms, VOICED_MS));
+    return parseTell(text, Math.max(max ?? 0, VOICED_TELL));
+  };
+  /** What was told goes into the story so far (never a refusal: it would be read back every turn after). */
+  const kept = (told: Told, said: string): string => {
+    if (said && !refused(said)) o.voice?.said(told, said);
+    return said;
+  };
   return {
     know(who, company, content) {
       known = { who, with: company, ...(content ? { content } : {}) };
@@ -74,7 +104,7 @@ export function modelMinds(ask0: Ask, o: ModelMindsOptions = {}): Minds & { hero
       try {
         const s = parseTell(await within(ask(fellowMessages(brief, m, await scene(`${m.stop.situation}
 ${lastLine}`, { line: lastLine })), "teller"), ms));
-        if (s) return s;
+        if (s) return kept({ at: m.stop, must: `One of the company speaks. ${brief}` }, s);
         fell("fellow", "empty answer");
       } catch (e) {
         fell("fellow", e);
@@ -96,34 +126,40 @@ ${lastLine}`, { line: lastLine })), "teller"), ms));
       return plain.read(line, m);
     },
     async tell(out, stop, note, more) {
+      const line = lastLine || out.check.attempt;
+      const told: Told = { at: stop, wrote: line, must: note };
       try {
-        const s = parseTell(await within(ask(tellMessages(out, stop, note, more, await scene(`${stop.situation}
-${lastLine || out.check.attempt}`, { line: lastLine || out.check.attempt })), "teller"), ms));
-        if (s) return s;
+        const v = await voiceNow();
+        const s = await narrated(v, tellMessages(out, stop, note, more, await scene(`${stop.situation}
+${line}`, { line, voiced: !!v })));
+        if (s) return kept(told, s);
         fell("teller", "empty answer");
       } catch (e) {
         fell("teller", e);
       }
-      return plain.tell(out, stop, note, more);
+      return kept(told, await plain.tell(out, stop, note, more));
     },
     async answer(line, m, note) {
+      const told: Told = { at: m.stop, wrote: line, ...(note ? { must: note } : {}) };
       try {
-        const s = parseTell(await within(ask(answerMessages(line, m, await scene(`${m.stop.situation}
-${line}`), note), "teller"), ms));
-        if (s) return s;
+        const v = await voiceNow();
+        const s = await narrated(v, answerMessages(line, m, await scene(`${m.stop.situation}
+${line}`, { voiced: !!v }), note));
+        if (s) return kept(told, s);
         fell("answer", "empty answer");
       } catch (e) {
         fell("answer", e);
       }
-      return plain.answer(line, m, note);
+      return kept(told, await plain.answer(line, m, note));
     },
     async roam(line, m, note) {
       // Free play has nothing to fall back on but the narrator, so a failed answer is asked for once more.
       for (let i = 0; i < 2; i++) {
         try {
-          const s = parseTell(await within(ask(roamMessages(line, m, await scene(`${m.stop.situation}
-${line}`), note), "teller"), ms), ROAM_TELL);
-          if (s) return s;
+          const v = await voiceNow();
+          const s = await narrated(v, roamMessages(line, m, await scene(`${m.stop.situation}
+${line}`, { voiced: !!v }), note), ROAM_TELL);
+          if (s) return kept({ at: m.stop, wrote: line, ...(note ? { must: note } : {}) }, s);
           fell("roam", "empty answer");
         } catch (e) {
           fell("roam", e);
@@ -183,12 +219,43 @@ ${line}`), note), "teller"), ms), ROAM_TELL);
     },
     async battleTell(place, note) {
       try {
-        const s = parseTell(await within(ask(battleTellMessages(place, note, await scene(`${place.situation}
-${note}`)), "teller"), ms));
-        if (s) return s;
+        const v = await voiceNow();
+        const s = await narrated(v, battleTellMessages(place, note, await scene(`${place.situation}
+${note}`, { voiced: !!v })));
+        if (s) return kept({ at: place, must: note }, s);
         fell("battle tell", "empty answer");
       } catch (e) {
         fell("battle tell", e);
+      }
+      return "";
+    },
+    async sceneLine(line, ctx) {
+      lastLine = line;
+      const c = { ...ctx, who: ctx.who ?? { ...known, ...o.context?.() }.who };
+      // The line's whole reading is one answer, kept whole or asked once more: there is no stock reading worth having.
+      for (let i = 0; i < 2; i++) {
+        try {
+          const r = parseSceneLine(await within(ask(sceneLineMessages(line, c), "reader"), ms), c);
+          if (r) return r;
+          fell("scene line", "answer did not check");
+        } catch (e) {
+          fell("scene line", e);
+        }
+      }
+      return null;
+    },
+    async sceneTell(at, note, wrote) {
+      const told: Told = { at, ...(wrote ? { wrote } : {}), must: note };
+      for (let i = 0; i < 2; i++) {
+        try {
+          const v = await voiceNow();
+          const s = await narrated(v, sceneTellMessages(at, note, wrote, await scene(`${at.situation}
+${wrote ?? ""}`, { voiced: !!v })), SCENE_TELL);
+          if (s) return kept(told, s);
+          fell("scene tell", "empty answer");
+        } catch (e) {
+          fell("scene tell", e);
+        }
       }
       return "";
     },
@@ -232,9 +299,10 @@ ${note}`)), "teller"), ms));
     },
     async move(m, note) {
       try {
-        const s = parseTell(await within(ask(moveMessages(m, note, await scene(`${m.stop.situation}
-${note}`)), "teller"), ms));
-        if (s) return s;
+        const v = await voiceNow();
+        const s = await narrated(v, moveMessages(m, note, await scene(`${m.stop.situation}
+${note}`, { voiced: !!v })));
+        if (s) return kept({ at: m.stop, must: note }, s);
         fell("move", "empty answer");
       } catch (e) {
         fell("move", e);
@@ -263,7 +331,7 @@ ${note}`)), "teller"), ms));
       try {
         const s = parseTell(await within(ask(blowMessages(m, c, foe, await scene(`${m.stop.situation}
 ${foe.name}`)), "teller"), ms));
-        if (s) return s;
+        if (s) return kept({ at: m.stop, must: `${foe.name} is about to act; it has not landed yet.` }, s);
         fell("blow", "empty answer");
       } catch (e) {
         fell("blow", e);
@@ -282,8 +350,9 @@ ${foe.name}`)), "teller"), ms));
     },
     async epilogue(t) {
       try {
-        const s = parseTell(await within(ask(epilogueMessages(t, { ...known, ...o.context?.() }), "teller"), ms));
-        if (s) return s;
+        const v = await voiceNow();
+        const s = await narrated(v, epilogueMessages(t, { ...known, ...o.context?.(), voiced: !!v }));
+        if (s) return kept({ must: `The story is over (${t.over === "won" ? "won" : "lost"}). What became of everyone afterwards.` }, s);
         fell("epilogue", "empty answer");
       } catch (e) {
         fell("epilogue", e);

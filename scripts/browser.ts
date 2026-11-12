@@ -166,6 +166,14 @@ export async function withPage<T>(o: { soft?: boolean; width?: number; height?: 
     };
     return await fn(page);
   } finally {
+    if (process.platform === "win32") {
+      // On Windows, killing the process we started leaves the browser's own helpers (GPU, renderers, utilities)
+      // running for good, a dozen for every run. Stop the whole tree, and then anything still holding this profile.
+      const quiet = { stdout: "ignore", stderr: "ignore" } as const;
+      Bun.spawnSync(["taskkill", "/PID", String(proc.pid), "/T", "/F"], quiet);
+      const held = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*tallow-shots-${process.pid}*' -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+      Bun.spawnSync(["powershell", "-NoProfile", "-NonInteractive", "-Command", held], quiet);
+    }
     proc.kill();
     await proc.exited.catch(() => {});
     try {

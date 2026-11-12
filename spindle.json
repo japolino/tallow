@@ -12,7 +12,8 @@
     "embeddings",
     "world_books",
     "images",
-    "personas"
+    "personas",
+    "presets"
   ],
   "entry_backend": "dist/backend.js",
   "entry_frontend": "dist/frontend.js",

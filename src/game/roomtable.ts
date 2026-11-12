@@ -135,6 +135,26 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
         });
       }),
 
+    hand: (dice, thrown) => {
+      if (thrown) desk.voice.hush();
+      return desk.dice.show(dice, !!thrown);
+    },
+
+    pickDie: (dice) =>
+      new Promise<number | Written>((done) => {
+        void desk.dice.show(dice, false);
+        desk.dice.choosing = (i) => {
+          desk.lookBack();
+          desk.noLine();
+          done(i);
+        };
+        void desk.write().then((w) => {
+          desk.dice.choosing = null;
+          desk.dice.hover = -1;
+          done(w);
+        });
+      }),
+
     async throwDie(natural) {
       desk.voice.hush();
       await room.offerDie(natural);
@@ -278,6 +298,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
       at = "road";
       music.set("end");
       await desk.board.show(null);
+      await desk.dice.show([], false);
       await desk.mat.show(null);
       await desk.cards.sweep();
       await desk.dread.show(0);

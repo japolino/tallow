@@ -9,7 +9,11 @@
  * own times, ?card=world one that is a world rather than a person. ?decide=1 grants the extras and gives a pretend Decision model: it picks the answer that shares the most
  * words with what was written (sure of it when one does), and is never sure how a line tries to get past, so the
  * line goes on to the reader and the rules as it would with a real one that cannot tell.
+ * ?scenes=1 gives a pretend builder that answers one thing only: asked for a story of scenes (game/scenewriter.ts), it
+ * hands back the stock one (content/scenes.ts), so the hand of dice can be played at the table with no model. Every
+ * line is then read by its words and told in code's plain ones.
  */
+import { STOCK_SCENES_RAW } from "../src/content/scenes.js";
 import type { CardInfo } from "../src/game/card.js";
 import type { ModelsState, ToBackend, ToFrontend } from "../src/shared/protocol.js";
 
@@ -41,6 +45,7 @@ const CARDS: Record<string, CardInfo> = {
 const WHICH = new URLSearchParams(location.search).get("card") ?? "maren";
 const CARD = CARDS[WHICH] ?? CARDS.maren!;
 const DECIDE = new URLSearchParams(location.search).get("decide") === "1";
+const SCENES = new URLSearchParams(location.search).get("scenes") === "1";
 const decided: string[] = [];
 /** Permissions this pretend user has granted; ?decide=1 grants the extras up front. */
 const granted = new Set(["characters", "generation", "app_manipulation", ...(DECIDE ? ["decisions", "embeddings", "world_books"] : [])]);
@@ -87,7 +92,8 @@ const ctx = {
     else if (m.type === "models") {
       if (m.patch) Object.assign(settings, m.patch.role ? { roles: { ...settings.roles, [m.patch.role]: { ...settings.roles[m.patch.role], ...("connectionId" in m.patch ? { connectionId: m.patch.connectionId ?? null } : {}), ...(m.patch.reasoning ? { reasoning: m.patch.reasoning } : {}) } } } : {}, "decision" in m.patch ? { decision: m.patch.decision || "auto" } : {}, "embedding" in m.patch ? { embedding: m.patch.embedding || "auto" } : {});
       reply({ type: "models", id: m.id, state: { ...settings, llm: PRETEND_LLM, decisions: DECIDE ? [{ id: "d1", name: "Quick reads", model: "jev-small", isDefault: true }] : null, embeddings: DECIDE ? [{ id: "e1", name: "Local embedder", model: "embed-small", isDefault: true }] : [] } });
-    } else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
+    } else if (SCENES && m.type === "ask" && m.role === "builder" && m.messages.some((x) => x.content.includes("THE STORY TO WRITE"))) reply({ type: "answer", id: m.id, text: JSON.stringify(STOCK_SCENES_RAW) });
+    else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
     else reply({ type: "error", id: m.id, error: "no model in the pretend host" });
   },
   onBackendMessage(f: (m: unknown) => void) {

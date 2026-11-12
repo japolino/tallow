@@ -7,6 +7,7 @@
  * in place: every step returns the next one.
  */
 import type { FreeWorld } from "./free.js";
+import type { HandState, SceneStory } from "./hand.js";
 import { DANGER_SAVE, isContest, playRound, startContest, type Contest, type Moves, type Round } from "./contest.js";
 import { throwSave } from "./save.js";
 import { DREAD_MAX, dreadFrom } from "./dread.js";
@@ -166,6 +167,8 @@ export interface Adventure {
   finale?: { name: string; edges: number };
   /** Free form (free.ts): no story, only the world, the places you know and the threads in the air. */
   free?: FreeWorld;
+  /** A story of scenes played with a hand of dice (hand.ts), as its builder wrote it. Its stops are only its cards on the map. */
+  scenes?: SceneStory;
 }
 
 /** Whether the card's own character walks with you or is courted, for a made-up adventure too. */
@@ -244,6 +247,8 @@ export interface Trip {
   payoffs?: Payoff[];
   /** A weapon of yours (a project's payoff) already brought to a fight this story. */
   armed?: boolean;
+  /** In a story of scenes (hand.ts): the dice on the table, the scene in play and its two clocks. */
+  hand?: HandState;
 }
 
 export function mapOf(adv: Adventure): MapSheet {
