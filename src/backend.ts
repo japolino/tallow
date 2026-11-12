@@ -3,13 +3,15 @@
  *   card    reads the chat's character card (needs the "characters" permission), with a few entries of its lorebook
  *           when it has one (needs "world_books"; picked by meaning when there is an embedding model, "embeddings");
  *   ask     asks the user's model, each job on its own connection and reasoning (needs "generation");
- *   decide  asks the Decision model small typed questions (needs "decisions").
+ *   decide  asks the Decision model small typed questions (needs "decisions");
+ *   preset  reads the chat's preset as a story keeps it for its narrator (needs "presets"; game/preset.ts).
  * The game itself runs in the frontend. Nothing here decides anything, and the card is never changed. Every extra
  * (lore, decisions, embeddings) may be missing: the game goes on without it.
  */
-import type { SpindleAPI, WorldBookEntryDTO } from "lumiverse-spindle-types";
+import type { PromptVariableValuesDTO, SpindleAPI, WorldBookEntryDTO } from "lumiverse-spindle-types";
 import { createModels } from "./backend/models.js";
 import type { CardInfo } from "./game/card.js";
+import { cleanParameters, filled, judged, judgeMessages, parseJudge, snapshotOf, sortBlocks, type PresetSnapshot } from "./game/preset.js";
 import { loreQuery, loreText, pickLore, LORE_MAX, type LoreEntry } from "./game/lore.js";
 import { cosine } from "./meaning/models.js";
 import type { ToBackend, ToFrontend } from "./shared/protocol.js";
@@ -163,13 +165,51 @@ async function looksOf(userId: string, characterId: string, avatar: string | nul
   }
 }
 
+const JUDGE_MS = 25_000;
+
+/**
+ * The chat's preset as it is now, as a story keeps it (game/preset.ts): its blocks sorted by structure, their macros
+ * filled in by the host once, and then judged by the reader for what clashes with the game. Null without a preset,
+ * without the "presets" permission, or on a host too old to fill blocks for an extension. Only read, never changed.
+ */
+async function presetOf(userId: string, chatId: string): Promise<PresetSnapshot | null> {
+  if (!chatId || !spindle.presets?.getActive || typeof spindle.assemble !== "function") return null;
+  try {
+    const active = await spindle.presets.getActive(chatId, userId);
+    const preset = active?.preset_id ? await spindle.presets.get(active.preset_id, userId) : null;
+    if (!preset?.prompt_order?.length) return null;
+    const sorted = sortBlocks(preset.prompt_order, active.block_states ?? {});
+    if (!sorted.blocks.length) return null;
+    const vars = (preset.metadata as { promptVariables?: PromptVariableValuesDTO } | null)?.promptVariables;
+    const made = await spindle.assemble({ blocks: sorted.blocks, chatId, ...(vars && typeof vars === "object" ? { promptVariables: vars } : {}) }, userId);
+    const words = filled(made.breakdown ?? []);
+    // By meaning, the reader: its answer is kept whole or not at all, and asked for once more before going without.
+    const asked = judged(sorted.kept, words);
+    let clashes: ReturnType<typeof parseJudge> = asked.length ? null : {};
+    for (let i = 0; i < 2 && asked.length && !clashes; i++) {
+      clashes = await Promise.race([models.quiet(userId, "reader", judgeMessages(asked)), new Promise<string>((_, no) => setTimeout(() => no(new Error("timed out")), JUDGE_MS))]).then(
+        (said) => parseJudge(said, asked),
+        (err) => (spindle.log.info(`tallow: the preset's blocks were not judged (${text(err).slice(0, 120)})`), null),
+      );
+    }
+    const snapshot = snapshotOf(preset, sorted, words, clashes);
+    if (snapshot) spindle.log.info(`tallow: the story keeps the preset "${snapshot.name.slice(0, 60)}": ${snapshot.before.length + snapshot.after.length} parts kept, ${snapshot.dropped.length} blocks left out${snapshot.judged ? "" : " (by structure only: no model judged them)"}`);
+    return snapshot;
+  } catch (err) {
+    // No "presets" permission, no such chat, or a host that cannot fill the blocks: the story is told in the game's own voice.
+    spindle.log.info(`tallow: the preset could not be read (${text(err).slice(0, 160)})`);
+    return null;
+  }
+}
+
 spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
   const msg = raw as ToBackend;
   if (!msg || typeof msg !== "object" || typeof (msg as { id?: unknown }).id !== "string") return;
   try {
     if (msg.type === "card") send({ type: "card", id: msg.id, card: await card(userId, msg.characterId) }, userId);
     else if (msg.type === "lore") send({ type: "lore", id: msg.id, entries: await loreNear(userId, msg.characterId, msg.text) }, userId);
-    else if (msg.type === "ask") send({ type: "answer", id: msg.id, text: await models.quiet(userId, msg.role, msg.messages) }, userId);
+    else if (msg.type === "ask") send({ type: "answer", id: msg.id, text: await models.quiet(userId, msg.role, msg.messages, cleanParameters(msg.parameters)) }, userId);
+    else if (msg.type === "preset") send({ type: "preset", id: msg.id, snapshot: await presetOf(userId, msg.chatId) }, userId);
     else if (msg.type === "models") {
       if (!msg.patch) models.fresh(userId);
       send({ type: "models", id: msg.id, state: msg.patch ? await models.update(userId, msg.patch) : await models.state(userId) }, userId);

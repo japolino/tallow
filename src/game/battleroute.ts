@@ -619,7 +619,9 @@ export function parseBattleNames(text: string): { foes: Record<string, string>; 
 export function battleTellMessages(place: { name: string; situation: string }, note: string, ctx: TellContext = {}): Message[] {
   const system = [
     "You are the narrator of a tabletop game, a voice across a table in a dark room. A round of a fight on the battle mat has just been played out; code has decided all of it. You only tell it.",
-    "Tell it in two to four short sentences, at most 90 words, in the second person and the present tense: what happened, blow by blow, and last what the foes are now about to do, so the player can answer it. Plain words, said aloud. No numbers, no dice, no game words like Stamina or rounds, no markdown.",
+    ctx.voiced
+      ? "Tell what happened, blow by blow, and last what the foes are now about to do, so the player can answer it. Write it at the length and in the style, person and tense that the instructions above set out; where they set none, in the second person and the present tense, a paragraph or two. Prose only: no numbers, no dice, no game words like Stamina or rounds, no lists, no headings, no markdown."
+      : "Tell it in two to four short sentences, at most 90 words, in the second person and the present tense: what happened, blow by blow, and last what the foes are now about to do, so the player can answer it. Plain words, said aloud. No numbers, no dice, no game words like Stamina or rounds, no markdown.",
     "Tell only what the note says happened: nobody falls, flees or yields unless it says so, and nothing more is decided than it says. Whoever the note does not have acting did nothing: above all, a player who is down or overcome does not move or act at all.",
   ].join("\n");
   const user = [ctx.world ? `The world of the story:\n${ctx.world}` : "", `At ${place.name}: ${quoted(place.situation, 800)}`, ctx.who ? `The player: ${ctx.who}` : "", `What happened, and what is chalked next:\n${note}`].filter(Boolean).join("\n");

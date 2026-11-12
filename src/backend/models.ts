@@ -39,6 +39,8 @@ export function createModels(spindle: SpindleAPI) {
   const embCache = new Map<string, { at: number; list: EmbeddingConnectionDTO[] }>();
   /** `${userId}:${key}`: connections that rejected a reasoning request. */
   const noReasoning = new Set<string>();
+  /** `${userId}:${key}`: how often a connection failed with a preset's settings and then answered without them. */
+  const noParameters = new Map<string, number>();
   const backoff = new Map<string, number>();
   const vecs = new Map<string, number[]>();
 
@@ -97,17 +99,36 @@ export function createModels(spindle: SpindleAPI) {
 
   const connOf = (conns: LlmConn[] | null, a: Attempt): LlmConn | undefined => (a.connectionId ? conns?.find((c) => c.id === a.connectionId) : conns?.find((c) => c.isDefault));
 
-  /** One quiet call for a role; the text of the first attempt that answers. Throws the last error. */
-  async function quiet(userId: string, role: Role, messages: Message[]): Promise<string> {
+  /**
+   * One quiet call for a role; the text of the first attempt that answers. Throws the last error.
+   * `parameters` are a preset's own settings for the model (game/preset.ts), sent as the host itself sends those of a
+   * connection's preset. A connection that will not take them is asked once more without: a setting made for another
+   * provider must not cost the story its narrator.
+   */
+  async function quiet(userId: string, role: Role, messages: Message[], parameters?: Record<string, unknown>): Promise<string> {
     const [s, conns] = await Promise.all([settings(userId), llmConns(userId)]);
     const no = new Set([...noReasoning].filter((k) => k.startsWith(`${userId}:`)).map((k) => k.slice(userId.length + 1)));
     const attempts = attemptsFor(s, role, conns, no);
     let last: unknown = new Error("no connection to try");
     for (const [i, a] of attempts.entries()) {
-      try {
-        const text = contentOf(await spindle.generate.quiet({ type: "quiet", messages, ...(a.connectionId ? { connection_id: a.connectionId } : {}), reasoning: reasoningOverride(a, connOf(conns, a)), userId } as never));
+      const once = async (p?: Record<string, unknown>): Promise<string> => {
+        const text = contentOf(await spindle.generate.quiet({ type: "quiet", messages, ...(a.connectionId ? { connection_id: a.connectionId } : {}), ...(p ? { parameters: p } : {}), reasoning: reasoningOverride(a, connOf(conns, a)), userId } as never));
         if (!text.trim()) throw new Error("the model gave no answer");
         return text;
+      };
+      try {
+        const sent = parameters && (noParameters.get(`${userId}:${a.key}`) ?? 0) < 2 ? parameters : undefined;
+        if (!sent) return await once();
+        try {
+          return await once(sent);
+        } catch (err) {
+          if (isAbort(err)) throw err;
+          log(`${role}: the preset's settings were not taken (${errText(err).slice(0, 140)}); asking without them`);
+          const text = await once();
+          // It answered without them. Once may be chance; twice, and this connection is not sent them again.
+          noParameters.set(`${userId}:${a.key}`, (noParameters.get(`${userId}:${a.key}`) ?? 0) + 1);
+          return text;
+        }
       } catch (err) {
         last = err;
         if (isAbort(err)) throw err;
@@ -185,6 +206,7 @@ export function createModels(spindle: SpindleAPI) {
     settingsCache.set(userId, { at: Date.now(), s: next });
     // A new pick gets a fresh chance: forget failures and the lists read before.
     for (const k of [...noReasoning]) if (k.startsWith(`${userId}:`)) noReasoning.delete(k);
+    for (const k of [...noParameters.keys()]) if (k.startsWith(`${userId}:`)) noParameters.delete(k);
     backoff.delete(`${userId}:decide`);
     backoff.delete(`${userId}:embed`);
     llmCache.delete(userId);

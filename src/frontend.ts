@@ -17,6 +17,7 @@ import { cardText, type CardInfo } from "./game/card.js";
 import { modelMinds } from "./game/modelminds.js";
 import type { Decide } from "./game/decisions.js";
 import type { Ask } from "./game/prompts.js";
+import { voiceKeeper, type Keeper } from "./game/voice.js";
 import { PLAYER, roomTable } from "./game/roomtable.js";
 import { sit, type Kept } from "./game/session.js";
 import { createDrawer } from "./frontend/drawer.js";
@@ -31,10 +32,12 @@ import type { ToBackend, ToFrontend } from "./shared/protocol.js";
 const NEEDS = ["characters", "generation"];
 const WHY = "Tallow reads the chat's character card to build an adventure around them, and asks your model to write its words.";
 /** What makes it better, asked for once: the game is whole without them, and the user may say no. */
-const EXTRAS = ["decisions", "embeddings", "world_books", "personas"];
-const WHY_EXTRAS = "Optional. Your Decision model reads what you write in a second instead of several; the card's lorebook gives the adventure more of its world, and your embedding model picks the entries that matter. With your persona, you can sit down at the table as yourself (it is only read, never changed).";
+const EXTRAS = ["decisions", "embeddings", "world_books", "personas", "presets"];
+const WHY_EXTRAS = "Optional. Your Decision model reads what you write in a second instead of several; the card's lorebook gives the adventure more of its world, and your embedding model picks the entries that matter. With your persona, you can sit down at the table as yourself, and with your preset the narrator writes the way your chats do (both are only read, never changed).";
 /** Asked once; the key is new when a new extra is, so that one is asked for once too. */
-const ASKED = "tallow:asked-extras-2";
+const ASKED = "tallow:asked-extras-3";
+/** How long a story waits for its preset to be read before it is told in the game's own voice. */
+const PRESET_MS = 40_000;
 /** How loud things are (the drawer's sound section), kept in the page: there is nothing secret in it. */
 const LEVELS_KEY = "tallow:sound";
 
@@ -77,8 +80,8 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     if (m.type === "error") w.fail(new Error(m.error));
     else w.done(m);
   });
-  const ask: Ask = async (messages, role) => {
-    const m = await call({ type: "ask", role, messages });
+  const ask: Ask = async (messages, role, opts) => {
+    const m = await call({ type: "ask", role, messages, ...(opts?.parameters ? { parameters: opts.parameters } : {}) });
     if (m.type !== "answer") throw new Error("not an answer");
     return m.text;
   };
@@ -155,23 +158,8 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     if (mine !== sitting || !r.desk) return;
     // The teller is given the card's world in a few lines, so what it says sounds like that world.
     const world = card ? cardText(card as CardInfo, 700) : "";
-    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world }), ...(characterId && granted.includes("embeddings") ? { lore: (text: string) => call({ type: "lore", characterId, text }).then((m) => (m.type === "lore" ? m.entries : [])) } : {}), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`) });
-    const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24), ...(minds.pick ? { pick: minds.pick } : {}) });
-    if (!card) {
-      await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
-      return;
-    }
-    const canAsk = granted.includes("generation");
     // A sitting left before its end is kept for this chat, so leaving the table (or a reload) does not lose it.
     const key = `tallow:sitting:${chatId ?? "none"}:${characterId}`;
-    const save = (t: Trip | null): void => {
-      try {
-        if (t) localStorage.setItem(key, JSON.stringify({ v: 1, trip: t }));
-        else localStorage.removeItem(key);
-      } catch {
-        /* No storage here: the sitting simply is not kept. */
-      }
-    };
     let saved: Trip | null = null;
     try {
       const raw = localStorage.getItem(key);
@@ -180,6 +168,51 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     } catch {
       saved = null;
     }
+    // The story's voice (game/voice.ts): the chat's preset as it was when the story began, and the story so far, kept
+    // beside the sitting. A story left unfinished takes its own up again; a new one takes the preset as it is now.
+    const voiceKey = `tallow:voice:${chatId ?? "none"}:${characterId}`;
+    const storyOf = (t: Trip): string => `${t.adv.id}|${t.seed}`;
+    const canVoice = !!chatId && !!card && granted.includes("presets") && granted.includes("generation");
+    let keptVoices: unknown = null;
+    try {
+      keptVoices = JSON.parse(localStorage.getItem(voiceKey) ?? "null");
+    } catch {
+      keptVoices = null;
+    }
+    const voice: Keeper | null = canVoice
+      ? voiceKeeper({
+          take: () =>
+            Promise.race([
+              call({ type: "preset", chatId: chatId! }).then((m) => (m.type === "preset" ? m.snapshot : null)),
+              new Promise<null>((done) => setTimeout(() => done(null), PRESET_MS)),
+            ]),
+          kept: keptVoices,
+          keep: (k) => {
+            if (k.voices.length) localStorage.setItem(voiceKey, JSON.stringify(k));
+            else localStorage.removeItem(voiceKey);
+          },
+          ...(saved && !saved.over ? { resume: storyOf(saved) } : {}),
+        })
+      : null;
+    // Nothing left unfinished: the next story is a new one, and its preset is read while the table is being laid.
+    if (!saved || saved.over) voice?.ahead();
+    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world }), ...(characterId && granted.includes("embeddings") ? { lore: (text: string) => call({ type: "lore", characterId, text }).then((m) => (m.type === "lore" ? m.entries : [])) } : {}), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`), ...(voice ? { voice } : {}) });
+    const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24), ...(minds.pick ? { pick: minds.pick } : {}) });
+    if (!card) {
+      await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
+      return;
+    }
+    const canAsk = granted.includes("generation");
+    const save = (t: Trip | null): void => {
+      // The narrator is told which story it is telling, or that the one it was telling is over.
+      voice?.story(t && !t.over ? storyOf(t) : null);
+      try {
+        if (t) localStorage.setItem(key, JSON.stringify({ v: 1, trip: t }));
+        else localStorage.removeItem(key);
+      } catch {
+        /* No storage here: the sitting simply is not kept. */
+      }
+    };
     // Who you are at this card's table is kept too, from one story and one sitting to the next.
     const heroKey = `tallow:hero:${chatId ?? "none"}:${characterId}`;
     let kept: Kept | null = null;
@@ -214,7 +247,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     } catch {
       content = undefined;
     }
-    void sit({ card: card as CardInfo, seed: randomSeed(), table, minds, ask: canAsk ? ask : null, built: (adv) => r.setMap?.(mapOf(adv)), saved, save, kept, keep, content, keepContent: (c) => {
+    void sit({ card: card as CardInfo, seed: randomSeed(), table, minds, ask: canAsk ? ask : null, built: (adv) => (voice?.ahead(), r.setMap?.(mapOf(adv))), saved, save, kept, keep, content, keepContent: (c) => {
         try {
           localStorage.setItem("tallow:content", JSON.stringify(c));
         } catch {
