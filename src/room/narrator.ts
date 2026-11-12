@@ -194,8 +194,6 @@ export class Narrator {
   private elbows: Mesh[] = [];
   private cloth: MeshStandardMaterial;
   private clothBaked: MeshStandardMaterial;
-  /** The sleeves: the same baked soot, without the rim of light the mantle needs against the wall (on a thin tube it lit the whole sleeve). */
-  private sleeveCloth: MeshStandardMaterial;
   /** Moments inside the clips that the room acts on: seconds into "slam" when the fist lands, into "light" when the wick takes. */
   private marks: Record<string, number> = { slam: 0.74, light: 0.5 };
   private impact = 0;
@@ -238,8 +236,7 @@ export class Narrator {
     const cloth = (this.cloth = rimmed(new MeshStandardMaterial({ color: CLOTH, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide }), "narrator-cloth-rim"));
     this.clothBaked = rimmed(new MeshStandardMaterial({ color: CLOTH_BAKED, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide, vertexColors: true }), "narrator-cloth-rim-baked");
     const voidMat = new MeshBasicMaterial({ color: 0x000000, fog: false });
-    this.sleeveCloth = new MeshStandardMaterial({ color: CLOTH_BAKED, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide, vertexColors: true });
-    this.mats.push(cloth, this.clothBaked, this.sleeveCloth, voidMat);
+    this.mats.push(cloth, this.clothBaked, voidMat);
 
     // The cloak: a turned shape with folds pressed into it, wider than it is deep.
     const prof = [
@@ -430,7 +427,8 @@ export class Narrator {
         if (!m.isMesh) return;
         // The model names its surfaces: "cloth" is the sleeve, anything else is skin.
         const cloth = /cloth/i.test((m.material as Material | undefined)?.name ?? "");
-        m.material = cloth ? (m.geometry.getAttribute("color") ? this.sleeveCloth : this.cloth) : m.geometry.getAttribute("color") ? skinBaked : skin;
+        // The sleeves keep the mantle's rim of light: without it they sink into the dark and the hands float.
+        m.material = cloth ? this.clothOf(m) : m.geometry.getAttribute("color") ? skinBaked : skin;
         m.castShadow = true;
         m.receiveShadow = !cloth;
         // Its bounds are those of the arm at rest; reaching, it leaves them.

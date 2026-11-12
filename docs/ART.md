@@ -159,16 +159,18 @@ A model passes when every score is at least 7 and the mean is at least 8. Verdic
 | File | Script | What it holds | Tris | Baked | Size |
 |---|---|---|---|---|---|
 | `props.glb` | `props.py` | 23 props: table, dish, candlestick, coin, tome, dice box, book row, inkwell, tankard, bottle, scroll, hourglass, lantern, herb jar, jar, skull, coffer, chest, barrel, crate, stool, rug, candle wheel | 40,904 in all | AO, cavity and wear in `COLOR_0`; base colour from the embedded palette | 1,550 KB |
-| `narrator_arm.glb` | `narrator_arm.py` | Hand and sleeve, 22 bones, 18 clips | 5,040 | 512 px normal map from the full sculpt, AO in `COLOR_0`, both at rest | 652 KB |
+| `narrator_arm.glb` | `narrator_arm.py` | Hand and sleeve, 22 bones, 18 clips | 10,440 (the hand 9,000) | AO and cavity in `COLOR_0`, at rest; no normal map | 632 KB |
 | `narrator_cloak.glb` | `narrator_cloak.py` | The simulated mantle | 8,999 | AO and cavity in `COLOR_0`; no normal map | 240 KB |
 | `narrator_hood.glb` | `narrator_hood.py` | The hood and its void | 4,000 | AO and cavity in `COLOR_0` | 92 KB |
 | `pieces.glb` | `pieces.py` | `traveller` and `shadow` | 1,500 each | AO and wear in `COLOR_0` | 105 KB |
 
-All of them add up to about **2.64 MB, over the 2.5 MB budget by about 140 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 652 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py`, keeps a full copy to bake from, and thins the hand it ships. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
+All of them add up to about **2.62 MB, over the 2.5 MB budget by about 120 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 632 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py` and thins it to 9,000 triangles. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
 
 ### How the pipeline differs from Part 2
 
 - **Palette.** The texture is `models/palette.png`. It is embedded inside `props.glb`, not shipped as its own file.
+- **The hand is geometry, not a normal map.** Thinned to 3,600 triangles with the sculpt baked to a normal map, the hand read as a mottled lump. It ships at 9,000 triangles instead. The sculpt's palm sits below the long bones, so the four tendons and the knuckles stand out of the back of the hand, and a knob of wrist bone stands at the cuff. The budget in Part 2 (5,000 for the whole arm) gave way to that.
+- **Skin weights** are stored as normalized bytes by `quantize_glb`.
 - **Quantization.** After export, `style.quantize_glb` repacks every file with `KHR_mesh_quantization`:
   - normals as int8, UVs as uint16 and colours as uint8;
   - positions as int16, with the dequantizing offset and scale written onto the node (skipped for skinned meshes and for `pieces.glb`, whose nodes `room.ts` moves itself);
@@ -176,7 +178,7 @@ All of them add up to about **2.64 MB, over the 2.5 MB budget by about 140 KB.**
   - unused accessors are compacted out.
   
   `room.ts` puts each prop clone inside a carrier `Group` and moves that, so the node's own transform stays as the file set it.
-- **The narrator keeps its own colours.** The cloth is soot (`#16110E`), multiplied by its baked AO. The skin is bone in shadow (`#9E8E6C`), with the arm's normal map. The sleeves carry no rim light. The pieces are matte; their clearcoat is gone.
+- **The narrator keeps its own colours.** The cloth is soot (`#16110E`), multiplied by its baked AO. The skin is bone in shadow (`#9E8E6C`). The sleeves keep the mantle's rim light; without it they sink into the dark and the hands seem to float. The pieces are matte; their clearcoat is gone.
 - **Wobble.** Every prop except the ones something rests on or in (`STEADY`: table, dish, candlestick, coin) gets a slow, low warp over its whole size (`wobble`, 0.6% of its size), so no line is ruler-straight.
 - **Wear on narrow faces.** The wear bake lightens edges by curvature, so thin parts such as rims, bands and quill vanes go to the worn swatch first.
 - **Per-prop overrides.** In `props.py`, `o["tones"]` fixes the tone (shadow, base, worn edge or highlight) for a material index, and `o["noise"]` sets how much painted mottle `style.paint` adds.

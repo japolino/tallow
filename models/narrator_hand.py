@@ -106,19 +106,22 @@ def build():
         y, xx = ky, x
         # Start at the wrist: the long bone behind each knuckle is part of the finger, and the four of them
         # fan out across the back of the hand with only thin flesh between.
-        pts.append(((x * 0.42, 0.012, 0.027), 0.0100))
-        pts.append(((x * 0.78, ky * 0.52, 0.0285), 0.0068))
+        pts.append(((x * 0.42, 0.012, 0.027), 0.0092))
+        pts.append(((x * 0.66, ky * 0.3, 0.0292), 0.0056))
+        pts.append(((x * 0.86, ky * 0.68, 0.0302), 0.0060))
         for step, z, r in JOINTS:
             y -= step * length
             xx += splay * step * length
             pts.append(((xx, y, z), r))
         parts.append(stick(f"finger{n}", pts))
     parts.append(stick("thumb", THUMB))
-    # The back of the hand: broad at the knuckles, narrowing to the wrist, with the tendons' ridge down the middle.
-    # Kept thin, so the knuckles and the long bones behind them stand out of it and a fist has a flat back.
-    parts.append(lump("palm", (0.001, -0.058, 0.023), (0.076, 0.09, 0.026)))
-    parts.append(lump("heel", (-0.008, -0.016, 0.022), (0.06, 0.075, 0.03)))
-    parts.append(lump("wrist", (0.0, 0.05, 0.026), (0.066, 0.2, 0.04)))
+    # The back of the hand: broad at the knuckles, narrowing to the wrist. Its top stays below the long bones, so the
+    # four of them stand proud with hollows between, the knuckles stand above them, and a fist keeps a flat back.
+    parts.append(lump("palm", (0.001, -0.058, 0.0205), (0.074, 0.088, 0.021)))
+    parts.append(lump("heel", (-0.008, -0.016, 0.0205), (0.058, 0.07, 0.024)))
+    parts.append(lump("wrist", (0.0, 0.05, 0.024), (0.06, 0.2, 0.034)))
+    # The knob of the wrist bone on the little finger's side, where the sleeve's cuff stops short.
+    parts.append(stick("ulna", [((0.019, 0.026, 0.0365), 0.0068), ((0.02, 0.034, 0.0372), 0.0064)]))
 
     bpy.ops.object.select_all(action="DESELECT")
     for p in parts:
