@@ -782,7 +782,7 @@ The situation: ${m.stop.situation}`, { yes: "yes, it could", no: "no, it has not
     table.clock(trip.sheet.hour);
     opts.save?.(trip.over ? null : trip);
     void table.carry(null, trip.sheet, false);
-    await table.say(battleOverSaid(b, { ...end, climax: !!stop.climax }));
+    await table.say(battleOverSaid(b, { ...end, climax: !!stop.climax, ...(end.cleared && end.reward?.says ? { says: end.reward.says } : {}) }));
     // Beaten on the mat plays out as it does in a contest: the world's own way of losing, and what that costs.
     if (end.taken && end.taken !== "end") {
       const lost = takenOutOf(trip.adv.kit, `${trip.seed}:${stop.id}`, (trip.adv.content ?? DEFAULT_CONTENT).diceDecide, await howLost(stop));

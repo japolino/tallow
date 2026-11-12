@@ -31,9 +31,10 @@ import type { ToBackend, ToFrontend } from "./shared/protocol.js";
 const NEEDS = ["characters", "generation"];
 const WHY = "Tallow reads the chat's character card to build an adventure around them, and asks your model to write its words.";
 /** What makes it better, asked for once: the game is whole without them, and the user may say no. */
-const EXTRAS = ["decisions", "embeddings", "world_books"];
-const WHY_EXTRAS = "Optional. Your Decision model reads what you write in a second instead of several; the card's lorebook gives the adventure more of its world, and your embedding model picks the entries that matter.";
-const ASKED = "tallow:asked-extras";
+const EXTRAS = ["decisions", "embeddings", "world_books", "personas"];
+const WHY_EXTRAS = "Optional. Your Decision model reads what you write in a second instead of several; the card's lorebook gives the adventure more of its world, and your embedding model picks the entries that matter. With your persona, you can sit down at the table as yourself (it is only read, never changed).";
+/** Asked once; the key is new when a new extra is, so that one is asked for once too. */
+const ASKED = "tallow:asked-extras-2";
 /** How loud things are (the drawer's sound section), kept in the page: there is nothing secret in it. */
 const LEVELS_KEY = "tallow:sound";
 

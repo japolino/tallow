@@ -14,6 +14,7 @@ import { partOf, type Adventure, type Companion, type RoadStop } from "../engine
 import { KEYS } from "../engine/clues.js";
 import { ageFrom } from "../engine/content.js";
 import { COST_KINDS, STATS, WAYS, type CoreStat, type Stat, type Way } from "../engine/moment.js";
+import { FRIEND } from "../engine/road.js";
 import { clock } from "../engine/tell.js";
 import { cardText, courtable, type CardInfo, type Trope } from "./card.js";
 import { firstJson, type Ask, type Message } from "./prompts.js";
@@ -46,7 +47,7 @@ export const skeletonFor = (card: CardInfo, trope: Trope, modern?: boolean): Adv
 const skeleton = (s: Trope | Adventure): Adventure => (typeof s === "string" ? SKELETONS[s] : s);
 
 /** The id the card's own character has in a rescue, as a companion. */
-export const FRIEND = "friend";
+export { FRIEND } from "../engine/road.js";
 
 /** The words of an adventure, keyed by the skeleton's ids: what a model writes. */
 export interface Words {
@@ -111,7 +112,7 @@ export function designOf(adv: Adventure, hurts?: readonly string[]): Omit<Words,
   const stops = Object.fromEntries(
     adv.stops.map((s) => {
       const levers = Object.fromEntries(s.levers.map((l) => [leverKey(s, l), `<a thing really there that helps ${WAY_WORD[l.way]}, in a few words>`]));
-      const won = s.reward?.loot ? `the thing loot.${s.reward.loot} comes to you` : s.reward?.joins ? `companions.${s.reward.joins} joins you` : "";
+      const won = s.reward?.loot ? `the thing loot.${s.reward.loot} comes to you` : s.reward?.joins === FRIEND ? "the friend, met hostile here, falls in and walks on with you" : s.reward?.joins ? `companions.${s.reward.joins} joins you` : "";
       return [
         s.id,
         {
@@ -204,16 +205,25 @@ export interface TableAsks {
   redo?: string[];
 }
 
+/** What the builder is told of the opening stop: the card's first message starts the night there (road.ts, `opening`). */
+export function openingSaid(card: CardInfo, s: RoadStop): string {
+  const who = s.opening === "them" ? (card.world ? "whoever the card's first message sets against the player" : `${card.name}, as the card's first message has them`) : "whoever or whatever the card's first message throws at the player";
+  const what = s.kind === "fight" ? `a fight, from the first moment: ${who} comes at the player` : `${who}, cold or hostile, standing in the player's way; it could still be talked down`;
+  return `THE OPENING: the first stop, stops.${s.id}, is where the card's first message starts the night, and the player walks straight into it: ${what}. Write that stop from the first message: its place, its people and its mood, turned into the trouble in the player's way.${s.opening === "them" && !card.world && s.person ? ` Its "person" is ${card.name}.` : ""} The story's job still comes from what the player asked for.`;
+}
+
 export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: TableAsks = {}): Message[] {
   const adv = skeleton(of);
   const part = partOf(adv);
+  const opening = adv.stops.find((s) => s.opening);
+  const metFirst = opening?.opening === "them" && part === "friend";
   const story = adv.brief ?? (part === "friend" ? "a rescue: someone has been taken, and is held at the end of the road" : "a courtship: tonight the player tries to win someone's heart");
   const role = card.world
     ? part === "friend"
       ? `"${card.name}" is not one person: it is the world (or the scenario) the story is set in, so nobody in the story is called "${card.name}". A person of this world walks the road with the player from the start, as a companion: the one the story is about, or who needs this done. Take the companion from the people the card names, or invent one who belongs there, and invent anyone else the story needs. Write "friend" for the companion: "name" is their name (a few words at most); "who" is one line about them; "good_at" is the one of brawn, grace, charm, guile, wits, sense they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
       : `"${card.name}" is not one person: it is the world (or the scenario) the story is set in, so nobody in the story is called "${card.name}". The player is courting someone of this world tonight: take them from the people the card names (never one the card says is a child), or invent one who belongs there. Write "courted" for them: "name" is their name (a few words at most); "who" is one line about them. ${adv.rival ? " Whoever stands against the player is in the rival: invent them." : ""}`
     : part === "friend"
-      ? `${card.name} is the card's character, and walks the road with the player from the start, as a companion: the one the story is about, or who needs this done. Invent anyone else the story needs, from the card's world. Write "friend" for ${card.name}: "who" is one line about them; "good_at" is the one of brawn, grace, charm, guile, wits, sense they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
+      ? `${card.name} is the card's character, and ${metFirst ? `is met first, at the opening stop, as the card's first message has them (cold, hostile, or coming at the player); once that is past they walk the road with the player as a companion, won over, beaten into a truce, or because they need this done too` : "walks the road with the player from the start, as a companion: the one the story is about, or who needs this done"}. Invent anyone else the story needs, from the card's world. Write "friend" for ${card.name}: "who" is one line about them; "good_at" is the one of brawn, grace, charm, guile, wits, sense they are best at; "likes" and "dislikes" are ways (talk, sneak, force, pay) they approve and disapprove of, different from each other.`
       : `${card.name} is the card's character, and the one the player is courting tonight. Write "courted" for them: "who" is one line about them. ${adv.rival ? " Whoever stands against the player is in the rival: invent them." : ""}`;
   const system = [
     `You write the words of a short tabletop adventure. The rules and every number are fixed already; you only write the words, in the world of a ${card.world ? "card that describes a world or scenario" : "character card"}.`,
@@ -235,6 +245,7 @@ export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: Table
     ...(asks.asked || asks.who ? ["WHOSE STORY IT IS: the story above is only its shape (what happens and by when). If what the player asked for, or who they are, says whose it is, what was taken or who is in trouble (their own thing, their own people, their own plan), it is that, and the companion helps them with it. Only if they did not say is it the companion's."] : []),
     ...(asks.asked ? [`WHAT THE PLAYER ASKED FOR, in their words (fit the story to it as far as the fixed shape allows: its premise, its tone, the trouble they expect): "${asks.asked.slice(0, 700)}"`] : []),
     ...(asks.who ? [`WHO THE PLAYER IS, in their words (the story should suit them: who they are shapes what they know, how people meet them, and what trouble finds them): "${asks.who.slice(0, 700)}"`] : []),
+    ...(opening ? [openingSaid(card, opening)] : []),
     ...(asks.kit ? [`HOW THIS WORLD PLAYS (its era, fears and power; make the stops, people and things to use of it): ${asks.kit.slice(0, 600)}`] : []),
     ...(asks.campaign ? [`THE CAMPAIGN SO FAR (this story is one chapter of it: tie it in, by its hand or what it is after; do not repeat a trouble the players already ended): ${asks.campaign}`] : []),
     `THE CLOCK: it starts at ${clock(adv.startHour)} and is lost at ${clock(adv.deadline.hour)} (${adv.deadline.name}). Write the times of day to fit.`,
@@ -410,7 +421,8 @@ export function applyWords(from: Trope | Adventure, card: CardInfo, raw: unknown
     if (!who) missing.push("part");
     const friend: Companion = { id: FRIEND, name, card: "companion", who: who ?? `${name}, who asked for your help`, stat, likes, dislikes, ...(typeof f.age === "string" ? { age: f.age.slice(0, 20) } : {}) };
     adv.companions = [...adv.companions, friend];
-    adv.party = [FRIEND];
+    // Met hostile at the opening, they walk with you only once it is past (road.ts, `opening`).
+    adv.party = adv.stops.some((s) => s.reward?.joins === FRIEND) ? [] : [FRIEND];
   }
   if (part === "courted" && base.courted) {
     const who = one(obj(w.courted).who, 240);

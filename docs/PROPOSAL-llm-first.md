@@ -130,10 +130,45 @@ The kit is `WorldKit`: its era, fears, power, risks, gear rungs, contests, verbs
 - The reader names the foe weaknesses a line uses (`hurts`) and its approach (`trade`: bold or careful). Code keeps only weaknesses the foe really has. `hurtsUsed` and `tradeOf`, the word lists, are now fallbacks.
 - `checkedGrade` still caps a model's grade, but the reader's checked ids (a real lever, an ability the player has) count toward it. A line that uses a thing without repeating its name is no longer marked down.
 
+### 1.11 The night opens from the card's first message (tester feedback)
+
+Testers said the stories felt pre-made: a card whose character hates you should start with that, not with a road that ignores it. Before this, the first message was only background text for the builder.
+
+- **Model role.** Once the player has said who they are, the Decision model reads the card's first message and scenario (its macros filled), who the player is and what they asked for. It picks how the night opens, among the openings code allows:
+  - `fight_them`: the card's character comes at the player from the first moment
+  - `fight`: the first message throws the player into a fight with others
+  - `standoff`: someone meets the player cold or hostile, but could still be talked down
+  - `road`: nothing has to happen first
+
+  The task says a friendly, flirting, neutral or merely gruff greeting is the road, and so is a player who asked for something the opening would go against.
+- **Code role.**
+  - `openingOptions` offers only legal openings:
+    - fights only in stories that have fights
+    - a standoff only in stories with people in them
+    - `fight_them` only when the card is one person
+    - nothing at all without a first message
+  - `openingOf` maps the answer, and anything not offered is no opening.
+  - `layRoad({ opening })` lays the road with its first stop of that kind. On a road it is the first single stop. On a hub it is a place of its own that every way in goes through; it doesn't count toward what the hub needs, and the clock gets its time added.
+  - The opening stop wins no loot. A road without an opening is laid exactly as before, which the tests check.
+- **Game state.**
+  - In a story the card's character walks in, met hostile at the opening, they are not in the party at the start. The opening's reward is `joins: friend`: once it is past, by winning, parley or talk, they fall in.
+  - The builder is told the opening is where the first message starts the night (`openingSaid`), and writes that stop from it.
+  - Winning on the battle mat now says the stop's reward line. Before, a fight's loot or companion card was given in silence.
+- **Bench.** The opening pick scored 12/12 on hostile, friendly, gruff, knifepoint, ambush and cold-rival greetings, at about 0.35 s per pick. The user's real cards, none of which open with a threat, all read as `road`.
+
+### 1.12 Sitting down as your own persona (tester feedback)
+
+- The backend reads the active persona (new optional `personas` permission, read only). It fills the persona's macros and sends it with the card as `CardInfo.persona`.
+- When the narrator asks who you are, it offers "come as yourself, <name>".
+- The Decision model reads whether the line takes the offer (`PERSONA_TASK`), with the persona as context. The words (`takesPersona`) are only the fallback.
+- When taken, the persona's own description plus what was said at the table is what the hero reader and the builder get (`personaLine`).
+- The permission prompt key moved to `tallow:asked-extras-2`, so players who already answered are asked once about the new extra.
+
 ### Tests
 
-There are 606 tests, all passing, and `tsc` is clean. New tests:
+There are 619 tests, all passing, and `tsc` is clean. New tests:
 
+- `tests/opening.test.ts`: legal openings per story, the model's answer mapped or refused, the first stop laid as the opening (roads and hubs), the hub count and map with an opening, the character joining once it is past, the builder told, and the persona offer, fallback and line.
 - `tests/llmfirst.test.ts`: the pick parser, stop stakes and the risk line, `turned`, takenOut with a chosen means plus its toll, reader hurts and trade, grades earned by id, chosen dread moves, and builder `hurt_by`.
 - `tests/kitwriter.test.ts`: the kit shape and its checks.
 
@@ -151,16 +186,18 @@ Existing tests were updated for whole units, and the fork case file for visible 
 
 ### P2: correctness and duplicate machines
 
-4. **The free-form companion is stock.** `playFree`'s companion is not written by the builder. Give it the same `companion:<id>` unit as stories.
-5. **Project size is read by regex** in free play. Ask the router instead, with the ladder as legal options.
-6. **Seats reactions come from tables.** How the other seats react is a fixed table. Let the teller choose from the legal reactions.
-7. **Battle `namedIn`** matches names by words. Have the battle router return a target id, checked against the board.
-8. **Appointments don't change state.** This is a code issue, not a model one, but it breaks "the world reacts". Let a missed appointment close or warn its stop. (The world clock's dread is now capped at `DREAD_MAX` on this branch, like failures.)
+4. **Free play doesn't open from the first message yet.** `openingFor` runs for stories only. Free play's first place could take the same pick and open with the trouble the greeting has in it.
+5. **No chat integration.** Testers asked to carry the chat with the card into the game, or the game back into the chat. That is a design question, not a fix.
+6. **The free-form companion is stock.** `playFree`'s companion is not written by the builder. Give it the same `companion:<id>` unit as stories.
+7. **Project size is read by regex** in free play. Ask the router instead, with the ladder as legal options.
+8. **Seats reactions come from tables.** How the other seats react is a fixed table. Let the teller choose from the legal reactions.
+9. **Battle `namedIn`** matches names by words. Have the battle router return a target id, checked against the board.
+10. **Appointments don't change state.** This is a code issue, not a model one, but it breaks "the world reacts". Let a missed appointment close or warn its stop. (The world clock's dread is now capped at `DREAD_MAX` on this branch, like failures.)
 
 ### P3: housekeeping
 
-9. `worldScore` and `WORLD_SURE` remain exported but no longer decide anything. Remove them once the bench shows the model alone is enough.
-10. The `SETTING` pick still clamps the kit's era. The kit writer now writes the era, so reconcile the two by letting the kit's era win when both answer.
+11. `worldScore` and `WORLD_SURE` remain exported but no longer decide anything. Remove them once the bench shows the model alone is enough.
+12. The `SETTING` pick still clamps the kit's era. The kit writer now writes the era, so reconcile the two by letting the kit's era win when both answer.
 
 ---
 
@@ -204,5 +241,9 @@ These were run with `scripts/play-real.ts` on the user's own cards. The cards an
   - This run surfaced the bare-stake problem fixed in 1.5. Sneaking past armed dredgers risked "goodwill" from a 0.65 Decision pick.
 - **Harrowmere free play** (an isekai premise, "done for tonight" to end): the kit was written, there were no fallbacks, and leaving was routed by the model.
 - **Fork bench:** 16/16 on both the Decision model and Flash Lite with the visible keys.
+- **A made-up hostile card** (a mercenary captain whose first message has her charge the player for her drowned brother), played with "surprise me, but I want to find out what really happened at the weir", as the player's own persona:
+  - The persona was taken from "as myself" (1.00).
+  - On the first run the ask chose a mystery, which is a hub, and hubs had no opening yet: the captain simply walked with the player. That is why hubs open through a place of their own (1.11).
+  - On the second run the opening was `fight_them` (1.00). The first stop was "The Captain's Sabre" at the ruined salt mill, from the first message, fought on the battle mat against her. A parley got past it, she fought beside the player at the next stop, and the frame was the truth about the weir.
 
 **Still slow.** When the builder's first answer misses a unit, the retry adds 25 to 35 s before the first place. In one run it asked three times. Showing the frame while the stops are redone would hide most of that.

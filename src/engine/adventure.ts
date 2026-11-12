@@ -69,6 +69,8 @@ export interface RoadStop extends Stop {
   weather?: Sky;
   /** Someone here with a mind of their own (people.ts): what they want, how they feel, what they know and will say. */
   person?: Npc;
+  /** The first stop, where the card's first message opens the night (road.ts, `opening`): with the card's own character, or others. */
+  opening?: "them" | "others";
 }
 
 /** Someone who can walk with you. They are good at one thing, and they have opinions. */
@@ -247,7 +249,7 @@ export interface Trip {
 export function mapOf(adv: Adventure): MapSheet {
   const climax = new Set(adv.stops.filter((s) => s.climax).map((s) => s.id));
   // A hub is drawn as it is walked: a path out to each of its places, and one to the end.
-  const paths: [string, string][] = adv.hub ? adv.roads.filter(([a]) => a === adv.start).map(([a, b]) => [a, b]) : adv.roads.map(([a, b]) => [a, b]);
+  const paths: [string, string][] = adv.hub ? adv.roads.filter(([a]) => a === adv.start || stopOf(adv, a)?.opening).map(([a, b]) => [a, b]) : adv.roads.map(([a, b]) => [a, b]);
   return { title: adv.title, seed: adv.seed, stops: adv.places.map((p) => ({ ...p, ...(climax.has(p.id) ? { climax: true } : {}) })), paths };
 }
 
@@ -306,8 +308,8 @@ export function ahead(t: Trip): RoadStop[] {
   return t.adv.roads.filter(([a, b]) => a === t.at && !t.visited.includes(b) && opened(t, b)).map(([, b]) => stopOf(t.adv, b)!).filter(Boolean);
 }
 
-/** How many of a hub's places are done: the ones gone to, not counting its end. */
-export const hubDone = (t: Pick<Trip, "adv" | "visited">): number => t.visited.filter((id) => !stopOf(t.adv, id)?.climax && id !== t.adv.start).length;
+/** How many of a hub's places are done: the ones gone to, not counting its end, or the opening on the way in. */
+export const hubDone = (t: Pick<Trip, "adv" | "visited">): number => t.visited.filter((id) => !stopOf(t.adv, id)?.climax && !stopOf(t.adv, id)?.opening && id !== t.adv.start).length;
 
 /** Whether a place can be gone to yet: a hub's end only once enough of its places are done; anything else, always. */
 export function opened(t: Pick<Trip, "adv" | "visited">, id: string): boolean {
