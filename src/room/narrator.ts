@@ -19,6 +19,7 @@ import {
   LatheGeometry,
   LinearFilter,
   LoopOnce,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -129,6 +130,59 @@ const CLOTH_BAKED = CLOTH;
 /** The narrator's skin: the palette's bone, in shadow. */
 const SKIN = 0x9e8e6c;
 
+/*
+ * Cloth that moves (a very plain simulation, all in the vertex shaders; `drapeCloth` feeds it each frame):
+ * - the mantle is pushed out round each arm under it, so an arm never comes through it;
+ * - the loose part of each sleeve (the model's `_hang`, 0..1) falls under gravity whichever way the arm is turned,
+ *   trails behind the forearm on a spring as it moves, and lies on the wood where it reaches the table.
+ */
+/** Capsules the mantle is pushed out of: per arm, the upper arm and the start of the forearm. */
+const ARM_CAPS = 4;
+/** Their radii: the sleeve's, with room for its folds. */
+const ARM_R = [0.1, 0.088];
+/** How far the loosest cloth of a sleeve falls below where the model has it. */
+const SLEEVE_DROP = 0.06;
+/** The trailing spring: how far behind the forearm the cloth wants to be per metre a second, how stiff, how damped,
+ * and the most it lags. Under-damped, so it swings once past when the arm stops. */
+const LAG_TIME = 0.08;
+const LAG_K = 90;
+const LAG_DAMP = 11;
+const LAG_MAX = 0.05;
+
+const CLOTH_ABOVE = `
+float clothAbove(float y, float f, float s) {
+  float d = y - f;
+  return d >= s ? y : d <= -s ? f : f + (d + s) * (d + s) / (4.0 * s);
+}
+`;
+const MANTLE_VERTEX = `
+{
+  mat4 toN = uNarr * modelMatrix;
+  vec3 p = (toN * vec4(transformed, 1.0)).xyz;
+  for (int i = 0; i < ${ARM_CAPS}; i++) {
+    vec3 ab = uArmB[i] - uArmA[i];
+    float t = clamp(dot(p - uArmA[i], ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+    vec3 c = uArmA[i] + ab * t;
+    vec3 d = p - c;
+    float l = length(d);
+    if (l > 1e-5 && uArmR[i] > 0.0) p = c + d / l * clothAbove(l, uArmR[i], 0.025);
+  }
+  transformed = (inverse(toN) * vec4(p, 1.0)).xyz;
+}
+`;
+const SLEEVE_VERTEX = `
+{
+  mat4 toN = uNarr * modelMatrix;
+  vec4 p = toN * vec4(transformed, 1.0);
+  p.y -= _hang * ${SLEEVE_DROP.toFixed(3)};
+  p.xyz += uLag * _hang;
+  // Over the table the loose cloth lies on the wood, not in it.
+  float onTable = smoothstep(${(TABLE_EDGE - 0.02).toFixed(3)}, ${(TABLE_EDGE + 0.02).toFixed(3)}, p.z) * step(abs(p.x), 0.94);
+  p.y = mix(p.y, clothAbove(p.y, 0.004, 0.01), onTable);
+  transformed = (inverse(toN) * p).xyz;
+}
+`;
+
 /** One arm: a sleeve from the elbow, hidden in the mantle, to the hand, which can leave its place on the table to move a piece. */
 interface Arm {
   side: number;
@@ -154,6 +208,9 @@ interface Arm {
   kVel: { v: number };
   /** The sculpted, boned arm, once it has loaded. */
   rig?: Rig;
+  /** How far its sleeve's loose cloth lags behind the forearm (a uniform of the sleeve's shader), how fast that is
+   * changing, and where the forearm was last frame. */
+  drape?: { lag: { value: Vector3 }; vel: Vector3; prev: Vector3 | null };
   /** What the fingers are closed on (or closing on), if anything, and how far they have closed, 0..1. */
   hold: "pinch" | "grasp" | null;
   closed: number;
@@ -212,6 +269,13 @@ export class Narrator {
    * cannot be told from the wall, and it looks as if only half of it were there.
    */
   readonly rim = new Color(0.03, 0.03, 0.035);
+  /** What the cloth's shaders read each frame (`drapeCloth`): the narrator's space, and the arms the mantle lies over. */
+  private clothU = {
+    narr: { value: new Matrix4() },
+    a: { value: Array.from({ length: ARM_CAPS }, () => new Vector3()) },
+    b: { value: Array.from({ length: ARM_CAPS }, () => new Vector3()) },
+    r: { value: new Array<number>(ARM_CAPS).fill(0) },
+  };
 
   /**
    * @param models where the sculpted parts are served from (models/*.py make them): the draped mantle and the
@@ -345,6 +409,84 @@ export class Narrator {
     return m.geometry.getAttribute("color") ? this.clothBaked : this.cloth;
   }
 
+  /**
+   * Cloth for a modelled part that moves (see the note on ARM_CAPS): the mantle, pushed out round the arms, or a
+   * sleeve, whose loose cloth falls and trails by `lag`. Both keep the rim of light, the sleeve's softer: on a narrow
+   * tube a full rim lights the whole of it.
+   */
+  private movingCloth(m: Mesh, kind: "mantle" | "sleeve", lag?: { value: Vector3 }): MeshStandardMaterial {
+    const baked = !!m.geometry.getAttribute("color");
+    const mat = new MeshStandardMaterial({ color: baked ? CLOTH_BAKED : CLOTH, roughness: 1, metalness: 0, envMapIntensity: 0, side: DoubleSide, vertexColors: baked });
+    const rim = { value: this.rim };
+    const rimK = kind === "sleeve" ? "0.6" : "1.0";
+    const U = this.clothU;
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uRim = rim;
+      shader.fragmentShader =
+        "uniform vec3 uRim;\n" +
+        shader.fragmentShader.replace(
+          "#include <emissivemap_fragment>",
+          `#include <emissivemap_fragment>\n  { float rimF = 1.0 - abs(dot(normal, normalize(vViewPosition))); totalEmissiveRadiance += uRim * ${rimK} * rimF * rimF; }`,
+        );
+      shader.uniforms.uNarr = U.narr;
+      let head = "uniform mat4 uNarr;\n" + CLOTH_ABOVE;
+      if (kind === "mantle") {
+        shader.uniforms.uArmA = U.a;
+        shader.uniforms.uArmB = U.b;
+        shader.uniforms.uArmR = U.r;
+        head += `uniform vec3 uArmA[${ARM_CAPS}];\nuniform vec3 uArmB[${ARM_CAPS}];\nuniform float uArmR[${ARM_CAPS}];\n`;
+      } else {
+        shader.uniforms.uLag = lag ?? { value: new Vector3() };
+        head += "attribute float _hang;\nuniform vec3 uLag;\n";
+      }
+      shader.vertexShader = head + shader.vertexShader.replace("#include <skinning_vertex>", `#include <skinning_vertex>\n${kind === "mantle" ? MANTLE_VERTEX : SLEEVE_VERTEX}`);
+    };
+    mat.customProgramCacheKey = () => `narrator-cloth-${kind}-${baked ? "baked" : "plain"}`;
+    this.mats.push(mat);
+    return mat;
+  }
+
+  /**
+   * Each frame, after the arms are placed: where the arms are, for the mantle to lie over them, and how far each
+   * sleeve's loose cloth trails its forearm.
+   */
+  private drapeCloth(dt: number): void {
+    const U = this.clothU;
+    this.group.updateMatrixWorld(true);
+    U.narr.value.copy(this.group.matrixWorld).invert();
+    let i = 0;
+    for (const a of this.arms) {
+      const r = a.rig;
+      if (!r || i + 2 > ARM_CAPS) continue;
+      const S = this.group.worldToLocal(r.upper.getWorldPosition(_c1));
+      const E = this.group.worldToLocal(r.fore.getWorldPosition(_c2));
+      const W = this.group.worldToLocal(r.foreEnd.getWorldPosition(_c3));
+      // From a little below the shoulder (the mantle sits on the shoulder itself), down to the elbow; and on, a way
+      // along the forearm.
+      U.a.value[i]!.copy(S).lerp(E, 0.25);
+      U.b.value[i]!.copy(E);
+      U.r.value[i++] = ARM_R[0]!;
+      U.a.value[i]!.copy(E);
+      U.b.value[i]!.copy(E).lerp(W, 0.45);
+      U.r.value[i++] = ARM_R[1]!;
+      const d = a.drape;
+      if (!d) continue;
+      const mid = _c4.copy(E).lerp(W, 0.7);
+      if (d.prev && dt > 0 && dt < 0.1 && !this.reduced) {
+        // Moving, the cloth wants to be behind the forearm by as much as it is moving; a spring takes it there.
+        const want = _c1.copy(mid).sub(d.prev).multiplyScalar(-LAG_TIME / dt);
+        if (want.length() > LAG_MAX) want.setLength(LAG_MAX);
+        const lag = d.lag.value;
+        d.vel.addScaledVector(want.sub(lag).multiplyScalar(LAG_K).addScaledVector(d.vel, -LAG_DAMP), dt);
+        lag.addScaledVector(d.vel, dt);
+        if (lag.length() > LAG_MAX) lag.setLength(LAG_MAX);
+      } else if (this.reduced) {
+        d.lag.value.set(0, 0, 0);
+      }
+      d.prev = (d.prev ?? new Vector3()).copy(mid);
+    }
+  }
+
   /** Swap the turned hood for the sculpted one: thick cloth round a hollow that takes no light. */
   private async loadHood(url: string): Promise<void> {
     const scene = await this.fetch(url, "hood");
@@ -375,7 +517,8 @@ export class Narrator {
     scene.traverse((o) => {
       const m = o as Mesh;
       if (!m.isMesh) return;
-      m.material = this.clothOf(m);
+      // It lies over the arms (drapeCloth): an arm never comes through it.
+      m.material = this.movingCloth(m, "mantle");
       m.castShadow = true;
       found = true;
     });
@@ -396,7 +539,7 @@ export class Narrator {
       console.warn("tallow: the narrator's arms are not the model this room expects; keeping the plain shape.");
       return;
     }
-    // The sculpt's knuckles and tendons come in the model's normal map, and its own shadow in its vertex colours.
+    // The sculpt's own shadow comes in its vertex colours (and a normal map, if the model has one).
     let made: MeshStandardMaterial | undefined;
     file.scene.traverse((o) => {
       const m = o as Mesh;
@@ -416,6 +559,7 @@ export class Narrator {
     for (const arm of this.arms) {
       const root = cloneSkinned(file.scene) as Group;
       root.scale.x = arm.side;
+      const drape = { lag: { value: new Vector3() }, vel: new Vector3(), prev: null };
       root.traverse((o) => {
         try {
           const marks = JSON.parse(String(o.userData.marks ?? "{}")) as Record<string, number>;
@@ -427,8 +571,9 @@ export class Narrator {
         if (!m.isMesh) return;
         // The model names its surfaces: "cloth" is the sleeve, anything else is skin.
         const cloth = /cloth/i.test((m.material as Material | undefined)?.name ?? "");
-        // The sleeves keep the mantle's rim of light: without it they sink into the dark and the hands float.
-        m.material = cloth ? this.clothOf(m) : m.geometry.getAttribute("color") ? skinBaked : skin;
+        // The sleeves keep a rim of light (without it they sink into the dark and the hands float), and their loose
+        // cloth hangs and trails (drapeCloth).
+        m.material = cloth ? this.movingCloth(m, "sleeve", drape.lag) : m.geometry.getAttribute("color") ? skinBaked : skin;
         m.castShadow = true;
         m.receiveShadow = !cloth;
         // Its bounds are those of the arm at rest; reaching, it leaves them.
@@ -461,6 +606,7 @@ export class Narrator {
       const reach = along.length();
       along.normalize();
       const pole = elbow.clone().sub(upper.position).addScaledVector(along, -(l1 * l1 - l2 * l2 + reach * reach) / (2 * reach)).normalize();
+      arm.drape = drape;
       arm.rig = {
         root, space, mixer, actions, fades, clip: "idle", then: [],
         upper, upperEnd, fore, foreEnd, wrist: get("wrist"), ctl: get("ctl"), grip: get("grip"),
@@ -946,6 +1092,7 @@ export class Narrator {
 
   update(t: number, camera: Camera, dt = 1 / 60): void {
     this.poseArms(dt);
+    this.drapeCloth(dt);
     if (t > this.gazeUntil && this.gaze !== "player") {
       this.gaze = "player";
       this.lookTarget = null;
@@ -1042,3 +1189,4 @@ export class Narrator {
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _q4 = new Quaternion();
+const _c1 = new Vector3(), _c2 = new Vector3(), _c3 = new Vector3(), _c4 = new Vector3();
