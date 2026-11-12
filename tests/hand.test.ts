@@ -33,19 +33,64 @@ describe("a story of scenes, checked whole", () => {
     expect(STOCK_SCENES.scenes.at(-1)!.difficulty).toBeGreaterThan(STOCK_SCENES.scenes[0]!.difficulty);
   });
 
-  test("a story with a note left in it, a scene short, or a picture that is not one, is refused whole", () => {
-    const raw = () => JSON.parse(JSON.stringify(STOCK_SCENES_RAW)) as typeof STOCK_SCENES_RAW;
+  const raw = () => JSON.parse(JSON.stringify(STOCK_SCENES_RAW)) as typeof STOCK_SCENES_RAW;
+  const refused = (story: unknown): string => {
+    let why = "";
+    expect(checkSceneStory(story, (r) => (why = r))).toBeNull();
+    return why;
+  };
+
+  test("a story with a note left in it, a scene short, a part missing or too few things is refused whole, and says why", () => {
     const noted = raw();
     (noted.scenes[1] as { through: string }).through = "<what the player has to get done here>";
-    expect(checkSceneStory(noted)).toBeNull();
+    expect(refused(noted)).toBe(`scene 2: "through" still has a note's brackets in it`);
     const short = raw();
     (short as { scenes: unknown[] }).scenes = short.scenes.slice(0, 2);
-    expect(checkSceneStory(short)).toBeNull();
-    const card = raw();
-    (card.scenes[0] as { card: string }).card = "no-such-card";
-    expect(checkSceneStory(card)).toBeNull();
-    expect(checkSceneStory(null)).toBeNull();
-    expect(checkSceneStory("a story")).toBeNull();
+    expect(refused(short)).toBe("it has 2 scenes, not 3");
+    const gone = raw();
+    delete (gone.scenes[2] as { taken?: string }).taken;
+    expect(refused(gone)).toBe(`scene 3: "taken" is missing`);
+    const bare = raw();
+    (bare.scenes[0] as { things: string[] }).things = ["only the one"];
+    expect(refused(bare)).toBe("scene 1: it has 1 things to use, not two or three");
+    expect(refused(null)).toBe("the answer is not a story");
+    expect(refused("a story")).toBe("the answer is not a story");
+  });
+
+  test("a phrase longer than the note asked for is the model's phrase, and the story is kept", () => {
+    // What the first real builder wrote: things of ten words where the note said a few, and a boon of twelve.
+    const long = raw();
+    const s = long.scenes[2] as { things: string[]; boon: string; taken: string };
+    s.things = ["the ledger of favours Maren keeps buttoned inside her coat, with tonight's page torn out", "the ferryman's habit of counting heads twice before he casts off", "a lamp still warm to the touch"];
+    s.boon = "the ferryman's word that he will hold the last boat for you once";
+    s.taken = `${s.taken} They take what you carry and put you off the quay, and by the time you are back the lamps along the whole east side are dark and nobody will say who was there.`;
+    const story = checkSceneStory(long)!;
+    expect(story).not.toBeNull();
+    expect(story.scenes[2]!.things.map((t) => t.name)).toEqual(s.things);
+    expect(story.scenes[2]!.boon).toBe(s.boon);
+    expect(story.scenes[2]!.taken).toBe(s.taken);
+    // A runaway answer is still refused: a "thing" that is a page of text is not a thing.
+    const runaway = raw();
+    (runaway.scenes[0] as { things: string[] }).things[0] = "a thing ".repeat(40);
+    expect(refused(runaway)).toBe("scene 1: thing 1 is 319 characters");
+  });
+
+  test("a title that must fit a card is cut back to whole words; a fourth thing is left out; a picture not on the list is replaced", () => {
+    const wide = raw();
+    const s = wide.scenes[0] as { face: string; things: string[]; card: string; person?: unknown };
+    s.face = "The Ferryman Who Counts Every Head Twice Over";
+    s.things = [...s.things.slice(0, 3), "a fourth thing nobody asked for"];
+    s.card = "The Guardian";
+    const story = checkSceneStory(wide)!;
+    expect(story.scenes[0]!.face).toBe("The Ferryman Who Counts Every Head");
+    expect(story.scenes[0]!.things.length).toBe(3);
+    // Named by its title: the same picture. Not on the list at all: the plainest picture of the scene's kind.
+    expect(story.scenes[0]!.card).toBe("guardian");
+    const odd = raw();
+    (odd.scenes[0] as { card: string }).card = "no-such-card";
+    const got = checkSceneStory(odd)!;
+    expect(got).not.toBeNull();
+    expect(got.scenes[0]!.card).toBe(got.scenes[0]!.person ? "keeper" : "gate");
   });
 
   test("the adventure made of it is a line of scenes against a clock", () => {

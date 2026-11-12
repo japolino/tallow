@@ -168,6 +168,8 @@ export interface SittingOptions {
   content?: ContentSettings;
   /** Keep content set at the table in your own words ("heat on", "veil: spiders"), for the next sitting too. */
   keepContent?(c: ContentSettings): void;
+  /** Told when something a model was asked to write was not taken, with the reason, for whoever looks into it. */
+  fellBack?: (job: string, why: string) => void;
 }
 
 export const WHO_ASK = "And who are you? Write it in your own words: what kind of person you are, and your name, if you like.";
@@ -531,7 +533,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     const before = (kept?.played ?? []).filter((p) => p.startsWith(SCENES_PLAYED)).map((p) => p.slice(SCENES_PLAYED.length));
     const writing: { p?: ReturnType<typeof writeScenes> } = {};
     // Written once you have said who you are, from that and from what you asked for, while your words are read into your sheet.
-    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before }, content ?? DEFAULT_CONTENT)));
+    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before }, content ?? DEFAULT_CONTENT, (why) => o.fellBack?.("story of scenes", why))));
     const hero = await whoYouAre(someoneNew, start);
     const story = await table.wait("deal", writing.p ?? start(hero.who));
     if (!story) return { hero };

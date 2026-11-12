@@ -253,7 +253,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
         } catch {
           /* No storage here: the settings hold for this sitting only. */
         }
-      }, leave: done, started: (d) => void window.dispatchEvent(new CustomEvent("tallow:director", { detail: d })) }).catch((e) => console.error("tallow:", e));
+      }, leave: done, fellBack: (job, why) => console.warn(`tallow: the ${job} was not taken (${why})`), started: (d) => void window.dispatchEvent(new CustomEvent("tallow:director", { detail: d })) }).catch((e) => console.error("tallow:", e));
   }
 
   // Sound: the levels as they were left, and the recordings that are in this bundle. Nothing plays before the first

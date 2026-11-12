@@ -135,10 +135,23 @@ export interface HandState {
   opened: boolean;
 }
 
+/**
+ * Words a model wrote, as they are: markdown marks and odd spacing taken out, nothing else. `max` is where a runaway
+ * answer is refused (far past anything asked for), not a length to write to: a phrase a few words longer than the
+ * note asked for is still the model's phrase, and is kept whole. Null when it is missing, too short to be anything,
+ * or still has a placeholder's brackets in it.
+ */
 const plain = (v: unknown, max: number, min = 2): string | null => {
   if (typeof v !== "string") return null;
   const s = v.replace(/[*_#`]+/g, "").replace(/\s+/g, " ").trim();
   return s.length >= min && s.length <= max && !/[{}<>]/.test(s) ? s : null;
+};
+/** A title that has to fit a card or the map: as `plain`, and cut back to whole words when it runs past `fits`. */
+const label = (v: unknown, fits: number): string | null => {
+  const s = plain(v, fits * 4);
+  if (!s || s.length <= fits) return s;
+  const cut = s.slice(0, fits + 1).replace(/\s+\S*$/, "").replace(/[\s,;:.\-]+$/, "");
+  return cut.length >= 2 ? cut : s.slice(0, fits);
 };
 const obj = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
@@ -148,45 +161,67 @@ export const SCENE_CARDS: readonly string[] = CARD_KINDS.filter((k) => k.family 
 /**
  * A story as a model wrote it, checked whole: every scene has every part, in words of its own (no placeholder left
  * in), or the whole story is null and is asked for again. Code gives the ids and the difficulties.
+ *
+ * The check is of what the story has, not of how long its phrases are. Real models write a thing to use in ten
+ * words where the note said a few, and a story thrown away for that is a story the player never gets: the first
+ * real builder's story was refused for one phrase seven characters over. `why` is told the reason a story is not
+ * taken, so that a table that fell back to a road story can say what was wrong.
  */
-export function checkSceneStory(raw: unknown): SceneStory | null {
+export function checkSceneStory(raw: unknown, why?: (reason: string) => void): SceneStory | null {
+  const no = (reason: string): null => (why?.(reason), null);
+  // What is wrong with a part, in a few words, for whoever reads why a story was not taken.
+  const wrong = (v: unknown): string => (typeof v !== "string" ? "is missing" : /[{}<>]/.test(v) ? "still has a note's brackets in it" : `is ${v.trim().length} characters`);
   const o = obj(raw);
-  if (!o || !Array.isArray(o.scenes) || o.scenes.length !== SCENES) return null;
-  const title = plain(o.title, 70);
-  const goal = plain(o.goal, 320, 12);
-  const won = plain(o.won, 320, 8);
-  const lost = plain(o.lost, 320, 8);
-  const by = plain(o.by, 60);
-  if (!title || !goal || !won || !lost || !by) return null;
+  if (!o) return no("the answer is not a story");
+  if (!Array.isArray(o.scenes) || o.scenes.length !== SCENES) return no(`it has ${Array.isArray(o.scenes) ? o.scenes.length : "no"} scenes, not ${SCENES}`);
+  const top = { title: label(o.title, 70), goal: plain(o.goal, 900, 12), won: plain(o.won, 900, 8), lost: plain(o.lost, 900, 8), by: plain(o.by, 160) };
+  for (const [k, v] of Object.entries(top)) if (!v) return no(`"${k}" ${wrong(o[k])}`);
   const scenes: Scene[] = [];
   for (const [i, rawScene] of o.scenes.entries()) {
     const s = obj(rawScene);
-    if (!s) return null;
+    if (!s) return no(`scene ${i + 1} is not a scene`);
     const id = `s${i + 1}`;
-    const name = plain(s.name, 48);
-    const card = typeof s.card === "string" && SCENE_CARDS.includes(s.card) ? s.card : null;
-    const face = plain(s.face, 36);
-    const situation = plain(s.situation, 900, 40);
-    const through = plain(s.through, 200, 6);
-    const closing = plain(s.closing, 200, 6);
-    const taken = plain(s.taken, 240, 6);
-    const boon = plain(s.boon, 60);
-    const things = Array.isArray(s.things) ? s.things.map((t) => plain(t, 60)) : [];
-    if (!name || !card || !face || !situation || !through || !closing || !taken || !boon) return null;
-    if (things.length < 2 || things.length > 3 || things.some((t) => !t)) return null;
+    const parts = {
+      name: label(s.name, 48),
+      face: label(s.face, 36),
+      situation: plain(s.situation, 2400, 40),
+      through: plain(s.through, 500, 6),
+      closing: plain(s.closing, 500, 6),
+      taken: plain(s.taken, 700, 6),
+      boon: plain(s.boon, 160),
+    };
+    for (const [k, v] of Object.entries(parts)) if (!v) return no(`scene ${i + 1}: "${k}" ${wrong(s[k])}`);
+    // Three were asked for: more than three and the first three are the scene's; fewer than two is not a scene to play.
+    const things = (Array.isArray(s.things) ? s.things : []).slice(0, 3).map((t) => plain(t, 160));
+    if (things.length < 2) return no(`scene ${i + 1}: it has ${things.length} things to use, not two or three`);
+    const bad = things.findIndex((t) => !t);
+    if (bad >= 0) return no(`scene ${i + 1}: thing ${bad + 1} ${wrong((s.things as unknown[])[bad])}`);
     let person: Scene["person"];
     if (s.person !== undefined && s.person !== null) {
       const p = obj(s.person);
-      const pn = plain(p?.name, 48);
-      const who = plain(p?.who, 220, 4);
-      const wants = plain(p?.wants, 220, 4);
-      if (!p || !pn || !who || !wants) return null;
+      const pn = label(p?.name, 48);
+      const who = plain(p?.who, 600, 4);
+      const wants = plain(p?.wants, 600, 4);
+      if (!p || !pn || !who || !wants) return no(`scene ${i + 1}: its person ${!p ? "is not a person" : !pn ? `has a name that ${wrong(p.name)}` : !who ? `has a "who" that ${wrong(p.who)}` : `has a "wants" that ${wrong(p.wants)}`}`);
       person = { name: pn, who, wants, ...(typeof p.age === "string" ? { age: p.age.slice(0, 20) } : {}) };
     }
-    scenes.push({ id, name, card, face, situation, ...(person ? { person } : {}), through, closing, taken, things: things.map((t, j) => ({ id: `${id}-t${j + 1}`, name: t! })), boon, difficulty: SCENE_DIFFICULTY[i] ?? 1 });
+    scenes.push({ id, name: parts.name!, card: sceneCard(s.card, !!person), face: parts.face!, situation: parts.situation!, ...(person ? { person } : {}), through: parts.through!, closing: parts.closing!, taken: parts.taken!, things: things.map((t, j) => ({ id: `${id}-t${j + 1}`, name: t! })), boon: parts.boon!, difficulty: SCENE_DIFFICULTY[i] ?? 1 });
   }
-  if (new Set(scenes.map((s) => s.name.toLowerCase())).size !== scenes.length) return null;
-  return { title, goal, won, lost, by, scenes };
+  if (new Set(scenes.map((s) => s.name.toLowerCase())).size !== scenes.length) return no("two scenes have the same name");
+  return { title: top.title!, goal: top.goal!, won: top.won!, lost: top.lost!, by: top.by!, scenes };
+}
+
+/**
+ * The picture on a scene's card. The model names one from the list it was given, by its id or by its title; a name
+ * that is not on the list is only a picture missing, never a reason to throw a story away, so the scene then gets
+ * the plainest picture of its kind.
+ */
+function sceneCard(v: unknown, person: boolean): string {
+  const said = typeof v === "string" ? v.trim().toLowerCase().replace(/^the\s+/, "") : "";
+  const kinds = CARD_KINDS.filter((k) => SCENE_CARDS.includes(k.id));
+  const named = kinds.find((k) => k.id === said || k.title.toLowerCase().replace(/^the\s+/, "") === said);
+  if (named) return named.id;
+  return (kinds.find((k) => k.family === (person ? "person" : "obstacle")) ?? kinds[0]!).id;
 }
 
 /** A scene as a stop: what the map, the card and the content rules need of it. Nothing is played by its ways. */

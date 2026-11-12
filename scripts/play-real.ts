@@ -118,5 +118,5 @@ const table = {
 } as unknown as Table;
 
 const minds = modelMinds(ask, { decide, onFallback: (job, why) => out(`    [FELL BACK: ${job}: ${why}]`) });
-await sit({ card, seed: arg("seed") ?? "real-1", table, minds, ask });
+await sit({ card, seed: arg("seed") ?? "real-1", table, minds, ask, fellBack: (job, why) => out(`    [NOT TAKEN: ${job}: ${why}]`) });
 out(`\n[${at()}] over.`);
