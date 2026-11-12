@@ -34,7 +34,17 @@ export type ToBackend =
   /** The drawer: read the model choices, or change one. */
   | { type: "models"; id: string; patch?: ModelsPatch }
   /** The card's lore nearest a scene, by meaning when there is an embedding model (backend.ts, loreNear). */
-  | { type: "lore"; id: string; characterId: string; text: string };
+  | { type: "lore"; id: string; characterId: string; text: string }
+  /** [book] The narrator's book for a hero at a card (engine/chapter.ts, bookFile), read from the user's own storage. */
+  | { type: "book"; id: string; file: string }
+  /** [book] Keep the book. */
+  | { type: "book-keep"; id: string; file: string; book: unknown }
+  /** [book] Whether Inlay Illustrator answers its shared-pictures endpoint for this user. */
+  | { type: "pictures"; id: string }
+  /** [book] One picture for a chapter, drawn by Inlay Illustrator; answered when it is ready or has failed. */
+  | { type: "picture"; id: string; picture: { id: string; chatId: string; text: string } }
+  /** [book] A picture's bytes, for a room that cannot load it by its address. */
+  | { type: "image"; id: string; imageId: string };
 
 export type ToFrontend =
   | { type: "card"; id: string; card: CardInfo | null }
@@ -43,4 +53,10 @@ export type ToFrontend =
   | { type: "decided"; id: string; answers: Record<string, DecisionAnswer | undefined> | null }
   | { type: "models"; id: string; state: ModelsState }
   | { type: "lore"; id: string; entries: string[] }
+  // [book] The narrator's book, its keeping, and its pictures.
+  | { type: "book"; id: string; book: unknown }
+  | { type: "book-kept"; id: string }
+  | { type: "pictures"; id: string; ready: boolean }
+  | { type: "picture"; id: string; picture: { imageId: string; url: string } | null; why?: string }
+  | { type: "image"; id: string; data: string | null; mime?: string }
   | { type: "error"; id: string; error: string };

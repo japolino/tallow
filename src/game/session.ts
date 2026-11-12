@@ -35,6 +35,7 @@ import { writeScenes } from "./scenewriter.js";
 import { roam } from "./free.js";
 import { pickBy, type Minds } from "./minds.js";
 import { firstJson, freeWorldMessages, frontMessages, type Ask } from "./prompts.js";
+import type { Chapters } from "./chapters.js"; // [book]
 
 /** Who you are at this card's table, kept from one story (and one sitting) to the next. */
 /** How a story of scenes is kept among the stories played: this, and its title. */
@@ -170,6 +171,8 @@ export interface SittingOptions {
   keepContent?(c: ContentSettings): void;
   /** Told when something a model was asked to write was not taken, with the reason, for whoever looks into it. */
   fellBack?: (job: string, why: string) => void;
+  /** [book] The narrator's book (game/chapters.ts): told when a chapter is due, and asked what it has established for the next story. */
+  chapters?: Pick<Chapters, "due" | "forBuilder">;
 }
 
 export const WHO_ASK = "And who are you? Write it in your own words: what kind of person you are, and your name, if you like.";
@@ -401,6 +404,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
 
   /** When a story is over: what became of everyone, an ability and a thing or two if it was won, and the table cleared. */
   const after = async (t0: Trip, hero: Hero, kept0: Kept | null): Promise<Kept> => {
+    o.chapters?.due(t0, "end", hero); // [book] written while the epilogue is told
     const written = o.minds.epilogue ? await table.wait("tell", o.minds.epilogue(t0).catch(() => null)) : null;
     // The epilogue keeps to what the game allows, like every other line a model writes.
     const epilogue = written && t0.adv.content ? playable(written, t0.adv.content) : written;
@@ -533,14 +537,14 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     const before = (kept?.played ?? []).filter((p) => p.startsWith(SCENES_PLAYED)).map((p) => p.slice(SCENES_PLAYED.length));
     const writing: { p?: ReturnType<typeof writeScenes> } = {};
     // Written once you have said who you are, from that and from what you asked for, while your words are read into your sheet.
-    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before }, content ?? DEFAULT_CONTENT, (why) => o.fellBack?.("story of scenes", why))));
+    const start = (who: string): ReturnType<typeof writeScenes> => (writing.p = kitP.then((kit) => writeScenes(o.ask ?? null, card, { asked: askedFor, who, kit: kitLines(kit).join(" "), played: before, before: o.chapters?.forBuilder() /* [book] */ }, content ?? DEFAULT_CONTENT, (why) => o.fellBack?.("story of scenes", why))));
     const hero = await whoYouAre(someoneNew, start);
     const story = await table.wait("deal", writing.p ?? start(hero.who));
     if (!story) return { hero };
     const kit = await kitP;
     const adv = sceneAdventure(story, { seed, who: hero.who, kit, ...(content ? { content } : {}) });
     o.built?.(adv);
-    const d = directScenes(adv, inKit({ ...hero.sheet, ...START }, kit), seed, table, o.minds, { abilities: hero.abilities ?? [], level: hero.level ?? 1, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(o.save ? { save: o.save } : {}) });
+    const d = directScenes(adv, inKit({ ...hero.sheet, ...START }, kit), seed, table, o.minds, { abilities: hero.abilities ?? [], level: hero.level ?? 1, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(o.save ? { save: o.save } : {}), ...(o.chapters ? { chapter: (t: Trip, at: "rest" | "stop") => o.chapters!.due(t, at, hero) } : {}) /* [book] */ });
     o.started?.(d);
     last = await d.done;
     // Left for tonight in the middle of it: kept as it stood (scenes.ts saved it).
@@ -701,6 +705,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       },
     });
     keepFree(t);
+    o.chapters?.due(t, "night", hero); // [book]
   };
 
   if (o.saved && !o.saved.over) {
@@ -723,7 +728,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       // The black candle stands where it stood when you got up from the table.
       if (kept?.campaign) table.blackCandle?.({ burned: kept.campaign.burned, lit: false });
       // A story of scenes is taken up by its own director, with the dice as they lay.
-      const d = t.adv.scenes ? directScenes(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, ...(o.save ? { save: o.save } : {}) }) : direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
+      const d = t.adv.scenes ? directScenes(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, ...(o.save ? { save: o.save } : {}), ...(o.chapters ? { chapter: (x: Trip, at: "rest" | "stop") => o.chapters!.due(x, at, kept?.hero ?? { name: "", who: t.adv.who }) } : {}) /* [book] */ }) : direct(t.adv, t.sheet, t.seed, table, o.minds, { resume: t, save: o.save, ...(kept?.hero ? { hero: heroNow(kept.hero) } : {}) });
       o.started?.(d);
       last = await d.done;
       if (d.left) {

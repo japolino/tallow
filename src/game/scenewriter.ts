@@ -32,6 +32,8 @@ export interface SceneAsks {
   startHour?: number;
   /** Stories already played at this table, so this one is not one of them again. */
   played?: readonly string[];
+  /** [book] What the narrator's book has established at this table (engine/chapter.ts, establishedSaid), true in this story too. */
+  before?: string | undefined;
 }
 
 const SHAPE = {
@@ -77,6 +79,7 @@ export function sceneStoryMessages(card: CardInfo, asks: SceneAsks, content: Con
     asks.who ? `WHO THE PLAYER IS, in their words: "${asks.who.slice(0, 900)}"` : "",
     asks.kit ? `HOW THIS WORLD PLAYS: ${asks.kit.slice(0, 600)}` : "",
     asks.played?.length ? `STORIES ALREADY PLAYED AT THIS TABLE (write a different one): ${asks.played.slice(-6).join("; ")}` : "",
+    asks.before ? `FROM THE NARRATOR'S BOOK OF EARLIER STORIES (true in this world; a new story may meet these people again, or not): ${asks.before.slice(0, 900)}` : "", // [book]
     `THE CLOCK: the story starts at ${clock(start)} and is lost at ${clock(start + STORY_HOURS)}. Write the times of day to fit.`,
     `THE PICTURES A SCENE'S CARD CAN HAVE: ${cards}.`,
     `THE STORY TO WRITE, as JSON with exactly these keys and exactly ${SCENES} scenes (one is shown):\n${JSON.stringify(SHAPE, null, 1)}`,

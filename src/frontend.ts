@@ -5,7 +5,10 @@
  * backend (src/backend.ts): each job on its own connection, the Decision model for quick reads when there is one, and
  * the card's lorebook picked by meaning. Leaving the table (the ✕) ends the sitting.
  */
-import { readContent, type ContentSettings } from "./engine/content.js";
+import { DEFAULT_CONTENT, readContent, type ContentSettings } from "./engine/content.js";
+import { bookFile } from "./engine/chapter.js";
+import { chapterKeeper } from "./game/chapters.js";
+import { loadImage, PICTURES_ASK, picturesAsked, picturesOn, setPictures } from "./frontend/pictures.js";
 import type { SpindleFrontendContext } from "lumiverse-spindle-types";
 import { DefaultLoadingManager } from "three";
 import { MODELS } from "./embedded/models.js";
@@ -135,7 +138,11 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       granted = await ctx.permissions.request(EXTRAS.filter((p) => !granted.includes(p)), { reason: WHY_EXTRAS } as never).catch(() => granted);
     }
     const { chatId, characterId } = ctx.getActiveChat();
+    // [book] Whether Inlay Illustrator is there to paint the book's pictures, found out while the card is read.
+    const inlay = chatId && !picturesAsked() ? call({ type: "pictures" }).then((m) => m.type === "pictures" && m.ready, () => false) : Promise.resolve(false);
     const card = characterId && granted.includes("characters") ? await call({ type: "card", characterId }).then((m) => (m.type === "card" ? m.card : null)).catch(() => null) : null;
+    // [book] Pictures cost money: asked once, and only when Inlay Illustrator is there to paint them.
+    if (card && (await Promise.race([inlay, new Promise<false>((done) => setTimeout(() => done(false), 1500))]))) setPictures(await ctx.ui.showConfirm(PICTURES_ASK).then((r) => r.confirmed, () => false));
 
     if (!overlay) {
       overlay = createOverlay(ctx, granted.includes("app_manipulation"));
@@ -196,8 +203,33 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       : null;
     // Nothing left unfinished: the next story is a new one, and its preset is read while the table is being laid.
     if (!saved || saved.over) voice?.ahead();
-    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world }), ...(characterId && granted.includes("embeddings") ? { lore: (text: string) => call({ type: "lore", characterId, text }).then((m) => (m.type === "lore" ? m.entries : [])) } : {}), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`), ...(voice ? { voice } : {}) });
+    // [book] The narrator's book for the hero at this card (game/chapters.ts), kept in the user's own storage in Lumiverse.
+    let content: ContentSettings | undefined;
+    const bookOf = (hero: string): string => bookFile(chatId ?? "none", characterId ?? "none", hero);
+    const chapters = chapterKeeper({
+      ask: granted.includes("generation") ? ask : null,
+      voice,
+      card: card?.name ?? "",
+      load: (hero) => call({ type: "book", file: bookOf(hero) }).then((m) => (m.type === "book" ? m.book : null)),
+      save: (hero, book) => call({ type: "book-keep", file: bookOf(hero), book }).then(() => undefined),
+      ...(r.book ? { shelf: r.book } : {}),
+      pictures: {
+        allowed: () => !!chatId && picturesOn(),
+        draw: (p) => call({ type: "picture", picture: { id: p.id, chatId: chatId!, text: p.text } }).then((m) => (m.type === "picture" && m.picture ? m.picture : { why: (m.type === "picture" && m.why) || "no picture came" })),
+      },
+      content: () => content ?? DEFAULT_CONTENT,
+      fellBack: (job, why) => console.warn(`tallow: the ${job} was not taken (${why})`),
+    });
+    // A picture is shown from Lumiverse by its address; if the room cannot load it so, from its bytes.
+    if (r.book)
+      r.book.pictures = async (p) =>
+        (p.url ? await loadImage(p.url) : null) ??
+        (p.imageId ? await call({ type: "image", imageId: p.imageId }).then((m) => (m.type === "image" && m.data ? loadImage(m.data) : null), () => null) : null);
+    const minds = modelMinds(ask, { ...(granted.includes("decisions") ? { decide } : {}), context: () => ({ world: [world, chapters.established()].filter(Boolean).join("\n\n") }), ...(characterId && granted.includes("embeddings") ? { lore: (text: string) => call({ type: "lore", characterId, text }).then((m) => (m.type === "lore" ? m.entries : [])) } : {}), onFallback: (job, why) => console.warn(`tallow: the ${job} fell back to the rules (${why})`), ...(voice ? { voice } : {}) });
     const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24), ...(minds.pick ? { pick: minds.pick } : {}) });
+    // [book] A chapter knows what the narrator said aloud, so it does not say it again.
+    const sayAloud = table.say.bind(table);
+    table.say = (lines) => (chapters.heard(lines), sayAloud(lines));
     if (!card) {
       await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
       return;
@@ -206,6 +238,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     const save = (t: Trip | null): void => {
       // The narrator is told which story it is telling, or that the one it was telling is over.
       voice?.story(t && !t.over ? storyOf(t) : null);
+      chapters.story(t && !t.over ? storyOf(t) : null); // [book]
       try {
         if (t) localStorage.setItem(key, JSON.stringify({ v: 1, trip: t }));
         else localStorage.removeItem(key);
@@ -223,7 +256,11 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     } catch {
       kept = null;
     }
+    // [book] The book of the hero you were last time stands on the shelf from the start.
+    if (kept?.hero.name) void chapters.open(kept.hero.name);
+    if (saved && !saved.over) chapters.story(storyOf(saved));
     const keep = (k: Kept): void => {
+      if (k.hero.name) void chapters.open(k.hero.name); // [book]
       try {
         localStorage.setItem(heroKey, JSON.stringify({ v: 1, kept: k }));
       } catch {
@@ -240,14 +277,14 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       }, 2500);
     };
     // What the game allows at this table (content.ts): heat, dark themes, lines and veils, kept for every chat.
-    let content: ContentSettings | undefined;
     try {
       const raw = localStorage.getItem("tallow:content");
       content = raw ? readContent(JSON.parse(raw)) : undefined;
     } catch {
       content = undefined;
     }
-    void sit({ card: card as CardInfo, seed: randomSeed(), table, minds, ask: canAsk ? ask : null, built: (adv) => (voice?.ahead(), r.setMap?.(mapOf(adv))), saved, save, kept, keep, content, keepContent: (c) => {
+    void sit({ card: card as CardInfo, seed: randomSeed(), table, minds, ask: canAsk ? ask : null, built: (adv) => (voice?.ahead(), r.setMap?.(mapOf(adv))), saved, save, kept, keep, content, chapters, keepContent: (c) => {
+        content = c; // [book] chapters keep to what the table now allows
         try {
           localStorage.setItem("tallow:content", JSON.stringify(c));
         } catch {
