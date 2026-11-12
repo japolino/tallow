@@ -244,3 +244,24 @@ if (q.get("mat") === "1" && room.desk) {
     }
   });
 }
+
+// ?roster=1 (with play=0): the paper of who you may be (room/roster.ts), with sample personas; what you pick is shown.
+if (q.get("roster") === "1" && room.desk) {
+  void room.ready.then(async () => {
+    const table = roomTable(room, { reduced: reduced ?? matchMedia("(prefers-reduced-motion: reduce)").matches, setHour: (h) => setHour(h) });
+    const n = Number(q.get("n") ?? 4);
+    const sample = [
+      { name: "Kestrel", title: "A wandering cartographer" },
+      { name: "Rook", title: "One-eyed smuggler, owes everyone" },
+      { name: "Sister Amaranth Vell-Okonkwo of the Ninth Lantern", title: "Exiled lamp-priest with a very long title that will not fit" },
+      { name: "Ash" },
+      { name: "Juniper", title: "Herbalist" },
+      { name: "Marrow", title: "Gravedigger and poet" },
+    ];
+    const list = Array.from({ length: n }, (_, i) => ({ ...sample[i % sample.length]!, name: i < sample.length ? sample[i]!.name : `${sample[i % sample.length]!.name} ${i + 1}` }));
+    const got = await table.personas!(list);
+    const said = "ticked" in got ? (got.ticked < list.length ? `ticked ${list[got.ticked]!.name}` : "ticked someone new") : `wrote: ${got.line}`;
+    Object.assign(window, { rosterPicked: said });
+    note(said);
+  });
+}
