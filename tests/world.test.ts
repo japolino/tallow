@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { bringBack, campaignBrief, endChapter, finaleEdges, handFor, keyFor, RINGS, sayItsSo, setUp, startCampaign } from "../src/engine/campaign.js";
 import { checkClues, getClue, keyKnown, keysKnown, layTogether, lean, newCasebook, slipNamed, type Clue } from "../src/engine/clues.js";
 import { goalNamed, payoffOf, projectSaid, sizeGoal, startProject, workOn } from "../src/engine/project.js";
-import { goingOn, hourNamed, hourSaid, learn, newSchedule, notches, runClock, stop, timeRead, timeTaken, type Appointment } from "../src/engine/schedule.js";
+import { goingOn, hourNamed, hourSaid, learn, newSchedule, notches, runClock, stop, timeRead, timeTaken, type Appointment, whatSaid } from "../src/engine/schedule.js";
 
 const night: Appointment[] = [
   { id: "meet", at: 24, where: "alley", what: "the masked four meet behind the tavern", lasts: 0.25 },
@@ -63,6 +63,17 @@ describe("things to do with time", () => {
     expect(hourNamed("until dawn", 21)).toBe(30);
     expect(hourSaid(24)).toBe("midnight");
     expect(hourSaid(25.5)).toBe("half past 1 in the morning");
+    // A quarter to noon is not "in the morning", nor a quarter to midnight "at night".
+    expect(hourSaid(11.75)).toBe("a quarter to noon");
+    expect(hourSaid(23.75)).toBe("a quarter to midnight");
+    expect(hourSaid(8.75)).toBe("a quarter to 9 in the morning");
+  });
+
+  test("what happens is said once: the hour the model wrote into it, and its full stop, are left off", () => {
+    expect(whatSaid("mercenaries search the barges at Raven Bridge at 7:15 pm, hunting for mana.")).toBe("mercenaries search the barges at Raven Bridge, hunting for mana");
+    expect(whatSaid("the enforcers ransack the Guild Bureau at 11:45 am")).toBe("the enforcers ransack the Guild Bureau");
+    expect(whatSaid("the guards change at midnight.")).toBe("the guards change");
+    expect(whatSaid("a bell rings at the three gates")).toBe("a bell rings at the three gates");
   });
 });
 

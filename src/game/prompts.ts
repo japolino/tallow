@@ -258,15 +258,22 @@ export function roamMessages(line: string, m: Moment, ctx: TellContext = {}, not
  * A night of free form (engine/free.ts, checkFreeWorld): the place it begins at and two things going on in it, written for
  * the card's world. Code checks it, keeps the clocks, and makes up whatever does not check from its stock.
  */
-export function freeWorldMessages(world: string, who = ""): Message[] {
+export function freeWorldMessages(world: string, who = "", asked = ""): Message[] {
   const system = [
     "You set up a night of free play in a tabletop roleplaying game: no set story, only the world, and the player does as they like in it.",
     'Answer with JSON only: {"place": {"name": "...", "said": "..."}, "threads": [{"kind": "...", "said": "...", "words": ["..."], "steps": ["...", "...", "..."]}, {...}]}.',
     '"place": where the night begins, somewhere that belongs in this world and has people about. "name": what it is called, at most six words, as you would say it aloud ("the Gilded Eel", "Mother Sarn\'s kitchen", "the night market under the bridge"). "said": what it is like there, in one or two sentences.',
     '"threads": two things going on in this world, of two different kinds, each something the player might come across tonight if they go about it. The player is never told of them: they are there to be found. "kind" is one of: rescue (someone to be saved), heist (something to be taken), mystery (something to be found out), journey (somewhere to get to, or someone to get out), hunt (someone or something to be tracked down), survival (something to be lived through). "said": the thing as talk going round, in one sentence, with no names the player has to know. "words": three to six words a player would use about it. "steps": three short sentences, what happens if it is left alone, one step at a time; the third is the end of it, and then it is over.',
     "The first thread is something for tonight; the second can wait a day or so. Plain words, no markdown. Everything must fit the world it is written for.",
+    "If the player says what they want tonight, or who they are, that comes first: the place and both threads grow out of it (how they came to be here, what they know of this world and what they do not, the trouble and the tone they ask for), set in this world. Keep to their idea; never put one of your own in its place.",
   ].join("\n");
-  const user = [world ? `The world:\n${world.slice(0, 1400)}` : "A world of your choosing.", who ? `The player: ${who.slice(0, 300)}` : ""].filter(Boolean).join("\n\n");
+  const user = [
+    world ? `The world:\n${world.slice(0, 1400)}` : "A world of your choosing.",
+    asked ? `What the player asked for tonight, in their words: "${asked.slice(0, 700)}"` : "",
+    who ? `Who the player is, in their words: "${who.slice(0, 700)}"` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return [
     { role: "system", content: system },
     { role: "user", content: user },

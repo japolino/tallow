@@ -268,6 +268,16 @@ export function hourSaid(h: number): string {
   if (min === 0) return `${name}${part}`;
   if (min === 30) return `half past ${name}${part}`;
   if (min === 15) return `a quarter past ${name}${part}`;
-  if (min === 45) return `a quarter to ${whole + 1 === 24 ? "midnight" : whole + 1 === 12 ? "noon" : `${(whole + 1) % 12}`}${part}`;
+  // A quarter to noon or to midnight is said by the hour it comes to, with no part of the day after it.
+  if (min === 45) return whole + 1 === 24 ? "a quarter to midnight" : whole + 1 === 12 ? "a quarter to noon" : `a quarter to ${(whole + 1) % 12}${part}`;
   return `${name}:${String(min).padStart(2, "0")}${part}`;
 }
+
+/**
+ * What happens, as a model wrote it, said after the hour the narrator has already given: without the hour written in it
+ * again ("... at 7:15 pm") and without its own full stop, so the line reads once.
+ */
+export const whatSaid = (what: string): string =>
+  what
+    .replace(/\s+(?:at|by|around)\s+(?:\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)|noon|midnight)(?=\s*(?:[,.;!]|$))/gi, "")
+    .replace(/[\s.!;,]+$/, "");

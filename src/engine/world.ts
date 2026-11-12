@@ -16,7 +16,7 @@ import { ATTITUDE_STEP, attitudeIndex, favourDone, hearLine, hunch, PATIENCE, li
 import { goalNamed, PAYOFF_DOES, payoffOf, projectSaid, startProject, workOn, type Payoff, type Project } from "./project.js";
 import { doubt } from "./clues.js";
 import { kitFight } from "./kit.js";
-import { goingOn, hourSaid, hoursNamed, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken, type TimeRead } from "./schedule.js";
+import { goingOn, hourSaid, hoursNamed, learn, newSchedule, nextAt, runClock, stoppedAt, type Appointment, timeRead, timeTaken, type TimeRead, whatSaid } from "./schedule.js";
 import { asksTable, feel, spoke, spotlight, talkItOver, vote, whatTheySay, type Fellow, type Said, type Style } from "./seats.js";
 import { hasPower, shut, statOf, TARGETS, WAY_STATS, WAYS, type Moment, type Stat, type Way } from "./moment.js";
 import type { Tier } from "./moment.js";
@@ -161,12 +161,12 @@ export function worldArrive(t: Trip, stop: RoadStop, since?: number): Told {
     // What began here on your way is said by the clock (worldClock), so only what was going on before is said now.
     // Said as going on only if it began before you set out: one that began on your way was said by the clock already.
     const began = (a: Appointment): number => (a.daily ? nextAt(a, trip.sheet.hour - (a.lasts ?? 0.25)) : trip.schedule!.happened.find((h) => h.id === a.id)?.at ?? a.at);
-    for (const a of goingOn(trip.schedule, stop.id, trip.sheet.hour)) if (since === undefined || began(a) <= since) lines.push(`Right now, here: ${a.what}.`);
+    for (const a of goingOn(trip.schedule, stop.id, trip.sheet.hour)) if (since === undefined || began(a) <= since) lines.push(`Right now, here: ${whatSaid(a.what)}.`);
     // What the other side did here while you were elsewhere, and nobody saw: you come too late, and find its signs.
     const s = trip.schedule;
     const missed = s.happened.filter((h) => (since === undefined || h.at <= since) && !s.known.includes(h.id)).map((h) => ({ h, a: s.appointments.find((x) => x.id === h.id) })).filter((x) => x.a?.where === stop.id && !goingOn(s, stop.id, trip.sheet.hour).some((g) => g.id === x.h.id));
     for (const { h, a } of missed) {
-      lines.push(`You come too late for it. At ${hourSaid(h.at)}, here: ${a!.what}. It is done, and you can see the signs of it.`);
+      lines.push(`You come too late for it. At ${hourSaid(h.at)}, here: ${whatSaid(a!.what)}. It is done, and you can see the signs of it.`);
       trip = { ...trip, schedule: learn(trip.schedule!, h.id) };
     }
   }
@@ -232,14 +232,14 @@ export function worldClock(t: Trip, from: number, to: number): Told {
   let schedule = r.schedule;
   const lines = r.events
     .map((e) => {
-      if (e.a.where === here) return `At ${hourSaid(e.at)}, here: ${e.a.what}.`;
+      if (e.a.where === here) return `At ${hourSaid(e.at)}, here: ${whatSaid(e.a.what)}.`;
       // Splitting up (4.3): the narrator cuts to a player who is there, and what they saw is yours to know.
       const there = away.find((f) => f.at === e.a.where);
       if (there) {
         schedule = learn(schedule, e.a.id);
-        return `Cut to ${there.name}, at ${placeName(t.adv, e.a.where)}: at ${hourSaid(e.at)}, ${e.a.what}.`;
+        return `Cut to ${there.name}, at ${placeName(t.adv, e.a.where)}: at ${hourSaid(e.at)}, ${whatSaid(e.a.what)}.`;
       }
-      return e.known ? `At ${hourSaid(e.at)}, at ${placeName(t.adv, e.a.where)}: ${e.a.what}. The flame passes the notch.` : "";
+      return e.known ? `At ${hourSaid(e.at)}, at ${placeName(t.adv, e.a.where)}: ${whatSaid(e.a.what)}. The flame passes the notch.` : "";
     })
     .filter(Boolean);
   // What happens out of sight is not told, but you feel the other side has moved.

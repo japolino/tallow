@@ -17,7 +17,7 @@ import { calledRead, freeOpen, NARRATOR_LOST } from "../src/game/free.js";
 import { asksForRoll } from "../src/engine/project.js";
 import { standIns } from "../src/game/minds.js";
 import { parseRisk, parseTell, ROAM_TELL, roamMessages } from "../src/game/prompts.js";
-import { FREE_OFFER, GOODNIGHT, greeting, sit, wantsFree, type Kept } from "../src/game/session.js";
+import { FREE_OFFER, freePremise, GOODNIGHT, greeting, sit, wantsFree, writeFreeWorld, type Kept } from "../src/game/session.js";
 
 const MAREN: CardInfo = { name: "Maren", description: "Maren Vell is a ferrywoman of thirty who keeps the crossing at Dunmore." };
 
@@ -365,6 +365,38 @@ describe("a sitting in free form", () => {
     expect(risky).toContain("I ask the bouncer to let me in");
     expect(log.filter((l) => l.startsWith("[die]")).length).toBe(1);
     expect(log.some((l) => l.startsWith("[page] The narrator's notebook") && l.includes("You are at the Drowned Lantern"))).toBe(true);
+  });
+
+  test("what you asked for and who you are go to the setup, and what you asked for is kept all night", async () => {
+    const log: string[] = [];
+    const d = { now: null as Director | null };
+    const premise = "No story, I just want to go around the places. I was isekai'd here and know nothing, and the pretty monster girls are not what they look like.";
+    const who = "A total normie office worker named Ken, completely clueless about this world";
+    const lines = [premise, who, "I look around", "done for tonight"];
+    const sent: string[] = [];
+    const ask = async (m: { role: string; content: string }[], role: string): Promise<string> => (role === "builder" && sent.push(m.map((x) => x.content).join("\n")), role === "builder" ? JSON.stringify(WRITTEN) : "");
+    let saved: Trip | null = null;
+    await sit({ card: MAREN, seed: "free-premise", table: tableFor(lines, log, d), minds, ask, started: (x) => (d.now = x), save: (t) => t && (saved = t) });
+    // The place and the rumours are written from both, not from the card alone.
+    expect(sent.length).toBe(1);
+    expect(sent[0]).toContain("isekai'd here and know nothing");
+    expect(sent[0]).toContain("named Ken");
+    // The premise stays in front of the narrator at every place, and is kept with the night.
+    expect(freeOf(saved!)!.premise).toContain("not what they look like");
+    expect(sceneSituation(freeOf(saved!)!)).toContain("isekai'd");
+  });
+
+  test("a setup that does not check is asked for once more before the stock is used", async () => {
+    let asked = 0;
+    const draft = await writeFreeWorld(async () => (asked++ === 0 ? "" : JSON.stringify(WRITTEN)), "Dunmore", "a courier", "retry", 19, "a quiet night");
+    expect(asked).toBe(2);
+    expect(draft.place?.name).toBe("the Drowned Lantern");
+  });
+
+  test("a bare ask for free play is no premise", () => {
+    expect(freePremise("free play")).toBe("");
+    expect(freePremise("no story, just let me roam")).toBe("");
+    expect(freePremise("I want to wander as a lost knight looking for home")).toContain("lost knight");
   });
 
   test("a sitting left in free form is taken up again where it was", async () => {

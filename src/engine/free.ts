@@ -64,6 +64,8 @@ export interface FreeWorld {
   log: string[];
   /** The world it is all in, from the card, in a few lines: so the narrator says every place as part of it. */
   setting?: string;
+  /** What the player asked for when they sat down, in their words: the night is theirs, so the narrator keeps it in mind all night. */
+  premise?: string;
 }
 
 /** How many things that happened the narrator keeps in mind. */
@@ -207,7 +209,9 @@ export function sceneSituation(w: FreeWorld): string {
   const lately = w.log.length ? ` What has just happened: ${w.log.join(" ")}` : "";
   // The place first, so a prompt that cuts the situation short still has it; the world it is in after.
   const world = w.setting ? ` The world it is in: ${w.setting}` : "";
-  return `Here: ${p.said} Nothing here stands in the player's way: they are free to do as they like, and only something that could go wrong is a try.${lately}${goingOn(w)}${world}`;
+  // What the player sat down for comes before what is going on, so the night keeps to it.
+  const premise = w.premise ? ` What the player asked for tonight, in their words, which the night keeps to: "${w.premise}"` : "";
+  return `Here: ${p.said} Nothing here stands in the player's way: they are free to do as they like, and only something that could go wrong is a try.${lately}${premise}${goingOn(w)}${world}`;
 }
 
 /** The place you are at, standing as the free world now is: its situation told afresh, nothing else changed. */
@@ -250,7 +254,7 @@ export function faceScene(t: Trip): Trip {
 }
 
 /** An adventure that is no story: only the world, the place you start at, and the threads in the air. */
-export function freeAdventure(o: { seed: string; who: string; world: string; start: { name: string; said: string }; startHour: number; kit?: WorldKit; content?: ContentSettings; companion?: Companion; threads?: Thread[]; setting?: string }): Adventure {
+export function freeAdventure(o: { seed: string; who: string; world: string; start: { name: string; said: string }; startHour: number; kit?: WorldKit; content?: ContentSettings; companion?: Companion; threads?: Thread[]; setting?: string; premise?: string }): Adventure {
   const start: FreePlace = { id: "place-1", name: o.start.name, said: o.start.said };
   const seedNum = [...o.seed].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7);
   return {
@@ -272,7 +276,7 @@ export function freeAdventure(o: { seed: string; who: string; world: string; sta
     won: "",
     ...(o.kit ? { kit: o.kit } : {}),
     ...(o.content ? { content: o.content } : {}),
-    free: { here: start.id, places: [start], threads: o.threads ?? stockThreads(o.seed, o.startHour), log: [], ...(o.setting ? { setting: o.setting } : {}) },
+    free: { here: start.id, places: [start], threads: o.threads ?? stockThreads(o.seed, o.startHour), log: [], ...(o.setting ? { setting: o.setting } : {}), ...(o.premise ? { premise: o.premise } : {}) },
   };
 }
 

@@ -24,7 +24,7 @@ import type { Sheet } from "../engine/moment.js";
 import { abilityRule, levelTaken } from "../engine/tell-adventure.js";
 import { drawRecipe, familiesFor, familiesSaid, FAMILY_SAID, storyRead, type Family, type Recipe, type StoryAnswer } from "../content/tropes.js";
 import { buildAdventure, FRIEND, modernCard } from "./build.js";
-import { cardText, courtable, looksLikeWorld, type CardInfo } from "./card.js";
+import { cardText, courtable, looksLikeWorld, WORLD_SURE, worldScore, type CardInfo } from "./card.js";
 import { KIND, MINOR, SETTING } from "./decisions.js";
 import { campaignBy, contentBy, someoneNewBy } from "./meaning.js";
 import { abilityCard, direct, type Director, type Table } from "./director.js";
@@ -66,17 +66,38 @@ export async function writeFront(ask: Ask | null, world: string, stock: Front, a
 
 /**
  * A night of free form for a card's world (engine/free.ts): the place it begins at and two threads, written by a model
- * and checked by code, or the stock threads and no place.
+ * and checked by code, or the stock threads and no place. An answer that does not check (empty, blocked, not JSON) is
+ * asked for once more while there is time: the stock is a last resort, since it knows nothing of the card or the player.
  */
-export async function writeFreeWorld(ask: Ask | null, world: string, who: string, seed: string, hour: number): Promise<FreeDraft> {
+export async function writeFreeWorld(ask: Ask | null, world: string, who: string, seed: string, hour: number, asked = ""): Promise<FreeDraft> {
   if (!ask) return checkFreeWorld(null, seed, hour);
-  try {
-    const text = await Promise.race([ask(freeWorldMessages(world, who), "builder"), new Promise<string>((_, no) => setTimeout(() => no(new Error("slow")), FREE_WORLD_MS))]);
-    return checkFreeWorld(firstJson(text), seed, hour);
-  } catch {
-    return checkFreeWorld(null, seed, hour);
+  const until = Date.now() + FREE_WORLD_MS;
+  for (let tries = 0; tries < 2 && Date.now() < until - 5000; tries++) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const slow = new Promise<string>((_, no) => (timer = setTimeout(() => no(new Error("slow")), Math.max(1000, until - Date.now()))));
+      const draft = checkFreeWorld(firstJson(await Promise.race([ask(freeWorldMessages(world, who, asked), "builder"), slow])), seed, hour);
+      if (draft.place) return draft;
+    } catch {
+      // Too slow, or no answer: asked again below if there is time.
+    } finally {
+      clearTimeout(timer);
+    }
   }
+  return checkFreeWorld(null, seed, hour);
 }
+
+/**
+ * What the player asked for when they chose free form, kept as the night's premise: only a line that says more than
+ * "free play" or "just let me roam" is one.
+ */
+export const freePremise = (line: string): string => {
+  const s = line.replace(/\s+/g, " ").trim();
+  const said = s.toLowerCase().split(/[^\p{L}']+/u).filter((w) => w && !FREE_ASK_WORDS.has(w));
+  return said.length >= 3 ? s.slice(0, 700) : "";
+};
+/** The words of a bare ask for free form, which say nothing of what the night is to be. */
+const FREE_ASK_WORDS = new Set("no story stories free freely form play playing just let me us i i'd i'm want wanna would like to roam wander explore around sandbox open world the a an please at all only thanks ok okay yes sure".split(" "));
 
 /** Whether a line asks for a campaign: one long threat across many stories. */
 export const wantsCampaign = (line: string): boolean => /\b(campaign|long game|many stories|big bad)\b/i.test(line) && !/\b(no|not|without|don'?t want|rather not)\b[^.,;]{0,24}\b(campaign|long game|many stories|big bad)\b/i.test(line);
@@ -158,6 +179,10 @@ export const freeWorldName = (card: CardInfo): string => (card.world ? card.name
 /** Asked when a story is over. */
 export const anotherAsk = (offered: readonly Family[]): string[] => [`Another story? Write what kind: ${familiesSaid(offered)}. Or no story at all, only the world. Or write that I should choose, or that you are done for tonight.`];
 export const storyAgain = (offered: readonly Family[], canStop: boolean): string => `Which kind of story? Write one: ${familiesSaid(offered)}. Or write that I should choose${canStop ? ", or that you are done for tonight" : ""}.`;
+/** Whether a line asks for a romance. */
+export const asksRomance = (line: string): boolean => /\b(romance|romantic|court(?:ing|ship)?|woo(?:ing)?|in love|love story|date|dating)\b/i.test(line);
+/** Said when a romance is asked for and the card offers none: someone in it reads as young (card.ts, `courtable`). */
+export const NO_ROMANCE = "Not a romance, not with this card: someone in it reads as young, so nobody in its stories is courted.";
 export const GOODNIGHT = ["Then that is all for tonight. The candles can burn down without us.", "Come back when you want another story. I will keep your place at the table."];
 
 /** What the narrator says when the story is drawn: the kind, and what it turned out to be. */
@@ -202,6 +227,8 @@ async function worldCard(card: CardInfo, minds: Minds, reading: <T>(p: Promise<T
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<null>((r) => (timer = setTimeout(() => r(null), KIND_MS)));
   const kind = await reading(Promise.race([asked, timeout])).finally(() => clearTimeout(timer));
+  // Words that plainly describe a world (a game, a simulation, a narrator of many) are not overruled by a model.
+  if (kind === "person" && worldScore(card) >= WORLD_SURE) return true;
   return kind === "world" ? true : kind === "person" ? false : guess;
 }
 
@@ -295,11 +322,15 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
   // Whether the card is of our own day, asked of the Decision model while the narrator greets you; else its words decide.
   const setting = o.minds.pick ? o.minds.pick(SETTING.question, cardText(card, 3000), SETTING.options, SETTING.task).catch(() => null) : Promise.resolve(null);
 
-  /** Who you are: kept from before, or written now. */
-  const whoYouAre = async (someoneNew: boolean): Promise<Hero> => {
+  /**
+   * Who you are: kept from before, or written now. What you wrote is handed on (`written`) the moment you write it, so the
+   * setup can be written from it while it is read into your sheet.
+   */
+  const whoYouAre = async (someoneNew: boolean, written?: (line: string) => void): Promise<Hero> => {
     if (kept && !someoneNew) return heroNow(kept.hero);
     await table.say([WHO_ASK]);
     const w = await table.write();
+    written?.(w.line);
     const heroRead = o.minds.hero(w.line, undefined, card.world ? cardText(card, 700) : "");
     await w.given;
     const hero = await reading(heroRead);
@@ -328,8 +359,13 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     // What the player asked for, and the campaign so far, go to the builder so the story is theirs and one chapter of
     // it: the first chapter of a campaign begun now waits for its big bad, so it is built as part of it.
     const briefed: Promise<string | undefined> = frontAsked ? frontAsked.then(campaignBrief) : Promise.resolve(kept?.campaign ? campaignBrief(kept.campaign) : undefined);
-    const build = briefed.then((brief) => buildAdventure(o.ask, card, base, seed, modern, { asked: askedFor, ...(brief ? { campaign: brief } : {}) })).then((adv) => fitted(adv)).then((adv) => (o.built?.(adv), adv));
-    const hero = await whoYouAre(someoneNew);
+    // The words are written once you have said who you are, from that and from what you asked for, so the story suits
+    // you; they are written while your words are read into your sheet.
+    const building: { p?: Promise<Adventure> } = {};
+    const startBuild = (who: string): Promise<Adventure> =>
+      (building.p = briefed.then((brief) => buildAdventure(o.ask, card, base, seed, modern, { asked: askedFor, ...(who ? { who } : {}), ...(brief ? { campaign: brief } : {}) })).then((adv) => fitted(adv)).then((adv) => (o.built?.(adv), adv)));
+    const hero = await whoYouAre(someoneNew, startBuild);
+    const build = building.p ?? startBuild(hero.who);
     const carry = kept && !someoneNew ? kept.carry : [];
     if (frontAsked) {
       const started = await table.wait("deal", frontAsked);
@@ -374,16 +410,21 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
    * Free form (engine/free.ts, game/free.ts): no story, only the world. Played until you are done for tonight; a thread
    * pulled on is played as a story, and then you are back where you were. Who you are is kept as it goes.
    */
-  const playFree = async (someoneNew: boolean, resume?: Trip): Promise<void> => {
+  const playFree = async (someoneNew: boolean, resume?: Trip, askedFor = ""): Promise<void> => {
     const world = await setting;
     const modern = world === "now" ? true : world === "then" ? false : undefined;
     const kit = kitFor(card, modern ?? modernCard(card), content);
     const seed = `${o.seed}:free:${stories}`;
     // The world it is all in goes to the narrator with every place: the card's scenario first, then who it is about.
     const worldSaid = plainCard([card.scenario ?? "", card.description ?? ""].filter(Boolean).join(" "), 700);
-    // The place it begins at and the threads in the air are written for the card's world while you say who you are.
-    const drafted = resume ? null : writeFreeWorld(o.ask, card.world ? cardText(card, 1200) : worldSaid, "", seed, 19);
-    let hero = await whoYouAre(someoneNew);
+    // What you asked for when you sat down is the night's premise, kept all night; a bare "free play" is not one.
+    const premise = freePremise(askedFor);
+    // The place it begins at and the threads in the air are written for the card's world, for what you asked for and
+    // who you said you are: begun the moment you write it, while it is read into your sheet.
+    const drafting: { p?: Promise<FreeDraft> } = {};
+    const startDraft = (who: string): Promise<FreeDraft> => (drafting.p = writeFreeWorld(o.ask, card.world ? cardText(card, 1200) : worldSaid, who, seed, 19, premise));
+    let hero = await whoYouAre(someoneNew, resume ? undefined : startDraft);
+    const drafted = resume ? null : (drafting.p ?? startDraft(hero.who));
     if (!kept || someoneNew) kept = { hero, played: kept && !someoneNew ? kept.played : [], carry: [] };
     const name = freeWorldName(card);
     // The card's own character is with you, as in a story; a world card is only where you are.
@@ -392,7 +433,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     const begun = (draft: FreeDraft): Trip => {
       const scenario = plainCard(card.scenario ?? "", 300);
       const start = draft.place ?? { name: START_NAME, said: scenario || `Somewhere in ${name}, as the night begins.` };
-      const adv = freeAdventure({ seed, who: hero.who, world: name, start, startHour: 19, kit, setting: worldSaid, threads: draft.threads, ...(content ? { content } : {}), ...(companion ? { companion } : {}) });
+      const adv = freeAdventure({ seed, who: hero.who, world: name, start, startHour: 19, kit, setting: worldSaid, threads: draft.threads, ...(premise ? { premise } : {}), ...(content ? { content } : {}), ...(companion ? { companion } : {}) });
       const t = startTrip(adv, inKit({ ...hero.sheet, ...START }, kit), seed, hero.abilities ?? [], hero.level ?? 1);
       return worldBegin({ ...t, ...(hero.calling?.store ? { storeName: hero.calling.store } : {}), ...(kept?.payoffs?.length ? { payoffs: [...kept.payoffs] } : {}), ...(kept?.projects?.length ? { projects: kept.projects.map((p) => ({ ...p })) } : {}) });
     };
@@ -417,7 +458,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
         o.keepContent?.(c);
       },
       story: async (thread) => {
-        const done = await playStory(thread.family, thread.said, false, false);
+        // A thread pulled on keeps to what you sat down for.
+        const done = await playStory(thread.family, premise ? `${thread.said} The night began with the player asking: ${premise}` : thread.said, false, false);
         const h = kept?.hero ?? hero;
         hero = h;
         return { hours: Math.max(1, done.sheet.hour - done.adv.startHour), abilities: (h.abilities ?? []).map((a) => ({ ...a })), level: h.level ?? 1 };
@@ -500,7 +542,8 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
       answer = await pickBy(o.minds, first ? "What kind of story is it to be, or no story at all?" : "Another story, and what kind? Or no story at all? Or done for tonight?", w.line, options, () => (wantsFree(w.line) ? "free" : storyRead(w.line, offered, !first) ?? (someoneNew ? "any" : null)), reading);
       void table.aside();
       if (answer) break;
-      await table.say([storyAgain(offered, !first)]);
+      // A romance asked for where none is offered is told why, not only asked again.
+      await table.say([...(!offered.includes("romance") && asksRomance(w.line) ? [NO_ROMANCE] : []), storyAgain(offered, !first)]);
     }
     if (answer === "done") {
       await table.say(GOODNIGHT);
@@ -509,7 +552,7 @@ export async function sit(o: SittingOptions): Promise<Trip | null> {
     }
     if (answer === "free") {
       // Free form runs until you are done for tonight.
-      await playFree(someoneNew);
+      await playFree(someoneNew, undefined, askedFor);
       await table.say(GOODNIGHT);
       o.leave?.();
       return last;

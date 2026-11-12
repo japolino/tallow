@@ -139,6 +139,8 @@ function factsOf(adv: Adventure): string {
 export interface TableAsks {
   /** The player's own words when they chose the story ("a heist, to steal his heart-locket"). */
   asked?: string;
+  /** Who the player is, in their own words as they wrote it at the table: the story should suit them. */
+  who?: string;
   /** A campaign under way (campaign.ts), in a few lines: its big bad, the steps it has taken, what the players know. */
   campaign?: string;
 }
@@ -169,7 +171,8 @@ export function buildMessages(card: CardInfo, of: Trope | Adventure, asks: Table
   const user = [
     `THE CARD\n${cardText(card)}`,
     `THE STORY: ${story} ${role}`,
-    ...(asks.asked ? [`WHAT THE PLAYER ASKED FOR, in their words (fit the story to it as far as the fixed shape allows): "${asks.asked.slice(0, 300)}"`] : []),
+    ...(asks.asked ? [`WHAT THE PLAYER ASKED FOR, in their words (fit the story to it as far as the fixed shape allows: its premise, its tone, the trouble they expect): "${asks.asked.slice(0, 700)}"`] : []),
+    ...(asks.who ? [`WHO THE PLAYER IS, in their words (the story should suit them: who they are shapes what they know, how people meet them, and what trouble finds them): "${asks.who.slice(0, 700)}"`] : []),
     ...(asks.campaign ? [`THE CAMPAIGN SO FAR (this story is one chapter of it: tie it in, by its hand or what it is after; do not repeat a trouble the players already ended): ${asks.campaign}`] : []),
     `THE CLOCK: it starts at ${clock(adv.startHour)} and is lost at ${clock(adv.deadline.hour)} (${adv.deadline.name}). Write the times of day to fit.`,
     ...(!card.world && foreignName(card.name) ? [`The card writes the name "${card.name}" in another script. Add a key "called": the name in English letters, and use it everywhere.`] : []),

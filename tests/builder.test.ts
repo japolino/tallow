@@ -8,8 +8,8 @@ import { startMoment } from "../src/engine/moment.js";
 import { CLASSES, checkSpread, makeHero, rulesHero, STAT_BUDGET } from "../src/engine/hero.js";
 import { handPrice, budgetAt, stockOffer, STOCK_CALLINGS } from "../src/engine/abilities.js";
 import { applyWords, buildAdventure, buildMessages, fallbackAdventure, foreignName, FRIEND, SKELETONS, wordsOf } from "../src/game/build.js";
-import { cardText, courtable, looksLikeWorld, tropeRead, tropesFor, unmacro, type CardInfo } from "../src/game/card.js";
-import { greeting } from "../src/game/session.js";
+import { cardText, courtable, looksLikeWorld, tropeRead, tropesFor, unmacro, WORLD_SURE, worldScore, type CardInfo } from "../src/game/card.js";
+import { asksRomance, greeting, NO_ROMANCE } from "../src/game/session.js";
 import { firstJson, heroMessages, parseHero, parseRead, parseTell, readMessages, tellMessages } from "../src/game/prompts.js";
 import { BRIDGE, YOU } from "../preview/mock.js";
 
@@ -115,6 +115,20 @@ describe("an adventure built for a card", () => {
     expect((wordsOf(SKELETONS.courtship).deadline as Record<string, unknown>).name).toBeUndefined();
   });
 
+  test("a romance asked for is heard as one, so the narrator can say why there is none", () => {
+    expect(asksRomance("a romance. i got reincarnated as a mimic and i'm in love with the adventurer")).toBe(true);
+    expect(asksRomance("a heist, to take back the crown")).toBe(false);
+    expect(NO_ROMANCE).toContain("reads as young");
+  });
+
+  test("what the player asked for and who they said they are both go to the builder", () => {
+    const [, user] = buildMessages(MAREN, "rescue", { asked: "a rescue where everything is stranger than it looks", who: "an isekai'd office worker who knows nothing of this world" });
+    expect(user!.content).toContain("WHAT THE PLAYER ASKED FOR");
+    expect(user!.content).toContain("stranger than it looks");
+    expect(user!.content).toContain("WHO THE PLAYER IS");
+    expect(user!.content).toContain("isekai'd office worker");
+  });
+
   test("a name in another script is asked for in English letters too, and used", () => {
     expect(foreignName("하나")).toBe(true);
     expect(foreignName("Zoë O'Hara")).toBe(false);
@@ -170,6 +184,10 @@ describe("an adventure built for a card", () => {
     expect(looksLikeWorld(VALE)).toBe(true);
     expect(looksLikeWorld(MAREN)).toBe(false);
     expect(looksLikeWorld(HANA)).toBe(false);
+    // A game master's brief for a game is a world, sure enough that a model calling it one person is not believed.
+    const TOWER: CardInfo = { name: "Tower of Player V2", description: "## Simulation: Tower of Player\n### AI Responsibilities:\n- you control your character's speech.\n### Scenario:\n- Events: exploration, floor missions, guild politics.\n### Objectives for {{user}}:\n- Explore new floors.\n### Mechanics:\n- Combat: descriptive action." };
+    expect(worldScore(TOWER)).toBeGreaterThanOrEqual(WORLD_SURE);
+    expect(worldScore(MAREN)).toBeLessThan(WORLD_SURE);
     const world: CardInfo = { ...VALE, world: true };
     const [sys, user] = buildMessages(world, "rescue");
     expect(sys!.content).toContain("describes a world or scenario");

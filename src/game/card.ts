@@ -41,6 +41,10 @@ const WORLD_STRONG = [
   /\bnot (a|one) (single )?(character|person)\b/i,
   /\bnpcs?\b/i,
   /^\W{0,4}(factions?|locations?|places|races|regions|world ?(name|info|lore|atmosphere)|magic( system)?|major threats)\W{0,4}:/im,
+  // A card laid out as a game master's brief: "## Simulation: ...", "### Mechanics:", "### Objectives for {{user}}:".
+  /^\W{0,6}(simulation|world setting)\b/im,
+  /^\W{0,6}(game )?mechanics\W{0,4}:?\s*$/im,
+  /^\W{0,6}(objectives for (you|\{\{user\}\})|ai responsibilities)\W{0,4}:?\s*$/im,
 ];
 const WORLD_WEAK = [
   /\b(world|realm|kingdom|empire|city|town|village|academy|school|isle|island|continent|lands?|planet|station|colony|province|valley|universe|setting|scenario)\b/i,
@@ -61,12 +65,21 @@ const PERSON = [
  * user has one, is asked the same and its sure answer wins (session.ts); this is the answer without it.
  */
 export function looksLikeWorld(card: CardInfo): boolean {
+  return worldScore(card) >= WORLD_AT;
+}
+
+/** How far a card's words lean towards a world: at WORLD_AT it reads as one; at WORLD_SURE, no model's word overrules it. */
+export const WORLD_AT = 4;
+export const WORLD_SURE = 9;
+export function worldScore(card: CardInfo): number {
   const name = card.name;
   const text = [card.description, card.scenario, card.personality].map((s) => (s ?? "").slice(0, 4000)).join("\n");
   const strong = WORLD_STRONG.filter((r) => r.test(text)).length;
-  const weak = WORLD_WEAK.filter((r) => r.test(text)).length + (WORLD_WEAK[0]!.test(name) ? 2 : 0);
+  // A game's or a simulator's name ("Tower of Player V2", "... SIMULATOR") is a world's, never a person's.
+  const titled = /\b(v\d+(\.\d+)?|simulator|simulation|rpg)\b/i.test(name) ? 3 : 0;
+  const weak = WORLD_WEAK.filter((r) => r.test(text)).length + (WORLD_WEAK[0]!.test(name) ? 2 : 0) + titled;
   const person = PERSON.reduce((n, r) => n + Math.min(3, text.match(r)?.length ?? 0), 0);
-  return strong * 3 + weak - person >= 4;
+  return strong * 3 + weak - person;
 }
 
 export type Trope = "rescue" | "courtship";
