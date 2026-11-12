@@ -36,6 +36,8 @@ export interface SceneAsks {
   played?: readonly string[];
   /** Who goes with the player from the last story (lasting.ts, companyKept), in a line each. */
   company?: readonly string[];
+  /** [book] What the narrator's book has established at this table (engine/chapter.ts, establishedSaid), true in this story too. */
+  before?: string | undefined;
 }
 
 const SHAPE = {
@@ -82,6 +84,7 @@ export function sceneStoryMessages(card: CardInfo, asks: SceneAsks, content: Con
     asks.kit ? `HOW THIS WORLD PLAYS: ${asks.kit.slice(0, 600)}` : "",
     asks.played?.length ? `STORIES ALREADY PLAYED AT THIS TABLE (write a different one): ${asks.played.slice(-6).join("; ")}` : "",
     asks.company?.length ? `WHO GOES WITH THE PLAYER, won in an earlier story and still with them: ${asks.company.join("; ")}. They are with the player from the first scene, as themselves: nobody in the scenes is them.` : "",
+    asks.before ? `FROM THE NARRATOR'S BOOK OF EARLIER STORIES (true in this world; a new story may meet these people again, or not): ${asks.before.slice(0, 900)}` : "", // [book]
     `THE CLOCK: the story starts at ${clock(start)} and is lost at ${clock(start + STORY_HOURS)}. Write the times of day to fit.`,
     `THE PICTURES A SCENE'S CARD CAN HAVE: ${cards}.`,
     `THE STORY TO WRITE, as JSON with exactly these keys and exactly ${SCENES} scenes (one is shown):\n${JSON.stringify(SHAPE, null, 1)}`,

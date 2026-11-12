@@ -32,6 +32,8 @@ export interface SceneOptions {
   save?: (trip: Trip | null) => void;
   /** Who goes with the hero from the last story (engine/lasting.ts, companyKept): with them from the first scene. */
   company?: readonly Carried[];
+  /** [book] A chapter of the narrator's book is due (game/chapters.ts): at a rest, or when you stop for the night. Never waited for. */
+  chapter?: (trip: Trip, at: "rest" | "stop") => void;
 }
 
 /** What an earlier scene left you with, as a card on your side. */
@@ -191,6 +193,7 @@ export function directScenes(adv: Adventure, sheet: Sheet, seed: string, bare: T
     if (!r) return;
     trip = r.trip;
     keep();
+    if (!outOfTime(trip)) opts.chapter?.(trip, "rest"); // [book] the narrator writes while you rest; a rest that runs out the clock ends the story, and the ending's chapter says it
     table.clock(trip.sheet.hour);
     const carried = table.carry(before, trip.sheet, false);
     await table.hand?.(dice(), true);
@@ -263,6 +266,7 @@ export function directScenes(adv: Adventure, sheet: Sheet, seed: string, bare: T
       if (read.kind === "stop") {
         void table.aside();
         opts.save?.(trip);
+        opts.chapter?.(trip, "stop"); // [book]
         await table.say(LEFT_SAID);
         throw new LeftOff();
       }
