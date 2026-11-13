@@ -16,8 +16,11 @@ import type { Trip } from "./adventure.js";
 import { samePerson, whatStands } from "./lasting.js";
 import { standingSaid } from "./tell-lasting.js";
 
-/** When a chapter is written: at a rest, at the end of a story, when you stop in the middle of one, or after a night of free form. */
-export type ChapterAt = "rest" | "end" | "stop" | "night";
+/**
+ * When a chapter is written: at a rest, at the end of a story, when you stop in the middle of one, after a night of free
+ * form, or at a break in an ordinary chat that the book is kept beside (engine/chatbook.ts).
+ */
+export type ChapterAt = "rest" | "end" | "stop" | "night" | "chat";
 
 /** How far a story had got when its last chapter was written, so the next one is written only from what came after. */
 export interface ChapterMark {
@@ -31,6 +34,8 @@ export interface ChapterMark {
   visited: number;
   /** Lines the narrator had said by then (counted by whoever keeps them: game/chapters.ts). */
   told: number;
+  /** A chat's book: the last message written about, by its place in the chat (engine/chatbook.ts). */
+  upTo?: number;
 }
 
 /** Someone the chapter can be about: a person of a scene or a stop, or a companion. */
@@ -292,6 +297,8 @@ export interface BookChapter {
   hour: number;
   /** When it was written (ms since 1970). */
   written: number;
+  /** A chat's book: the last message of the chat this chapter was written from, by its place in the chat. */
+  upTo?: number;
 }
 
 /** The narrator's book for one hero at one card. */
@@ -324,20 +331,20 @@ export function readBook(raw: unknown, hero: string, card: string): Book {
     if (!x || typeof x !== "object" || typeof x.id !== "string") continue;
     const text = strs(x.text, CHAPTER_MAX, 40);
     if (!text.length) continue;
-    const at: ChapterAt = x.at === "end" || x.at === "stop" || x.at === "night" ? x.at : "rest";
+    const at: ChapterAt = x.at === "end" || x.at === "stop" || x.at === "night" || x.at === "chat" ? x.at : "rest";
     const p = x.picture;
     const picture: BookPicture | undefined =
       p && typeof p === "object" && typeof p.id === "string" && (p.status === "asked" || p.status === "ready" || p.status === "failed")
         ? { id: p.id, status: p.status, ...(typeof p.imageId === "string" ? { imageId: p.imageId } : {}), ...(typeof p.url === "string" ? { url: p.url } : {}), ...(typeof p.why === "string" ? { why: p.why.slice(0, 200) } : {}) }
         : undefined;
-    chapters.push({ id: x.id.slice(0, 80), n: chapters.length + 1, story: str(x.story, 200), storyTitle: str(x.storyTitle, 80), at, title: str(x.title, 60), text, facts: strs(x.facts, 200, FACTS_MAX), ...(typeof x.scene === "string" ? { scene: x.scene.slice(0, 400) } : {}), ...(picture ? { picture } : {}), hour: typeof x.hour === "number" && Number.isFinite(x.hour) ? x.hour : 0, written: typeof x.written === "number" ? x.written : 0 });
+    chapters.push({ id: x.id.slice(0, 80), n: chapters.length + 1, story: str(x.story, 200), storyTitle: str(x.storyTitle, 80), at, title: str(x.title, 60), text, facts: strs(x.facts, 200, FACTS_MAX), ...(typeof x.scene === "string" ? { scene: x.scene.slice(0, 400) } : {}), ...(picture ? { picture } : {}), hour: typeof x.hour === "number" && Number.isFinite(x.hour) ? x.hour : 0, written: typeof x.written === "number" ? x.written : 0, ...(typeof x.upTo === "number" && Number.isFinite(x.upTo) ? { upTo: Math.floor(x.upTo) } : {}) });
   }
   const marks: Record<string, ChapterMark> = {};
   for (const [k, m] of Object.entries(b.marks && typeof b.marks === "object" ? b.marks : {})) {
     const x = m as Partial<ChapterMark> | null;
     if (!x || typeof x !== "object") continue;
     const n = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
-    marks[k.slice(0, 200)] = { deeds: strs(x.deeds, 200, 12), scene: n(x.scene), lost: n(x.lost), visited: n(x.visited), told: n(x.told) };
+    marks[k.slice(0, 200)] = { deeds: strs(x.deeds, 200, 12), scene: n(x.scene), lost: n(x.lost), visited: n(x.visited), told: n(x.told), ...(typeof x.upTo === "number" && Number.isFinite(x.upTo) ? { upTo: Math.floor(x.upTo) } : {}) };
   }
   return { v: 1, hero: str(b.hero, 80) || hero, card: str(b.card, 120) || card, chapters: chapters.slice(-BOOK_MAX), marks };
 }

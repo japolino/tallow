@@ -18,6 +18,8 @@ const AT_SAID: Record<ChapterMaterial["at"], string> = {
   end: "The story has just ended. Set the chapter afterwards: the next morning, or days or a season later, among the people the story touched.",
   stop: "The player has stopped for the night in the middle of the story; it will go on another night. Set the chapter where the player's character is not acting, while they are away: with someone they met earlier and left behind, with the people working against them, or, when someone walks with the player, among those who walk with them, out of the player's hearing. Whichever it is, it is something the player did not see or hear, never the scene they stopped in told again.",
   night: "A night of wandering the world freely has ended; there was no set story. Set the chapter later, the next day or after, among the people the player met.",
+  // A chapter beside an ordinary chat is written by game/chatwriter.ts, in its own words.
+  chat: "A scene has just ended. Set the chapter a little later, or in between, among the people the player dealt with.",
 };
 
 /** The form a chapter is asked in: plain text with three marks, which a model holds to under any preset, unlike JSON. */
@@ -127,19 +129,24 @@ const within = <T>(p: Promise<T>, ms: number): Promise<T> =>
     );
   });
 
+/** What a chapter is asked with: the messages, and the preset's own settings when it is written under one. */
+export interface ChapterAsk {
+  messages: Message[];
+  parameters?: Record<string, unknown>;
+}
+
 /**
  * A chapter written by a model and checked by code, asked twice at most while there is time; null when no model can be
- * asked or neither answer is a chapter, with the reason (`onFail`). Under a voice it is written as the night's prose
- * is: the preset, the story so far, then this job last.
+ * asked or neither answer is a chapter, with the reason (`onFail`). What it is asked with is built by the caller.
  */
-export async function writeChapter(ask: Ask | null, m: ChapterMaterial, content: ContentSettings, voice: Voice | null, onFail?: (why: string) => void, ms = CHAPTER_MS): Promise<ChapterDraft | null> {
+export async function writeDraft(ask: Ask | null, build: () => ChapterAsk, content: ContentSettings, onFail?: (why: string) => void, ms = CHAPTER_MS): Promise<ChapterDraft | null> {
   if (!ask) return (onFail?.("no model to write it"), null);
   const until = Date.now() + ms;
   let last = "no answer";
   for (let tries = 0; tries < 2 && Date.now() < until - 5000; tries++) {
     try {
-      const job = chapterMessages(m, content, !!voice);
-      const said = await within(voice ? ask(laid(voice, job), "teller", voice.snapshot.parameters ? { parameters: voice.snapshot.parameters } : undefined) : ask(job, "teller"), Math.min(TRY_MS, until - Date.now()));
+      const job = build();
+      const said = await within(ask(job.messages, "teller", job.parameters ? { parameters: job.parameters } : undefined), Math.min(TRY_MS, until - Date.now()));
       const draft = checkChapter(parseChapter(said), (why) => (last = why));
       const fit = draft && allowedChapter(draft, content, (why) => (last = why));
       if (fit) return fit;
@@ -149,4 +156,21 @@ export async function writeChapter(ask: Ask | null, m: ChapterMaterial, content:
   }
   onFail?.(last);
   return null;
+}
+
+/**
+ * A chapter of the game's book. Under a voice it is written as the night's prose is: the preset, the story so far,
+ * then this job last.
+ */
+export function writeChapter(ask: Ask | null, m: ChapterMaterial, content: ContentSettings, voice: Voice | null, onFail?: (why: string) => void, ms = CHAPTER_MS): Promise<ChapterDraft | null> {
+  return writeDraft(
+    ask,
+    () => {
+      const job = chapterMessages(m, content, !!voice);
+      return voice ? { messages: laid(voice, job), ...(voice.snapshot.parameters ? { parameters: voice.snapshot.parameters } : {}) } : { messages: job };
+    },
+    content,
+    onFail,
+    ms,
+  );
 }

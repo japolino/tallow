@@ -75,6 +75,27 @@ function pretendDecide(m: Extract<ToBackend, { type: "decide" }>): Record<string
   return { pick: { type: "choice", choice, confidence: 0.9, probabilities: { [choice]: 0.9 } } };
 }
 
+/** [chat book] The pretend chat, the pretend host's storage for books, and what its model writes when asked for a chapter. */
+const PRETEND_CHAT = [
+  "The inn is warm and nearly empty. The innkeeper looks up from the fire.",
+  "I shake the rain off my coat and ask about the road north.",
+  "She tells you the bridge is out, and pours you a cup without being asked.",
+  "I thank her, pay in silver, and go up to bed.",
+  "The stair creaks under you. Below, the fire is banked for the night.",
+].map((text, index) => ({ index, id: `m${index}`, you: index % 2 === 1, name: index % 2 === 1 ? "Ash" : "Marta", text }));
+const books = new Map<string, unknown>();
+const PRETEND_CHAPTER = [
+  "TITLE: What the Cook Heard",
+  "",
+  "Marta banked the kitchen fire and did not go to bed. The stranger had paid in silver and asked about the north road, and nobody asked about the north road who meant to come back by it.",
+  "",
+  "\"He'll be gone by morning,\" the stable boy said from the doorway. Marta said that was his business, and set a loaf aside in a cloth all the same.",
+  "",
+  "FACTS:",
+  "- Marta has set bread aside for the stranger's road.",
+  "PICTURE: An old cook sits by a banked kitchen fire at night, a wrapped loaf on the table beside her.",
+].join("\n");
+
 const listeners: ((m: unknown) => void)[] = [];
 const reply = (m: ToFrontend): void => void setTimeout(() => listeners.forEach((f) => f(m)), 30);
 const actions: { label: string; click: () => void }[] = [];
@@ -94,6 +115,14 @@ const ctx = {
       reply({ type: "models", id: m.id, state: { ...settings, llm: PRETEND_LLM, decisions: DECIDE ? [{ id: "d1", name: "Quick reads", model: "jev-small", isDefault: true }] : null, embeddings: DECIDE ? [{ id: "e1", name: "Local embedder", model: "embed-small", isDefault: true }] : [] } });
     } else if (SCENES && m.type === "ask" && m.role === "builder" && m.messages.some((x) => x.content.includes("THE STORY TO WRITE"))) reply({ type: "answer", id: m.id, text: JSON.stringify(STOCK_SCENES_RAW) });
     else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
+    // [chat book] A pretend chat to keep a book beside (?book=1 shows its tab): its messages, who it is between, the
+    // book's storage, and a chapter for the asking.
+    else if (m.type === "chat") reply({ type: "chat", id: m.id, lines: PRETEND_CHAT.filter((l) => l.index > m.after), earlier: PRETEND_CHAT.filter((l) => l.index <= m.after).slice(-3), last: PRETEND_CHAT.length - 1 });
+    else if (m.type === "who") reply({ type: "who", id: m.id, card: { name: CARD.name, about: "" }, hero: { name: "Ash", who: "a courier" } });
+    else if (m.type === "preset") reply({ type: "preset", id: m.id, snapshot: null });
+    else if (m.type === "book") reply({ type: "book", id: m.id, book: books.get(m.file) ?? null });
+    else if (m.type === "book-keep") (books.set(m.file, m.book), reply({ type: "book-kept", id: m.id }));
+    else if (m.type === "ask" && m.role === "teller" && m.messages.some((x) => x.content.includes("Stop the roleplay here"))) setTimeout(() => reply({ type: "answer", id: m.id, text: PRETEND_CHAPTER }), 1500);
     else reply({ type: "error", id: m.id, error: "no model in the pretend host" });
   },
   onBackendMessage(f: (m: unknown) => void) {
@@ -109,13 +138,28 @@ const ctx = {
     },
   },
   ui: {
-    /** The drawer tab, shown on the right of the page (?drawer=1) so it can be looked at. */
-    registerDrawerTab() {
+    /** A drawer tab, shown on the right of the page so it can be looked at: Tallow's with ?drawer=1, the chat's book with ?book=1. */
+    registerDrawerTab(o: { id: string }) {
+      const book = o.id === "tallow-book";
       const root = document.createElement("div");
-      root.id = "drawer";
-      Object.assign(root.style, { position: "fixed", top: "0", right: "0", width: "360px", height: "100%", overflow: "auto", background: "#1d1a17", color: "#e8e0d4", zIndex: "2", display: new URLSearchParams(location.search).get("drawer") === "1" ? "" : "none" });
+      root.id = book ? "bookdrawer" : "drawer";
+      const shown = new URLSearchParams(location.search).get(book ? "book" : "drawer") === "1";
+      Object.assign(root.style, { position: "fixed", top: "0", right: "0", width: "min(360px, 100%)", height: "100%", overflow: "auto", background: "#1d1a17", color: "#e8e0d4", zIndex: "2", display: shown ? "" : "none" });
       document.body.appendChild(root);
-      return { root, tabId: "tallow", setTitle() {}, setShortName() {}, setBadge() {}, activate() {}, destroy: () => root.remove(), onActivate: () => () => {} };
+      return {
+        root,
+        tabId: o.id,
+        setTitle() {},
+        setShortName() {},
+        setBadge(t: string | null) {
+          root.dataset.badge = t ?? "";
+        },
+        activate() {
+          root.style.display = "";
+        },
+        destroy: () => root.remove(),
+        onActivate: (f: () => void) => (shown && setTimeout(f, 50), () => {}),
+      };
     },
     registerInputBarAction(o: { label: string }) {
       let click = (): void => {};

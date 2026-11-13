@@ -159,6 +159,17 @@ Then, once, three optional ones; the game is whole without them:
 
 Open a chat with a character, then press "Sit at the table" in the Tallow tab, or in the ⋯ (Extras) menu under the message box. A card that is a world or a scenario rather than one person is told apart: the story is set there, and your companion is someone of that world. The ✕ at the top leaves the table. Without the generation permission, or if the model does not answer, the game still plays: a made-up adventure with the card's character in it, and plain stand-in lines.
 
+### The book beside an ordinary chat
+
+You do not have to sit at the table. If you would rather write freeform, Tallow can keep the narrator's book beside any chat and leave the chat alone: nothing is read as a move, nothing is refused, and nothing is ever put into the chat. Open the **Book** tab in the drawer (or "The narrator's book" in the ⋯ menu under the message box):
+
+- **Write a chapter now** writes one from everything since the last chapter; say what it should be about if you like.
+- **Write by itself** has the narrator write one each time a scene is over: after a reply, a quick question to your Decision model (or the reader) asks whether your newest message moved the story on (time passed, somewhere else, something else begins). Off until you turn it on; each chapter is one generation on your model, written in the background.
+
+A chapter is not a recap. It is a few hundred words of what you did not see: what the others made of it, a little later or in between, with your character only as they see them. It is written under the chat's preset when Tallow may read it, and gets a picture when Inlay Illustrator is installed and pictures are on. A branch of a chat starts with the chapters it shares with the chat it came from.
+
+The first time, Lumiverse asks for two more permissions: **chats** and **chat_mutation**. Lumiverse gives an extension a chat's messages only under the permission that would also let it change them; Tallow only reads them.
+
 ## Run the preview
 
 ```

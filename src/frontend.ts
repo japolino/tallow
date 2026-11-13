@@ -24,6 +24,7 @@ import { voiceKeeper, type Keeper } from "./game/voice.js";
 import { PLAYER, roomTable } from "./game/roomtable.js";
 import { sit, type Kept } from "./game/session.js";
 import { createDrawer } from "./frontend/drawer.js";
+import { createChatBooks, type ChatBooks } from "./frontend/chatbooks.js";
 import { createOverlay, type Overlay } from "./frontend/overlay.js";
 import { music } from "./room/music.js";
 import { SOUND_FILES } from "./room/soundfiles.js";
@@ -75,8 +76,12 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       waiting.set(id, { done, fail });
       ctx.sendToBackend({ ...msg, id });
     });
+  // [chat book] The book kept beside an ordinary chat (frontend/chatbooks.ts); made below, once `ask` and `decide` are.
+  let books: ChatBooks | null = null;
   const offMsg = ctx.onBackendMessage((raw: unknown) => {
     const m = raw as ToFrontend;
+    // Not an answer to anything asked: the backend saying a reply was just written in a chat.
+    if (m && m.type === "replied") return void books?.replied(m.chatId, m.kind);
     const w = m && waiting.get(m.id);
     if (!w) return;
     waiting.delete(m.id);
@@ -321,7 +326,16 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     },
   });
 
+  // [chat book] Beside an ordinary chat: a tab of its own in the drawer, and a way to it from the chat's input bar.
+  books = createChatBooks(ctx, { call, ask, decide, sitting: () => !!room });
+  const bookAction = ctx.ui.registerInputBarAction({ id: "tallow-book", label: "The narrator's book", subtitle: "Chapters written beside this chat" });
+  const offBook = bookAction.onClick(() => books?.open());
+
   return () => {
+    offBook();
+    bookAction.destroy();
+    books?.dispose();
+    books = null;
     offClick();
     action.destroy();
     offDrawer();

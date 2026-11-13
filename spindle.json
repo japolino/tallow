@@ -13,7 +13,9 @@
     "world_books",
     "images",
     "personas",
-    "presets"
+    "presets",
+    "chats",
+    "chat_mutation"
   ],
   "entry_backend": "dist/backend.js",
   "entry_frontend": "dist/frontend.js",

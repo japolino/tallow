@@ -1,5 +1,6 @@
 /** Messages between Tallow's frontend (the room) and its backend (the card and the models). */
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
+import type { ChatLine } from "../engine/chatbook.js";
 import type { CardInfo } from "../game/card.js";
 import type { PresetSnapshot } from "../game/preset.js";
 import type { Message, Role } from "../game/prompts.js";
@@ -44,7 +45,11 @@ export type ToBackend =
   /** [book] One picture for a chapter, drawn by Inlay Illustrator; answered when it is ready or has failed. */
   | { type: "picture"; id: string; picture: { id: string; chatId: string; text: string } }
   /** [book] A picture's bytes, for a room that cannot load it by its address. */
-  | { type: "image"; id: string; imageId: string };
+  | { type: "image"; id: string; imageId: string }
+  /** [chat book] An ordinary chat as its book reads it (backend/chat.ts): the messages after a place in it, cleaned. Only read. */
+  | { type: "chat"; id: string; chatId: string; after: number }
+  /** [chat book] Who a chat is between: its card in a few words, and the player's persona. */
+  | { type: "who"; id: string; chatId: string };
 
 export type ToFrontend =
   | { type: "card"; id: string; card: CardInfo | null }
@@ -59,4 +64,8 @@ export type ToFrontend =
   | { type: "pictures"; id: string; ready: boolean }
   | { type: "picture"; id: string; picture: { imageId: string; url: string } | null; why?: string }
   | { type: "image"; id: string; data: string | null; mime?: string }
+  | { type: "chat"; id: string; lines: ChatLine[]; earlier: ChatLine[]; last: number }
+  | { type: "who"; id: string; card: { name: string; about: string }; hero: { name: string; who: string } }
+  /** [chat book] Not an answer (its id is empty): a reply has just been written in a chat, or a chat was branched. */
+  | { type: "replied"; id: ""; chatId: string; kind: string }
   | { type: "error"; id: string; error: string };
