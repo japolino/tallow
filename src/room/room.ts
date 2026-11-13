@@ -42,6 +42,7 @@ import {
   SphereGeometry,
   IcosahedronGeometry,
   SRGBColorSpace,
+  Box3,
   BufferAttribute,
   BufferGeometry,
   TorusGeometry,
@@ -1084,9 +1085,25 @@ class Room implements RoomHandle {
     }
 
     // On the table, out of the way of the map, your things and the narrator's dealing space, and inside the seat's view.
-    put("inkwell", scene, 0.86, 0, -0.64, -0.5);
-    put("tankard", scene, -0.89, 0, -0.62, 1.9);
-    put("bottle", scene, -0.53, 0, -0.69, 2.4);
+    // The bottle and the tankard stand in the far corner, outside the way the narrator's left arm goes to the candles:
+    // beside its elbow, the sleeve went through the bottle every evening.
+    const tall: [Object3D | null, number][] = [
+      [put("inkwell", scene, 0.86, 0, -0.64, -0.5), 0.1],
+      [put("tankard", scene, -0.87, 0, -0.6, 1.9), 0],
+      [put("bottle", scene, -0.95, 0, -0.7, 2.4), 0],
+    ];
+    // What stands tall on the table, for the narrator's sleeves to go round: these (the inkwell with its quill), and
+    // the brass stick with its candle.
+    const box = new Box3(), mid = new Vector3(), size = new Vector3();
+    this.narrator.avoid([
+      ...tall.flatMap(([o, more]) => {
+        if (!o) return [];
+        box.setFromObject(o).getCenter(mid);
+        box.getSize(size);
+        return [{ x: mid.x, z: mid.z, r: Math.min(0.08, Math.max(size.x, size.z) / 2), top: box.max.y + more }];
+      }),
+      { x: 0.7, z: -0.42, r: 0.035, top: 0.33 },
+    ]);
 
     put("scroll", scene, -0.8, 0, 0.36, 0.55);
 

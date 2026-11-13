@@ -20,7 +20,12 @@ const CARD_T = 0.0011;
 /** Cards on your side are a little larger, so their names can be read from your seat. */
 const SIDE_SCALE = 1.3;
 
-type Hands = Reacher & { close?(arm: number, on?: "pinch" | "grasp"): void; release?(arm: number): void };
+type Hands = Reacher & {
+  close?(arm: number, on?: "pinch" | "grasp"): void;
+  release?(arm: number): void;
+  /** Shape a hand for shuffling ("cards_hold", "cards_riffle", "cards_square"), where the hands have such movements. */
+  pose?(arm: number, clip: string, fade?: number, then?: string[]): boolean;
+};
 
 export interface CardHost {
   narrator: Hands;
@@ -49,6 +54,12 @@ const DOWN = (yaw = 0) => Q(0, yaw, Math.PI);
 /** The deck, in front of the narrator. */
 const DECK = V(0.0, 0, -0.655);
 const DECK_N = 14;
+/** Shuffling: how far each half's middle lies from the deck's, end to end across the table, their inner ends overlapping. */
+const RIFFLE_APART = CARD_H / 2 - 0.009;
+/** How high the thumbs draw the inner ends of the halves before letting the cards go. */
+const RIFFLE_ARCH = 0.026;
+/** And how high the cards stand in the bridge that ends a shuffle: bowed up between the hands, to fall flat one on another. */
+const BRIDGE_ARCH = 0.042;
 /** Where the two cards of a fork are laid, in front of the narrator, for you to pick from. */
 const FORK = [V(-0.075, 0.0012, -0.555), V(0.075, 0.0012, -0.555)];
 /** Where the rival's card lies: on the narrator's side, by its left hand as you see it, between its die tray and the map. */
@@ -70,6 +81,48 @@ export interface CardSpec {
   title?: string;
   /** What is written on it under the picture: what it is and what it does. */
   text?: string;
+}
+
+/**
+ * One card of the deck while it is being shuffled. It lies with its inner end (its own +z) toward the other half,
+ * and bends: the inner end is drawn up by a thumb, the rest held down on the table.
+ */
+class Leaf {
+  readonly mesh: Mesh;
+  private flat: Float32Array;
+  private bent = 0;
+  private bentFrom = 0;
+  /** Which half it is in (0 the one on your left, 1 on your right), its place in that half from the bottom, and its place in the whole deck once the halves are riffled together. */
+  half = 0;
+  j = 0;
+  k = 0;
+
+  constructor(mats: Material[]) {
+    const g = new BoxGeometry(CARD_W, CARD_T, CARD_H, 1, 1, 8);
+    this.flat = Float32Array.from(g.attributes.position!.array);
+    this.mesh = new Mesh(g, mats);
+    this.mesh.castShadow = this.mesh.receiveShadow = true;
+  }
+
+  /**
+   * Raise the inner end by `lift`: the card curves up to it from where the fingers hold it down (`from`, 0 its outer
+   * end and 1 its inner one), and draws back a little as it does.
+   */
+  bend(lift: number, from = 0.3): void {
+    if (lift === this.bent && from === this.bentFrom) return;
+    this.bent = lift;
+    this.bentFrom = from;
+    const pos = this.mesh.geometry.attributes.position!;
+    const back = Math.min(0.012, (lift * lift) / (CARD_H * (1 - from)) * 0.9);
+    for (let i = 0; i < pos.count; i++) {
+      const z = this.flat[i * 3 + 2]!;
+      const c = Math.max(0, z / CARD_H + 0.5 - from) / (1 - from);
+      pos.setY(i, this.flat[i * 3 + 1]! + lift * c * c);
+      pos.setZ(i, z - back * c * c);
+    }
+    pos.needsUpdate = true;
+    this.mesh.geometry.computeVertexNormals();
+  }
 }
 
 class Card {
@@ -212,7 +265,7 @@ export class TableCards {
   }
 
   /** The narrator's hand goes to a card, takes it, carries it to a pose, and lets go. */
-  private carry(card: Mesh, arm: number, to: () => Pose, dur: number, lift: number, o: { from?: () => Vector3; turn?: boolean } = {}): Step[] {
+  private carry(card: Mesh | Group, arm: number, to: () => Pose, dur: number, lift: number, o: { from?: () => Vector3; turn?: boolean } = {}): Step[] {
     const n = this.h.narrator;
     const at = o.from ?? (() => card.position);
     return [
@@ -627,8 +680,10 @@ export class TableCards {
   }
 
   /**
-   * While something is being worked out before the road can be dealt: the narrator shuffles the deck, cutting it
-   * and riffling the halves together, for as long as it takes. A cut always finishes before it stops.
+   * While something is being worked out before the road can be dealt: the narrator shuffles the deck, for as long as
+   * it takes. It turns the deck across the table, cuts it, sets the halves end to end, draws their inner ends up
+   * under its thumbs and lets the cards fall into each other, one from each half in turn; then pushes the halves
+   * together and squares them. A riffle always finishes before it stops.
    */
   async shuffle(until: Promise<unknown>): Promise<void> {
     let done = false;
@@ -639,56 +694,175 @@ export class TableCards {
     await Promise.resolve();
     if (done) return;
     const n = this.h.narrator;
-    const half = new Mesh(new BoxGeometry(CARD_W, CARD_T * (DECK_N / 2), CARD_H), this.deckFaces);
-    half.castShadow = true;
-    this.group.add(half);
-    n.watch(DECK, 3, this.h.now());
-    const left = (): Vector3 => DECK.clone().add(V(-0.07, 0.003, 0.01));
-    const right = (): Vector3 => DECK.clone().add(V(0.07, 0.003, 0.01));
-    while (!done) {
-      // Cut: the top half is lifted off with one hand and set down beside it.
-      half.position.copy(this.deckTop()).add(V(0, -CARD_T * (DECK_N / 4), 0));
-      half.quaternion.copy(this.deck.quaternion);
-      this.deck.scale.y = 0.5;
-      this.deck.position.y = (CARD_T * DECK_N) / 4;
-      await this.h.tracks.run([
-        ...this.carry(half, 1, () => ({ p: right(), q: UP(-0.1) }), 0.45, 0.04),
-        // Both hands bend the halves and riffle them together.
-        { dur: 0.25, tick: () => (n.reach(0, this.deck.position.clone().add(V(-0.02, 0.01, 0))), n.reach(1, half.position.clone().add(V(0.02, 0.01, 0)))) },
-        { dur: 0.16, begin: () => (n.close?.(0, "pinch"), n.close?.(1, "pinch")) },
-        this.fly(this.deck, () => ({ p: left(), q: UP(0.15) }), 0.3, 0.01, () => n.reach(0, this.deck.position.clone().add(V(-0.02, 0.01, 0)))),
-        {
-          dur: 0.7,
-          begin: () => sound.play("riffle", { x: DECK.x }),
-          tick: (u) => {
-            // The halves slide into each other.
-            this.deck.position.x = left().x + (DECK.x - left().x) * ease(u);
-            half.position.x = right().x + (DECK.x - right().x) * ease(u);
-            half.position.y = this.deck.position.y + Math.sin(Math.PI * u) * 0.006;
-            this.deck.rotation.y = 0.15 * (1 - u) + 0.05 * u;
-            half.rotation.y = -0.1 * (1 - u) + 0.05 * u;
-            n.reach(0, this.deck.position.clone().add(V(-0.025, 0.01, 0)));
-            n.reach(1, half.position.clone().add(V(0.025, 0.01, 0)));
-          },
-        },
-        {
-          dur: 0.1,
-          begin: () => {
-            this.deck.scale.y = 1;
-            this.deck.position.copy(DECK).setY((CARD_T * DECK_N) / 2);
-            this.deck.rotation.set(0, 0.05, 0);
-            half.position.set(0, -1, 0);
-            n.release?.(0);
-            n.release?.(1);
-          },
-        },
-        { dur: 0.2 },
-      ]);
+    const run = (steps: Step[]): Promise<void> => this.h.tracks.run(steps);
+    const HALF = DECK_N / 2;
+    const ACROSS = Math.PI / 2;
+    const leaves = Array.from({ length: DECK_N }, () => new Leaf(this.deckFaces));
+    // The two halves: 0 on your left, 1 on your right (the narrator's hands are numbered the same way).
+    const halves = [new Group(), new Group()];
+    for (const g of halves) {
+      g.visible = false;
+      this.group.add(g);
     }
-    n.reach(0, null);
-    n.reach(1, null);
-    this.group.remove(half);
-    half.geometry.dispose();
+    /** Lay the cards as they lie in the squared deck: the lower half, and the upper half resting on it, ready to be cut off. */
+    const stack = (): void => {
+      leaves.forEach((l, i) => {
+        l.half = i < HALF ? 0 : 1;
+        l.j = i % HALF;
+        l.k = 2 * l.j + l.half;
+        halves[l.half]!.add(l.mesh);
+        l.mesh.position.set(0, CARD_T * (l.j + 0.5), 0);
+        l.mesh.rotation.set(0, l.half ? -ACROSS : ACROSS, 0);
+        l.bend(0);
+      });
+      halves[0]!.position.copy(DECK).setY(0);
+      halves[1]!.position.copy(DECK).setY(CARD_T * HALF);
+      for (const g of halves) g.rotation.set(0, 0, 0);
+    };
+    const sign = (h: number): number => (h ? 1 : -1);
+    /** Where a hand is sent to hold its half: it stands on the half's outer end, and leaves the inner end in the open. */
+    const hold = (h: number): Vector3 => V(DECK.x + sign(h) * Math.max(0.075, Math.abs(halves[h]!.position.x - DECK.x) + 0.058), 0.024, DECK.z - 0.03);
+    const both = (at: (h: number) => Vector3): void => (n.reach(0, at(0)), n.reach(1, at(1)));
+    const there = (): boolean => n.reached(0) > 0.8 && n.reached(1) > 0.8;
+    /** How high a card's inner end is drawn: the upper cards a little more, so the half fans open under the thumb. */
+    const arch = (l: Leaf): number => RIFFLE_ARCH + l.j * 0.0009;
+    /** How high its inner end rests once it has fallen between the other half's cards. */
+    const rest = (l: Leaf): number => CARD_T * (l.k - l.j);
+    const over = (h: number): Vector3 => DECK.clone().add(V(sign(h) * 0.062, 0.03, -0.03));
+
+    n.watch(DECK, 3, this.h.now());
+    try {
+      // Both hands to the deck, and turn it across the table.
+      await run([
+        { dur: 0.2, tick: () => both(over), until: there, patience: 1.4 },
+        {
+          dur: 0.34,
+          begin: () => sound.play("slide", { x: DECK.x, gain: 0.5 }),
+          tick: (u) => {
+            this.deck.rotation.y = 0.05 + (ACROSS - 0.05) * ease(u);
+            both(over);
+          },
+        },
+        {
+          dur: 0,
+          begin: () => {
+            stack();
+            this.deck.visible = false;
+            for (const g of halves) g.visible = true;
+          },
+        },
+      ]);
+      while (!done) {
+        const L = halves[0]!, R = halves[1]!;
+        // The cut: one hand lifts the upper half off and sets it down beyond the end of the lower, which the other draws aside.
+        await Promise.all([
+          run(this.carry(R, 1, () => ({ p: DECK.clone().add(V(RIFFLE_APART, 0, 0)), q: UP(-0.035) }), 0.4, 0.03, { from: () => R.position.clone().add(V(0.014, 0.004, 0)) })),
+          run([
+            { dur: 0.15, tick: () => n.reach(0, hold(0)), until: () => n.reached(0) > 0.8, patience: 1.4 },
+            { dur: 0.22 },
+            {
+              dur: 0.32,
+              tick: (u) => {
+                L.position.x = DECK.x - RIFFLE_APART * ease(u);
+                L.rotation.y = 0.035 * ease(u);
+                n.reach(0, hold(0));
+              },
+            },
+          ]),
+        ]);
+        /** The halves that far apart (1 as they were cut, 0 one deck), every card that far up to its place in the riffled deck. */
+        const close = (apart: number, risen: number): void => {
+          L.position.x = DECK.x - RIFFLE_APART * apart;
+          R.position.x = DECK.x + RIFFLE_APART * apart;
+          L.rotation.y = 0.035 * apart;
+          R.rotation.y = -0.035 * apart;
+          for (const l of leaves) l.mesh.position.y = CARD_T * (l.j + (l.k - l.j) * risen + 0.5);
+        };
+        /** How far a card has fallen, the cards going from the bottom up over the length of a step. */
+        const fallen = (l: Leaf, u: number): number => {
+          const f = Math.max(0, Math.min(1, (u - (l.k / DECK_N) * 0.86) / 0.12));
+          return f * f;
+        };
+        await run([
+          // Both hands take hold of the outer ends: fingers down the far edge, thumbs behind.
+          { dur: 0.3, begin: () => (n.pose?.(0, "cards_hold"), n.pose?.(1, "cards_hold")), tick: () => both(hold), until: there, patience: 1 },
+          // The inner ends are drawn up, facing each other.
+          {
+            dur: 0.26,
+            begin: () => (n.pose?.(0, "cards_riffle", 0.1), n.pose?.(1, "cards_riffle", 0.1)),
+            tick: (u) => {
+              for (const l of leaves) l.bend(arch(l) * ease(u));
+              both(hold);
+            },
+          },
+          // And let go from the bottom, one card from each half in turn: each falls flat onto the last.
+          {
+            dur: 0.6,
+            begin: () => sound.play("riffle", { x: DECK.x }),
+            tick: (u) => {
+              for (const l of leaves) l.bend(arch(l) + (rest(l) - arch(l)) * fallen(l, u));
+              both(hold);
+            },
+          },
+          // The bridge: the hands press the ends in, and the woven cards bow up between them.
+          {
+            dur: 0.34,
+            begin: () => (n.pose?.(0, "cards_riffle", 0.12), n.pose?.(1, "cards_riffle", 0.12)),
+            tick: (u) => {
+              const e = ease(u);
+              close(1 - 0.3 * e, 0);
+              for (const l of leaves) l.bend(rest(l) + (BRIDGE_ARCH + l.k * 0.0006 - rest(l)) * e, 0.3 - 0.16 * e);
+              both(hold);
+            },
+          },
+          // It comes down from the bottom, the cards running into each other, and the halves are one deck.
+          {
+            dur: 0.62,
+            begin: () => sound.play("riffle", { x: DECK.x, gain: 0.7 }),
+            tick: (u) => {
+              const e = ease(u);
+              close(0.7 * (1 - e), e);
+              for (const l of leaves) {
+                const high = BRIDGE_ARCH + l.k * 0.0006;
+                l.bend(high + (rest(l) * (1 - e) - high) * fallen(l, u), 0.14);
+              }
+              both(hold);
+            },
+          },
+          // Squared: tapped once, and it is one deck again, in its new order.
+          {
+            dur: 0.22,
+            begin: () => {
+              sound.play("pat", { x: DECK.x });
+              leaves.sort((x, y) => x.k - y.k);
+              stack();
+            },
+            tick: () => both(hold),
+          },
+        ]);
+      }
+      // Turned back the way it lay.
+      for (const g of halves) g.visible = false;
+      this.deck.visible = true;
+      await run([
+        { dur: 0.16, begin: () => (n.pose?.(0, "release", 0.2, ["reach"]), n.pose?.(1, "release", 0.2, ["reach"])), tick: () => both(over) },
+        {
+          dur: 0.34,
+          begin: () => sound.play("slide", { x: DECK.x, gain: 0.5 }),
+          tick: (u) => {
+            this.deck.rotation.y = ACROSS + (0.05 - ACROSS) * ease(u);
+            both(over);
+          },
+        },
+      ]);
+    } finally {
+      this.deck.visible = true;
+      this.deck.rotation.set(0, 0.05, 0);
+      n.reach(0, null);
+      n.reach(1, null);
+      for (const g of halves) this.group.remove(g);
+      for (const l of leaves) l.mesh.geometry.dispose();
+    }
   }
 
   update(dt: number, reduced: boolean): void {

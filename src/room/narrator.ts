@@ -79,7 +79,7 @@ function above(y: number, floor: number, soft: number): number {
 /** The clips that go round and round; every other one plays once and holds its last pose. */
 const LOOPS = new Set(["rest", "idle", "carry", "carry_wide"]);
 /** The clips of a hand at work on something. While one of these plays, being sent somewhere new does not start the hand over. */
-const WORK = new Set(["reach", "pinch", "grasp", "lift", "lift_wide", "carry", "carry_wide", "set_down", "set_down_wide", "release", "light"]);
+const WORK = new Set(["reach", "pinch", "grasp", "lift", "lift_wide", "carry", "carry_wide", "set_down", "set_down_wide", "release", "light", "cards_hold", "cards_riffle"]);
 /** The bones a clip may move. The shoulder, elbow and wrist are worked out here, from where the hand has to be. */
 const CLIP_BONES = /^(ctl|index_|middle_|ring_|little_|thumb_)/;
 
@@ -121,6 +121,40 @@ interface Rig {
   /** The shoulder as it was made: in the arm's own space, and in the narrator's. */
   shoulder0: Vector3;
   shoulderAt: Vector3;
+}
+
+/** Something standing on the table that a sleeve goes round and not through (a bottle, a candlestick): an upright post, in the room. */
+export interface Post {
+  x: number;
+  z: number;
+  /** How thick it is, and how high it stands above the table. */
+  r: number;
+  top: number;
+}
+/** How much room a sleeve needs round the middle line of the forearm: its own thickness, its folds, and the cloth that hangs from it. */
+const SLEEVE_ROOM = 0.105;
+/** How much of the forearm, from the elbow, the sleeve covers and so must keep clear: the hand beyond it may come close to things. */
+const SLEEVE_ALONG = 0.82;
+/** A hand sent this near a thing standing on the table is working on that thing: its sleeve does not shy from it. */
+const WORKING_AT = 0.12;
+/** How far round the elbow may be swung out of its usual place to keep the sleeve clear, tried in this order. */
+const ELBOW_SWINGS = [0.3, 0.6, 0.9, 1.2, 1.5];
+
+/** The shortest way between two lengths of line, a to b and c to d. */
+function apart(a: Vector3, b: Vector3, c: Vector3, d: Vector3): number {
+  const u = _s1.copy(b).sub(a), v = _s2.copy(d).sub(c), w = _s3.copy(a).sub(c);
+  const uu = u.dot(u), uv = u.dot(v), vv = v.dot(v), uw = u.dot(w), vw = v.dot(w);
+  const den = uu * vv - uv * uv;
+  let s = den > 1e-9 ? Math.max(0, Math.min(1, (uv * vw - vv * uw) / den)) : 0;
+  let t = vv > 1e-9 ? (uv * s + vw) / vv : 0;
+  if (t < 0) {
+    t = 0;
+    s = uu > 1e-9 ? Math.max(0, Math.min(1, -uw / uu)) : 0;
+  } else if (t > 1) {
+    t = 1;
+    s = uu > 1e-9 ? Math.max(0, Math.min(1, (uv - uw) / uu)) : 0;
+  }
+  return w.addScaledVector(u, s).addScaledVector(v, -t).length();
 }
 
 /** The colour of the narrator's cloth: the palette's soot (docs/ART.md). */
@@ -208,6 +242,9 @@ interface Arm {
   kVel: { v: number };
   /** The sculpted, boned arm, once it has loaded. */
   rig?: Rig;
+  /** How far round its elbow is swung out of the way of something standing on the table (radians), and how fast that is changing. */
+  swing: number;
+  swingVel: { v: number };
   /** How far its sleeve's loose cloth lags behind the forearm (a uniform of the sleeve's shader), how fast that is
    * changing, and where the forearm was last frame. */
   drape?: { lag: { value: Vector3 }; vel: Vector3; prev: Vector3 | null };
@@ -259,6 +296,8 @@ export class Narrator {
    * toward something far away before an arm has to lengthen for it, and into a blow of the fist.
    */
   private torso = new Group();
+  /** The things standing on the table that the sleeves keep clear of, in the narrator's own space: foot and top. */
+  private posts: { foot: Vector3; top: Vector3; r: number }[] = [];
   private lean = { pitch: 0, roll: 0, yaw: 0, nod: 0 };
   private leanVel = { pitch: { v: 0 }, roll: { v: 0 }, yaw: { v: 0 }, nod: { v: 0 } };
   /** How brightly the eyes show, 0..1 (set from the room's light: brighter in the dark). */
@@ -695,7 +734,7 @@ export class Narrator {
       this.group.add(hand);
       this.codeHands.push(hand);
       this.arms.push({ side, elbow, hand, rest: hand.position.clone(), restYaw: hand.rotation.y, tip: new Vector3(0, 0, 0.15), cuff: 0.03, sleeve, joints, want: null, holding: false, at: new Vector3(), k: 0,
-        vel: [{ v: 0 }, { v: 0 }, { v: 0 }], kVel: { v: 0 }, hold: null, closed: 0, tips: new Vector3(), carried: null,
+        vel: [{ v: 0 }, { v: 0 }, { v: 0 }], kVel: { v: 0 }, hold: null, closed: 0, tips: new Vector3(), carried: null, swing: 0, swingVel: { v: 0 },
       });
     }
     this.poseArms(0);
@@ -754,6 +793,43 @@ export class Narrator {
     const wide = a.hold === "grasp" ? "_wide" : "";
     a.hold = null;
     if (a.rig) this.play(a.rig, `set_down${wide}`, 0.15, ["release", "reach"]);
+  }
+
+  /**
+   * Shape a hand for work that has movements of its own in the model (shuffling: "cards_hold", "cards_riffle"). The hand keeps going where `reach` sends it. Returns false if this hand has no such movement.
+   */
+  pose(arm: number, clip: string, fade = 0.15, then: string[] = []): boolean {
+    const r = this.arms[arm]?.rig;
+    if (!r || !WORK.has(clip) || !r.actions.has(clip)) return false;
+    this.play(r, clip, fade, then);
+    return true;
+  }
+
+  /** Tell the narrator what stands on the table (in the room), so its sleeves go round those things and not through them. */
+  avoid(posts: Post[]): void {
+    this.group.updateMatrixWorld(true);
+    this.posts = posts.map((p) => ({
+      foot: this.group.worldToLocal(new Vector3(p.x, 0, p.z)),
+      top: this.group.worldToLocal(new Vector3(p.x, p.top, p.z)),
+      r: p.r,
+    }));
+  }
+
+  /**
+   * How near a sleeve is to the nearest thing standing on the table, in metres, now: nothing is nearer than this to
+   * the cloth. Negative means the cloth is in it. Infinity if nothing stands there or the sculpted arms are not loaded.
+   */
+  sleeveRoom(): number {
+    let least = Infinity;
+    for (const a of this.arms) {
+      const r = a.rig;
+      if (!r) continue;
+      const E = this.group.worldToLocal(r.fore.getWorldPosition(_c1));
+      const W = this.group.worldToLocal(r.foreEnd.getWorldPosition(_c2));
+      W.lerpVectors(E, W, SLEEVE_ALONG);
+      for (const p of this.posts) least = Math.min(least, apart(E, W, p.foot, p.top) - p.r - SLEEVE_ROOM);
+    }
+    return least;
   }
 
   /** How far the fingers have closed: 0 open, 1 closed on the thing. */
@@ -999,6 +1075,8 @@ export class Narrator {
     const side = _v3.copy(r.pole).addScaledVector(d, -r.pole.dot(d));
     if (side.lengthSq() < 1e-6) side.set(0, -1, 0).addScaledVector(d, d.y);
     side.normalize();
+    this.swingClear(a, r, S, W, d, along, out, side, dt);
+    if (a.swing) side.applyAxisAngle(d, a.swing);
     const E = _v4.copy(S).addScaledVector(d, along).addScaledVector(side, out);
     // Turn each bone from how it was made to how it must lie.
     const upperQ = _q2.setFromUnitVectors(r.upperDir0, _v2.copy(E).sub(S).normalize()).multiply(r.upperQ0);
@@ -1011,6 +1089,50 @@ export class Narrator {
     r.wrist.quaternion.copy(foreQ.multiply(r.foreEnd.quaternion).invert()).multiply(turn);
     r.root.updateMatrixWorld(true);
     r.grip.getWorldPosition(a.tips);
+  }
+
+  /**
+   * Keep the sleeve clear of what stands on the table. The hand has to be where it is, and so does the shoulder; what
+   * is free is the elbow, which can go anywhere on a circle round the line between them. If the forearm would pass
+   * through something as the elbow hangs, the elbow is swung round that circle, as little as clears it, upward for
+   * choice. Sets `a.swing`, eased, so the elbow never jumps.
+   */
+  private swingClear(a: Arm, r: Rig, S: Vector3, W: Vector3, d: Vector3, along: number, out: number, side: Vector3, dt: number): void {
+    let want = 0;
+    if (this.posts.length && out > 1e-3) {
+      // The posts, in the arm's own space (mirrored for the mirrored arm). Not the one the hand has gone to (a candle
+      // set on the stick): the hand is meant to be there.
+      const posts = this.posts.filter((p) => !a.want || Math.hypot(a.want.x - p.foot.x, a.want.z - p.foot.z) > WORKING_AT).map((p) => ({
+        foot: r.space.worldToLocal(this.group.localToWorld(p.foot.clone())),
+        top: r.space.worldToLocal(this.group.localToWorld(p.top.clone())),
+        r: p.r,
+      }));
+      const elbow = (swing: number, into: Vector3): Vector3 => into.copy(S).addScaledVector(d, along).addScaledVector(_s4.copy(side).applyAxisAngle(d, swing), out);
+      const room = (swing: number): number => {
+        const E = elbow(swing, _s5);
+        const C = _s6.lerpVectors(E, W, SLEEVE_ALONG);
+        let least = Infinity;
+        for (const p of posts) least = Math.min(least, apart(E, C, p.foot, p.top) - p.r - SLEEVE_ROOM);
+        return least;
+      };
+      let best = room(0);
+      if (best < 0) {
+        // The way that lifts the elbow first; and the way it is already swung, if any, before the other.
+        const up = elbow(0.3, _s5).y >= elbow(-0.3, _s6).y ? 1 : -1;
+        const first = Math.abs(a.swing) > 0.05 ? Math.sign(a.swing) : up;
+        search: for (const mag of ELBOW_SWINGS)
+          for (const sign of [first, -first]) {
+            const c = room(mag * sign);
+            if (c > best) {
+              best = c;
+              want = mag * sign;
+            }
+            if (c >= 0) break search;
+          }
+      }
+    }
+    a.swing = this.reduced ? want : settle(a.swing, want, a.swingVel, 0.3, dt);
+    if (!want && Math.abs(a.swing) < 1e-4) a.swing = 0;
   }
 
   /** The plain arm built in code: place the hand and stretch its sleeve to it. */
@@ -1190,3 +1312,4 @@ export class Narrator {
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _q4 = new Quaternion();
 const _c1 = new Vector3(), _c2 = new Vector3(), _c3 = new Vector3(), _c4 = new Vector3();
+const _s1 = new Vector3(), _s2 = new Vector3(), _s3 = new Vector3(), _s4 = new Vector3(), _s5 = new Vector3(), _s6 = new Vector3();

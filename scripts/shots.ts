@@ -185,6 +185,50 @@ scene("narrator", async (page, save) => {
   await save("-side");
 });
 
+// The narrator's hands by daylight, close, where nothing is hidden: at rest from in front, from each side and from
+// above, and reaching.
+scene("hands", async (page, save) => {
+  await page.open("t=12.5&hud=0&patrol=0");
+  await page.run("room.lookFrom([0.0, 0.34, -0.2], [0, 0.04, -0.68], 34); room.advance(2)");
+  await save("-front");
+  await page.run("room.lookFrom([0.42, 0.16, -0.5], [0.14, 0.04, -0.66], 26); room.advance(0.1)");
+  await save("-right-side");
+  await page.run("room.lookFrom([0.16, 0.5, -0.6], [0.15, 0.0, -0.66], 26); room.advance(0.1)");
+  await save("-right-above");
+  await page.run("room.lookFrom([-0.36, 0.1, -0.42], [-0.14, 0.04, -0.66], 26); room.advance(0.1)");
+  await save("-left-low");
+  await page.run("room.lookFrom([0.75, 0.5, -0.45], [0, 0.2, -1.0], 40); room.advance(0.1)");
+  await save("-arms-side");
+});
+
+// The left arm at work beside the bottle: setting the candles out takes it across that corner of the table.
+scene("bottle", async (page, save) => {
+  await page.open("t=18.1&hud=0&patrol=0");
+  await page.run("room.advance(1); room.setClock(18.4); room.lookFrom([-0.2, 0.55, 0.0], [-0.72, 0.12, -0.62], 40)");
+  for (const [i, s] of [0.8, 0.5, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.5, 0.6, 0.8, 1, 1.5, 2].entries()) {
+    await page.run(`room.advance(${s})`);
+    await save(`-${String(i).padStart(2, "0")}`);
+  }
+});
+
+// The narrator shuffling the deck, close and from your seat: the deck turned across the table, cut, riffled, bridged.
+// Time goes a frame at a time here, as it does in play, so each step of the shuffle begins when the last one ends.
+scene("shuffle", async (page, save) => {
+  const play = (s: number): string => `(async () => { for (let i = 0; i < ${Math.round(s * 60)}; i++) { room.advance(1 / 60); await new Promise((r) => setTimeout(r, 0)); } })()`;
+  for (const close of [true, false]) {
+    await page.open("t=12.5&hud=0&patrol=0");
+    await page.run(`${close ? "room.lookFrom([0, 0.36, 0.62], [0, 0.03, -0.66], 11); " : ""}room.advance(1.5); window.__stop = null; void room.desk.cards.shuffle(new Promise((r) => (window.__stop = r)))`);
+    if (close) await page.run(play(0.6));
+    for (let i = 0; i < (close ? 30 : 10); i++) {
+      await page.run(play(close ? 0.1 : 0.4));
+      await save(`-${close ? "close" : "seat"}-${String(i).padStart(2, "0")}`);
+    }
+    await page.run("window.__stop()");
+    await page.run(play(4));
+    await save(`-${close ? "close" : "seat"}-after`);
+  }
+});
+
 // Other ways the room is shown.
 still("lean", "t=18.3&lean=1");
 still("reduced", "t=23&weather=storm&reduced=1");

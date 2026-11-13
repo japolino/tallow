@@ -30,6 +30,7 @@ Clips (all start from, or pass through, the poses named in POSES below):
     reach, pinch, lift, carry, set_down, release   taking a small thing (a piece, by its head) and putting it down
     grasp, lift_wide, carry_wide, set_down_wide    the same for something thicker (the top of a candle)
     light                                       a pinch at a wick, and the fingers springing open as it takes
+    cards_hold, cards_riffle      shuffling: standing on the end of half the deck, and drawing its other end up
     slam, drum, tap, steeple, flick             small things it does when it has an opinion
 
 Blender's axes here: +Z up, the figure faces -Y (toward the player), +X is the
@@ -99,6 +100,15 @@ SLUMP = (1.12, 0.84)
 PINCH_GAP = 0.021  # the hood of the narrator's own piece
 GRASP_GAP = 0.042  # the top of a candle
 WICK_GAP = 0.002
+# Shuffling: where the hand is sent, from the middle of its half of the deck (room axes: x away from the other hand);
+# how far the room will have swung it round toward the other hand there; and how high the thumb draws the cards.
+CARD_GRIP = (0.058, 0.024, -0.03)
+CARD_YAW = -0.32
+CARD_ARCH = 0.018
+# Where each finger starts from when its bend for the cards is looked for: (knuckle, first joint, second joint, spread).
+CARD_LIKE = {"index": (0.3, 0.35, 0.2, 0.05), "middle": (0.3, 0.35, 0.2, 0.0), "ring": (0.35, 0.4, 0.22, 0.05), "little": (0.4, 0.45, 0.25, 0.1), "thumb": (0.5, 0.0, 0.3, 0.2, 0.2)}
+# The nails are painted darker than the skin: this much of its colour is left.
+NAIL_TINT = (0.5, 0.45, 0.42)
 PAD = 0.004
 
 # How soft a joint is: the distance over which one bone's hold on the skin gives way to the next.
@@ -356,6 +366,27 @@ def sleeve(arm, at):
     return o
 
 
+def paint_nails(hand, place):
+    """Darken the skin inside each nail the sculpt recorded (the hand is at rest, placed by `place`)."""
+    turn = place.to_3x3()
+    nails = [(place @ c, turn @ out, turn @ along, hl, hw) for c, out, along, hl, hw in sculpt.NAILS]
+    ca = hand.data.color_attributes.active_color
+    done = 0
+    for loop in hand.data.loops:
+        co = hand.data.vertices[loop.vertex_index].co
+        for c, out, along, hl, hw in nails:
+            d = co - c
+            a, h = d.dot(along), d.dot(out)
+            w = (d - along * a - out * h).length
+            # Rounded at its corners, and only the skin on the nail's own side of the finger.
+            if -0.0022 < h < 0.004 and (a / (hl * 1.08)) ** 4 + (w / (hw * 1.1)) ** 4 < 1:
+                k = ca.data[loop.index].color
+                ca.data[loop.index].color = (k[0] * NAIL_TINT[0], k[1] * NAIL_TINT[1], k[2] * NAIL_TINT[2], 1.0)
+                done += 1
+                break
+    print(f"  painted {done} corners of nail")
+
+
 def material(obj, name, colour):
     """A named material: the room chooses what each surface is made of by this name."""
     m = bpy.data.materials.new(name)
@@ -492,6 +523,37 @@ def close_on(P, gap, like, at=None, ring=(0.62, 0.72, 0.42), little=(0.52, 0.62,
     return unpack(x), middle
 
 
+def shape_on(P, turn, wants, like, yaw=0.0):
+    """
+    Bend every finger so that its tip comes to a place of its own: `wants` gives each tip from the point the hand
+    is sent to (the grip), in room axes, with the hand turned `turn` and then swung `yaw` round the upright the way
+    the room swings a reaching hand to point along its arm. Each finger stays as near its bend in `like` as it can.
+    Returns the finger bends.
+    """
+    grip = P.grip
+    swung = Matrix.Rotation(yaw, 3, "Z") @ turn.to_matrix()
+    back = (swung @ P.rest_turn.to_matrix().inverted()).inverted()
+    out = {}
+    for name, want in wants.items():
+        target = grip + back @ rm(*want)
+        start = list(like[name])
+        if name == "thumb":
+            lo, hi = [-1.3] * 5, [1.3] * 5
+            make = lambda x: P.fingers(thumb=x)  # noqa: E731
+        else:
+            lo, hi = [-0.5, -0.1, -0.1, -0.3], [1.7, 1.7, 1.4, 0.4]
+            make = lambda x, name=name: P.fingers(**{name: x})  # noqa: E731
+
+        def score(x):
+            return (100 * (P.tips(make(x))[name] - target).length) ** 2 + 0.02 * sum((a - b) ** 2 for a, b in zip(x, start))
+
+        x, _e = settle(score, start, lo, hi)
+        miss = (P.tips(make(x))[name] - target).length
+        print(f"    {name}: {miss * 1000:.1f} mm off")
+        out[name] = x
+    return P.fingers(**out)
+
+
 def make_fist(P):
     """Fingers rolled right up, the thumb laid across the front of the first one."""
     curl = dict(index=(1.45, 1.6, 1.15), middle=(1.5, 1.65, 1.2), ring=(1.5, 1.65, 1.2), little=(1.45, 1.6, 1.15))
@@ -578,6 +640,7 @@ def clips(P):
     print("fitting the fingers:")
     relaxed = [0.75, 0.75, 0.35, 0.8, 0.8, 0.4, 0, 0, 0, 0, 0]
     pinch_f, grip = close_on(P, PINCH_GAP, relaxed)
+    P.grip = grip
     grasp_f, _ = close_on(P, GRASP_GAP, relaxed, at=grip, ring=(0.5, 0.6, 0.35), little=(0.42, 0.5, 0.3))
     wick_f, _ = close_on(P, WICK_GAP, relaxed, at=grip)
     fist_f = make_fist(P)
@@ -641,6 +704,45 @@ def clips(P):
         "light",
         *keyed([(0, REACH, ""), (0.26, WICK, "smooth"), (0.38, rub, "smooth"), (0.5, WICK, "smooth"), (0.66, (over, down(40), wide_f), "spring"), (0.8, (over, down(40), wide_f), "linear"), (1.25, REACH, "smooth")]),
     )
+
+    # --- shuffling the deck (tablecards.ts, shuffle) ---
+    # Half the deck lies across the table, its inner end toward the other hand. The hand stands on its outer end and
+    # leaves the rest in the open: the first finger pressing down on it, the others on the table past its end and its
+    # far edge, the thumb behind, which lifts as the inner end is drawn up and comes down as the cards go. Every place below is from
+    # the middle of the half, on the table (room axes: x away from the other hand, y up, z toward you); the room
+    # sends the hand to CARD_GRIP from there.
+    print("  the hand on the cards:")
+    card_turn = down(34)
+
+    def on_cards(thumb, index_up=0.0, like=None):
+        wants = {
+            "index": (0.018, 0.012 + index_up, 0.008),
+            "middle": (0.043, 0.008, 0.029),
+            "ring": (0.07, 0.006, 0.032),
+            "little": (0.096, 0.008, 0.028),
+            "thumb": thumb,
+        }
+        gx, gy, gz = CARD_GRIP
+        return shape_on(P, card_turn, {n: (w[0] - gx, w[1] - gy, w[2] - gz) for n, w in wants.items()}, like or CARD_LIKE, yaw=CARD_YAW)
+
+    hold_f = on_cards((-0.004, 0.026, -0.03))
+    drawn_f = on_cards((-0.012, 0.026 + CARD_ARCH, -0.024), index_up=0.003)
+    HOLD = (over, card_turn, hold_f)
+    DRAWN = (over, card_turn, drawn_f)
+    write_clip(P, "cards_hold", *keyed([(0, REACH, ""), (0.3, HOLD, "smooth")]))
+
+    # The thumb draws the end up, and then lets the cards go a few at a time, coming down as the arch empties.
+    def riffle(t):
+        if t < 0.27:
+            return mix(HOLD, DRAWN, EASE["smooth"](t / 0.27))
+        if t > 0.87:
+            return mix(mix(DRAWN, HOLD, 0.8), HOLD, EASE["smooth"](min(1.0, (t - 0.87) / 0.2)))
+        u = (t - 0.27) / 0.6
+        pose = mix(DRAWN, HOLD, 0.8 * u)
+        flutter = 0.05 * math.sin(math.tau * 8 * u) * (1 - u)
+        return bent(pose, thumb_3=(flutter, 0.0, 0.0), index_3=(P.curl * flutter * 0.4, 0.0, 0.0))
+
+    write_clip(P, "cards_riffle", 1.07, riffle)
 
     # --- what it does when it has an opinion ---
 
@@ -805,6 +907,7 @@ def main():
     arm.data.pose_position = "REST"
     bpy.context.view_layer.update()
     style.bake([hand, cloth], apply=False, ground=False, ao_distance=0.03, wear=0.0, cavity=0.55, floor=0.3)
+    paint_nails(hand, place)
     arm.data.pose_position = "POSE"
     P = Poser(arm)
     grip, marks = clips(P)

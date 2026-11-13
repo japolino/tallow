@@ -134,7 +134,7 @@ Things that change as you play stay built in code, but take their colours and ro
 
 All of these are placed outside the play area: the map, both hands' reach, the notebook and the narrator's dealing space.
 
-- **On the table, at its edges:** an inkwell and quill by the narrator's tome, a pewter tankard and a stoppered bottle on your left beyond the candle dish, a small hourglass, a rolled scroll or two tied with cord, and a candle stub in a skull at the narrator's left (18+ and dark themes are fine).
+- **On the table, at its edges:** an inkwell and quill by the narrator's tome, a pewter tankard and a stoppered bottle in the far left corner, beyond the candle dish and off the line from the narrator's shoulder to it, a small hourglass, a rolled scroll or two tied with cord, and a candle stub in a skull at the narrator's left (18+ and dark themes are fine).
 - **On the sills:** a horn lantern on the back window sill, and a jar of dried herbs with a stub of candle on the left sill.
 - **On the shelves:** real books (raised bands and leaning stacks), a few jars and a small coffer.
 - **On the floor and against the walls:** an iron-bound chest, a barrel or crate in the dark corner, a three-legged stool, a worn rug under the table, and a cold iron candle wheel hanging from a beam.
@@ -159,17 +159,26 @@ A model passes when every score is at least 7 and the mean is at least 8. Verdic
 | File | Script | What it holds | Tris | Baked | Size |
 |---|---|---|---|---|---|
 | `props.glb` | `props.py` | 23 props: table, dish, candlestick, coin, tome, dice box, book row, inkwell, tankard, bottle, scroll, hourglass, lantern, herb jar, jar, skull, coffer, chest, barrel, crate, stool, rug, candle wheel | 40,904 in all | AO, cavity and wear in `COLOR_0`; base colour from the embedded palette | 1,550 KB |
-| `narrator_arm.glb` | `narrator_arm.py` | Hand and robe sleeve, 22 bones, 18 clips | 11,816 (the hand 9,000) | AO and cavity in `COLOR_0`, at rest; `_hang` per vertex for the cloth; no normal map | 727 KB |
+| `narrator_arm.glb` | `narrator_arm.py` | Hand and robe sleeve, 22 bones, 20 clips | 11,816 (the hand 9,000) | AO and cavity in `COLOR_0`, at rest, the nails painted darker into it; `_hang` per vertex for the cloth; no normal map | 709 KB |
 | `narrator_cloak.glb` | `narrator_cloak.py` | The simulated mantle | 8,999 | AO and cavity in `COLOR_0`; no normal map | 240 KB |
 | `narrator_hood.glb` | `narrator_hood.py` | The hood and its void | 4,000 | AO and cavity in `COLOR_0` | 92 KB |
 | `pieces.glb` | `pieces.py` | `traveller` and `shadow` | 1,500 each | AO and wear in `COLOR_0` | 105 KB |
 
-All of them add up to about **2.71 MB, over the 2.5 MB budget by about 210 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 727 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py` and thins it to 9,000 triangles. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
+All of them add up to about **2.70 MB, over the 2.5 MB budget by about 200 KB.** Most of that is `props.glb`, which holds 23 props where the old files held none. The arm went from 1,524 KB to 709 KB and the cloak from 466 KB to 240 KB. `narrator_hand.glb` is no longer shipped. `narrator_arm.py` builds the sculpt by importing `narrator_hand.py` and thins it to 9,000 triangles. Run on its own, `narrator_hand.py` now writes to `models/narrator_hand.glb`, which is gitignored.
 
 ### How the pipeline differs from Part 2
 
 - **Palette.** The texture is `models/palette.png`. It is embedded inside `props.glb`, not shipped as its own file.
-- **The hand is geometry, not a normal map.** Thinned to 3,600 triangles with the sculpt baked to a normal map, the hand read as a mottled lump. It ships at 9,000 triangles instead. The sculpt's palm sits below the long bones, so the four tendons and the knuckles stand out of the back of the hand, and a knob of wrist bone stands at the cuff. The budget in Part 2 (5,000 for the whole arm) gave way to that.
+- **The hand is geometry, not a normal map.** Thinned to 3,600 triangles with the sculpt baked to a normal map, the hand read as a mottled lump. It ships at 9,000 triangles instead. The budget in Part 2 (5,000 for the whole arm) gave way to that.
+- **The hand is one lean shape.** The first sculpt was a blob of palm with four beaded tubes for fingers and deep trenches between its tendons; at the table it read as a squid. `narrator_hand.py` now builds it this way:
+  - the forearm, wrist and palm are one loft of rounded-box sections (`PALM`): flat across the back and the palm, narrow at the wrist, widest at the knuckles;
+  - the fingers are stick figures wrapped in a skin, touching their neighbours at the knuckle, with joints only a little thicker than the bone between them (`JOINTS`, `THICK`);
+  - the long bones show as low ridges on the back of the hand, and the wrist bone is a low rise, not a knob;
+  - every finger has a nail: a low plate on the last bone, which `narrator_arm.py` paints darker into the baked colours (`NAILS`, `paint_nails`).
+
+  `narrator_arm.py` reads the joints out of `FINGERS`, `JOINTS` and `THUMB` by place, so the rig follows the sculpt when those change.
+- **Sleeves go round what stands on the table.** `room.ts` tells the narrator what stands tall there (`Narrator.avoid`: the inkwell and its quill, the tankard, the bottle, the candlestick and its candle). When a forearm would pass through one of them, `narrator.ts` swings the elbow round the line from shoulder to wrist, as little as clears it (`swingClear`). `Narrator.sleeveRoom()` gives the clearance at any moment, for checking a new errand or a new prop. Place a new tall prop off the lines from the narrator's shoulders (x ±0.27, z -1.12) to the places its hands work; the bottle stood on the line to the candle dish, and the sleeve went through it every evening.
+- **Shuffling has finger shapes of its own.** `cards_hold` and `cards_riffle` stand the hand on the outer end of half the deck, so the halves' inner ends are in the open between the hands, where the riffle and the bridge can be seen from the seat. `shape_on` in `narrator_arm.py` fits each fingertip to a place given from the cards. The cards themselves are bent in code (`Leaf` in `tablecards.ts`).
 - **Skin weights** are stored as normalized bytes by `quantize_glb`.
 - **The sleeve is a robe's.** It slumps where it lies, bunches into folds at the elbow and over the wrist, and opens into a bell with a rolled hem. Each vertex carries `_hang`, how freely it hangs.
 - **Cloth that moves.** `narrator.ts` runs a very plain simulation in the vertex shaders:
