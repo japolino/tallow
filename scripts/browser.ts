@@ -41,6 +41,8 @@ export interface Page {
   /** The middle of an element on the page, for clicking it with the mouse. */
   middle(selector: string): Promise<{ x: number; y: number }>;
   wait(ms: number): Promise<void>;
+  /** One command of the browser's debugging protocol, for what the methods above do not cover (scripts/film.ts). */
+  cdp<R = unknown>(method: string, params?: object): Promise<R>;
   /** Console errors and warnings seen so far. */
   readonly problems: string[];
 }
@@ -118,6 +120,7 @@ export async function withPage<T>(o: { soft?: boolean; width?: number; height?: 
     const page: Page = {
       problems,
       run,
+      cdp: send,
       wait: sleep,
       async open(query) {
         await send("Page.navigate", { url: `http://127.0.0.1:${port}/?${query}` });
