@@ -10,6 +10,10 @@ Any piece in his library may be played: a model picks the pieces for each scene.
 
 Before a scene has been read, one of these plays: "Teller of the Tales", "Midnight Tale", "Suonatore di Liuto", "Heavy Heart".
 
+## Card pictures
+
+The pictures on the cards (`assets/cards/`) were made for this deck with an image model (OpenAI's gpt-image), to our own subjects and direction: one figure in solid black on empty paper, with flat colour. Their style was set by showing the model a few black-and-white tarot cards as references; they copy no existing card.
+
 ## Sounds
 
 The recordings in `assets/sounds/` come from [Freesound](https://freesound.org). Each was trimmed, made mono (the one-shots), cut to length and set to one loudness; nothing else was changed. Most are CC0 and need no credit; they are listed anyway.

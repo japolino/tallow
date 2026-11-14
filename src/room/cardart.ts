@@ -1,15 +1,39 @@
 /**
- * The faces and backs of the cards, drawn in code: our own tarot-style set, printed the way a hand-drawn deck is. On
- * cream stock, in one ink for each family of card: a picture in line and hatching inside a pointed arch, with a disc
- * of light and fine rays behind it; a plate at the head that says what sort of card it is; the card's name on a banner
- * across the picture's foot; and, when a card says more, its words under the banner. The picture takes whatever room
- * the words leave. Nothing is copied from any deck.
+ * The faces and backs of the cards: our own tarot-style set. A card is black, with an off-white arched panel that
+ * holds its picture, what sort of card it is in small capitals at the head, its name in white under the panel, and,
+ * when it says more, its words under the name. The picture takes whatever room the words leave.
+ *
+ * The pictures are painted, not drawn here (assets/cards, one for each kind; CREDITS.md): one bold figure in solid
+ * black on empty paper, its details cut out of the black, with one or two flat colours. A kind with no painted picture
+ * falls back on a line drawing made in code below. Nothing is copied from any deck.
  *
  * Everything is drawn on a card 300 by 500 across and down, at twice that many pixels, so that a card held up to the
  * eyes (tablecards.ts, look) is still sharp.
  */
 import { cardKind, type CardFamily } from "../engine/cards.js";
 import { mk, rng, type Canvas } from "./textures.js";
+import { CARD_PICTURES } from "../embedded/pictures.js";
+
+/**
+ * The kinds whose picture is painted (assets/cards/<kind>.webp: a figure on nothing, in the card's own ink) and not
+ * drawn here in code. They are decoded once, before any card is dealt; a card drawn sooner has the picture drawn in code.
+ */
+const PAINTED = new Map<string, HTMLImageElement>();
+let painting: Promise<void> | null = null;
+export function loadCardPictures(): Promise<void> {
+  return (painting ??= Promise.all(
+    Object.entries(CARD_PICTURES).map(async ([file, b64]) => {
+      const img = new Image();
+      img.src = `data:image/webp;base64,${b64}`;
+      try {
+        await img.decode();
+        PAINTED.set(file.replace(/\.\w+$/, ""), img);
+      } catch {
+        /* That kind keeps the picture drawn in code. */
+      }
+    }),
+  ).then(() => undefined));
+}
 
 /** How many pixels a card is drawn at. */
 export const CARD_PX = { w: 600, h: 1000 };
@@ -596,19 +620,13 @@ function frame(g: G): void {
 
 /* ------------------------------------------------- the face ------------------------------------------------- */
 
-/** The card's own stock, the white its pictures are lit with, pencil, and gilt. */
-const STOCK = "#ecdcb6", WHITE = "#fbf6e6", GRAPHITE = "#4b4a52", GILT = "#d2a441";
-/** Each family's ink, and the wash behind its picture. */
-const INKS: Record<CardFamily, [string, string]> = {
-  person: ["#1d3b46", "#c6dcd3"],
-  obstacle: ["#4b2e17", "#ecd09c"],
-  fight: ["#5c1a1c", "#efc4ae"],
-  thing: ["#2c3b1a", "#d9dfaa"],
-  place: ["#2a2358", "#d2ccec"],
-};
-/** Kinds printed in another family's ink than their own, so the cards laid side by side are not all one colour. */
-const INK_AS: Record<string, CardFamily> = { lantern: "obstacle", boon: "person" };
-let WASH = INKS.place[1];
+/**
+ * The deck is printed in black and white and nothing else: the card black, the picture's panel off-white, the words
+ * white on the black. `GILT` is what the pictures drawn in code once gilded, now a pale grey; `PALE` is the white of
+ * everything printed on the black.
+ */
+const STOCK = "#f4f0e6", WHITE = "#f4f0e6", GRAPHITE = "#a39f95", GILT = "#c9c4b8", PALE = "#f4f0e6", BLACK = "#0b0a0a";
+const WASH = "#dedad0";
 
 const pen = (g: G, w: number, color = INK): void => {
   g.strokeStyle = color;
@@ -617,14 +635,14 @@ const pen = (g: G, w: number, color = INK): void => {
   g.lineCap = "round";
 };
 /** A shape from path data (as in an SVG): filled, then outlined in the card's ink. */
-function shape(g: G, d: string, fill: string | null = WHITE, w = 2): void {
+function shape(g: G, d: string, fill: string | null = WHITE, w = 2, color = INK): void {
   const p = new Path2D(d);
   if (fill) {
     g.fillStyle = fill;
     g.fill(p);
   }
   if (w > 0) {
-    pen(g, w);
+    pen(g, w, color);
     g.stroke(p);
   }
 }
@@ -954,72 +972,18 @@ const DRAWN: Record<string, (g: G) => void> = {
 };
 Object.assign(PICTURES, DRAWN);
 
-/**
- * Behind every picture: the family's wash, a white disc of light with fine rays going out from it to the edges of
- * the window, and a few small orbs in the air.
- */
-function backdrop(g: G, top: number, foot: number, cx: number, cy: number, r: number, seed: number): void {
-  const fill = g.createLinearGradient(0, top, 0, foot);
-  fill.addColorStop(0, WASH);
-  fill.addColorStop(1, STOCK);
-  g.fillStyle = fill;
-  g.fillRect(0, 0, W, H);
-  pen(g, 0.7);
-  g.globalAlpha = 0.5;
-  g.beginPath();
-  const n = 64;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * TAU + 0.05;
-    const r0 = r + (i % 2 ? 14 : 6), r1 = i % 4 === 1 ? r + 46 : 460;
-    g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
-    g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
-  }
-  g.stroke();
-  g.globalAlpha = 1;
-  orb(g, cx, cy, r);
-  pen(g, 0.7);
-  disc(g, cx, cy, Math.max(1, r - 5));
-  g.stroke();
-  const rnd = rng(seed);
-  for (let i = 0; i < 6; i++) {
-    const x = 40 + rnd() * 220, y = top + 22 + rnd() * Math.max(10, cy - top - 10), s = 1.8 + rnd() * 3.4;
-    if (Math.hypot(x - cx, y - cy) > r + 12) orb(g, x, y, s);
-  }
-}
-
-/** The card's stock: old paper, a little lighter in the middle. */
+/** The card itself: black to its edges. */
 function stock(g: G): void {
-  g.fillStyle = STOCK;
-  g.fillRect(0, 0, W, H);
-  const light = g.createRadialGradient(W / 2, H * 0.45, 30, W / 2, H / 2, H * 0.7);
-  light.addColorStop(0, "rgba(255,250,232,0.5)");
-  light.addColorStop(1, "rgba(255,250,232,0)");
-  g.fillStyle = light;
+  g.fillStyle = BLACK;
   g.fillRect(0, 0, W, H);
 }
 
 const rounded = (x: number, y: number, w: number, h: number, r: number): string =>
   `M${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} L${x + r},${y + h} Q${x},${y + h} ${x},${y + h - r} L${x},${y + r} Q${x},${y} ${x + r},${y} Z`;
 
-/** The printed border: a heavy line, a hair line inside it, and a small fan of strokes in each corner. */
+/** The printed border: one white hair line a little way in from the card's edge. */
 function border(g: G): void {
-  shape(g, rounded(8, 8, W - 16, H - 16, 9), null, 2.4);
-  shape(g, rounded(13, 13, W - 26, H - 26, 6), null, 0.8);
-  for (const [x, y, sx, sy] of [[19, 19, 1, 1], [W - 19, 19, -1, 1], [19, H - 19, 1, -1], [W - 19, H - 19, -1, -1]]) {
-    g.save();
-    g.translate(x!, y!);
-    g.scale(sx!, sy!);
-    pen(g, 0.9);
-    g.beginPath();
-    for (let i = 0; i <= 4; i++) {
-      const a = (i / 4) * (Math.PI / 2);
-      g.moveTo(Math.cos(a) * 5, Math.sin(a) * 5);
-      g.lineTo(Math.cos(a) * (i % 2 ? 11 : 16), Math.sin(a) * (i % 2 ? 11 : 16));
-    }
-    g.stroke();
-    orb(g, 1.5, 1.5, 2.2, GILT);
-    g.restore();
-  }
+  shape(g, rounded(9, 9, W - 18, H - 18, 4), null, 1, PALE);
 }
 
 const spacing = (g: G, px: number): void => {
@@ -1097,19 +1061,10 @@ function fitBlock(g: G, text: string, width: number, room: number, sizes: number
   return fit;
 }
 
-/** The banner across the foot of the picture, swallow-tailed, with the name on it. */
+/** The card's name under the picture: white on the black, as large as it fits. */
 function banner(g: G, mid: number, fit: Fit): void {
-  const y = mid - fit.h / 2, h = fit.h, x0 = 15, x1 = W - 15;
-  const d = `M${x0},${y} L${x1},${y} L${x1 - 9},${y + h / 2} L${x1},${y + h} L${x0},${y + h} L${x0 + 9},${y + h / 2} Z`;
-  g.save();
-  g.shadowColor = "rgba(40,24,8,0.35)";
-  g.shadowBlur = 5;
-  g.shadowOffsetY = 2;
-  shape(g, d, WHITE, 0);
-  g.restore();
-  shape(g, d, null, 2);
-  shape(g, `M${x0 + 14},${y + 3.5} L${x1 - 14},${y + 3.5} M${x0 + 14},${y + h - 3.5} L${x1 - 14},${y + h - 3.5}`, null, 0.7);
-  g.fillStyle = INK;
+  const x0 = 15, x1 = W - 15;
+  g.fillStyle = PALE;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.font = fit.font;
@@ -1126,17 +1081,12 @@ function plate(g: G, label: string): void {
   const text = label.toUpperCase();
   const w = Math.min(190, g.measureText(text).width + 30);
   const x0 = W / 2 - w / 2, x1 = W / 2 + w / 2;
-  shape(g, `M${x0 + 8},21 L${x1 - 8},21 L${x1},31 L${x1 - 8},41 L${x0 + 8},41 L${x0},31 Z`, WHITE, 1.6);
-  g.fillStyle = INK;
+  g.fillStyle = PALE;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.fillText(text, W / 2 + 0.75, 31.5, w - 22);
+  g.fillText(text, W / 2 + 0.75, 30, w - 22);
   spacing(g, 0);
-  if (x0 - 34 > 24) {
-    shape(g, `M${x0 - 6},31 L${x0 - 26},31 M${x1 + 6},31 L${x1 + 26},31`, null, 0.8);
-    orb(g, x0 - 30, 31, 1.8, GILT);
-    orb(g, x1 + 30, 31, 1.8, GILT);
-  }
+  if (x0 - 30 > 24) shape(g, `M${x0 - 2},30 L${x0 - 26},30 M${x1 + 2},30 L${x1 + 26},30`, null, 0.8, PALE);
 }
 
 /** Grain over everything, so the print looks worn, and the edges a little darker. */
@@ -1156,17 +1106,16 @@ function wear(g: G, seed: number): void {
 const plain = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /**
- * The face of a card, laid out as a tarot card is: the picture fills the card inside its arch, and the card's name is
- * on a banner across the picture's foot. A card that says more has what it says set under the banner, in a block only
- * as tall as its words, and the picture has the rest. `title` (what sort of card it is) is on a small plate at the
- * head; `line`, what touching the card writes for you, is pencilled at the foot unless it only repeats the name.
- * Nothing is ever drawn wider than the place made for it.
+ * The face of a card, laid out as a tarot card is: the picture in its panel, and the card's name under it. A card that
+ * says more has what it says set under the name, in a block only as tall as its words, and the picture has the rest.
+ * `title` (what sort of card it is) is at the head; `line`, what touching the card writes for you, is pencilled at the
+ * foot unless it only repeats the name. Nothing is ever drawn wider than the place made for it.
  */
 export function cardFace(kindId: string, name?: string, text?: string, title?: string, line?: string): Canvas {
   const [c, g] = mk(CARD_PX.w, CARD_PX.h);
   g.scale(SCALE, SCALE);
   const k = cardKind(kindId);
-  [INK, WASH] = INKS[INK_AS[k.id] ?? k.family];
+  INK = BLACK;
   const tidy = (s?: string): string => (s ?? "").replace(/\s+/g, " ").trim();
   const words = tidy(name) || tidy(title) || k.title;
   const label = tidy(name) ? tidy(title) : "";
@@ -1186,27 +1135,37 @@ export function cardFace(kindId: string, name?: string, text?: string, title?: s
   // The picture, sized to its window and standing on the banner.
   const stand = foot - named.h / 2 + 5;
   const s = Math.max(0.5, Math.min(1.22, (stand - (top + 16)) / 284));
+  // The picture's panel: off-white, arched, ending where the name begins.
+  const sill = foot - named.h / 2 - 2;
   g.save();
-  g.clip(new Path2D(`M26,${foot} L26,120 C26,78 84,54 150,48 C216,54 274,78 274,120 L274,${foot} Z`));
-  backdrop(g, top, foot, W / 2, stand - 162 * s, 76 * s, k.id.length * 31 + words.length);
-  g.translate(W / 2, stand);
-  g.scale(s, s);
-  g.translate(-W / 2, -376);
-  (PICTURES[k.id] ?? PICTURES.token!)(g, rng(k.id.length * 97));
+  g.clip(new Path2D(`M22,${sill} L22,112 C22,74 82,52 150,46 C218,52 278,74 278,112 L278,${sill} Z`));
+  g.fillStyle = STOCK;
+  g.fillRect(0, 0, W, H);
+  const painted = PAINTED.get(k.id);
+  if (painted) {
+    // A painted picture is one figure on empty paper: it is shown whole, as large as the panel lets it be. Its own
+    // white is the panel's white.
+    const f = Math.min(250 / painted.naturalWidth, (sill - top - 6) / painted.naturalHeight);
+    const w = painted.naturalWidth * f, h = painted.naturalHeight * f;
+    g.globalCompositeOperation = "multiply";
+    g.drawImage(painted, W / 2 - w / 2, sill - h, w, h);
+    g.globalCompositeOperation = "source-over";
+  } else {
+    g.translate(W / 2, stand);
+    g.scale(s, s);
+    g.translate(-W / 2, -376);
+    (PICTURES[k.id] ?? PICTURES.token!)(g, rng(k.id.length * 97));
+  }
   g.restore();
-  shape(g, `M26,${foot} L26,120 C26,78 84,54 150,48 C216,54 274,78 274,120 L274,${foot}`, null, 2.2);
-  shape(g, `M30,${foot} L30,121 C30,82 86,58 150,52 C214,58 270,82 270,121 L270,${foot}`, null, 0.7);
   border(g);
   if (label) plate(g, label);
-  else spark(g, W / 2, 31, 7, GILT);
   banner(g, foot, named);
 
   const y = foot + named.h / 2 + 4;
   if (block) {
     // A small rule with a lozenge, then the words.
-    shape(g, `M${W / 2 - 46},${y + 7} L${W / 2 - 8},${y + 7} M${W / 2 + 8},${y + 7} L${W / 2 + 46},${y + 7}`, null, 0.8);
-    shape(g, `M${W / 2},${y + 3} L${W / 2 + 4},${y + 7} L${W / 2},${y + 11} L${W / 2 - 4},${y + 7} Z`, GILT, 1);
-    g.fillStyle = INK;
+    shape(g, `M${W / 2 - 46},${y + 7} L${W / 2 + 46},${y + 7}`, null, 0.8, PALE);
+    g.fillStyle = PALE;
     g.textAlign = "center";
     g.textBaseline = "alphabetic";
     g.font = block.font;

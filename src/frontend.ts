@@ -22,6 +22,7 @@ import { music } from "./room/music.js";
 import { SOUND_FILES } from "./room/soundfiles.js";
 import { normalLevels, sound, type Levels } from "./room/sound.js";
 import { mountRoom, type RoomHandle } from "./room/room.js";
+import { loadCardPictures } from "./room/cardart.js";
 import type { ToBackend, ToFrontend } from "./shared/protocol.js";
 
 /** What the extension needs, and why, in the words of the host's own permission dialog. */
@@ -196,6 +197,8 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     }
   });
   sound.arm();
+  // The cards' painted pictures are decoded now, long before a card is dealt.
+  void loadCardPictures();
   sound.loadRecordings(
     SOUND_FILES.filter((f) => f in SOUNDS),
     async (f) => Uint8Array.from(atob(SOUNDS[f]!), (c) => c.charCodeAt(0)).buffer,

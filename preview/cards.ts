@@ -2,7 +2,9 @@
  * Every card face and back side by side, for looking at the art (http://localhost:4184/cards).
  */
 import { CARD_KINDS } from "../src/engine/cards.js";
-import { cardBack, cardFace } from "../src/room/cardart.js";
+import { cardBack, cardFace, loadCardPictures } from "../src/room/cardart.js";
+
+await loadCardPictures();
 
 document.body.style.cssText = "margin:0;background:#16110d;display:flex;flex-wrap:wrap;gap:10px;padding:10px";
 const show = (c: HTMLCanvasElement): void => {
