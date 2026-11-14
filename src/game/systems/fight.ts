@@ -19,7 +19,7 @@
  * A blow that would bring the character down costs a save from a killing blow instead, and a flat 20 health. Saves come
  * back when the character is healed.
  */
-import { isPlayer, MAX_HP, person, same, sheetText, type Judged, type Modifier, type Run } from "../../engine/run.js";
+import { isPlayer, MAX_HP, person, rulesOf, same, sheetText, type Judged, type Modifier, type Run } from "../../engine/run.js";
 import {
   able, addXp, chooseMove, contestGap, contestWords, contestXp, deedXp, endOf, FIGHT_MINUTES_MOST, fightOf, foesOf, foeWords, gapModifier, gapOf, LENGTHS, makeContest,
   moveMeasure, moveSide, opposing, spend, stepOf, viewFight, YOU, type After, type Contest, type Draft, type End, type Ending, type FightState, type Length, type Measure,
@@ -496,6 +496,8 @@ export const fight: System<Reading, Passage> = {
   },
 
   spare(r, t) {
+    // The player may have set the game to be played without them (engine/rules.ts).
+    if (!rulesOf(r).saves) return null;
     const st = fightOf(r);
     const left = spend(st, t.before.sheet.hp);
     if (left === null) return null;
@@ -516,13 +518,13 @@ export const fight: System<Reading, Passage> = {
       for (const m of c.measures) his.push(measureText("you", m));
       if (c.lines.length) his.push(`You might write: ${c.lines.map((l) => `"${l}"`).join(" or ")}.`);
     }
-    his.push(`Saves from a killing blow: ${st.saves} of ${st.savesMost}.`);
+    if (rulesOf(r).saves) his.push(`Saves from a killing blow: ${st.saves} of ${st.savesMost}.`);
     return [{ heading: c ? c.name : "The fight", his }];
   },
 
   shows(r): Show[] {
     const st = viewFight(r);
-    const out: Show[] = [{ kind: "tokens", id: "fight-saves", name: "Saves from a killing blow", count: st.saves, max: st.savesMost }];
+    const out: Show[] = rulesOf(r).saves ? [{ kind: "tokens", id: "fight-saves", name: "Saves from a killing blow", count: st.saves, max: st.savesMost }] : [];
     for (const p of foesOf(r)) out.push({ kind: "bar", id: `foe-${p.name}`, group: "fight", name: p.name, value: p.hp, max: MAX_HP, good: "down", note: `power ${p.power} of 7` });
     const c = live(r, st);
     if (c) {

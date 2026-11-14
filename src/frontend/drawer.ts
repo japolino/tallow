@@ -3,6 +3,7 @@
  * (docs/DESIGN.md, 1); everything that is chosen once and kept lives here instead:
  *   a button to sit down at the table for this chat;
  *   which of the user's connections each job uses, whether it may think first, and the Decision and embedding models;
+ *   how hard the game is (engine/rules.ts): how much luck counts, what a fall costs, and what is refused;
  *   the sound: on or off, how loud, and who made the music and the recordings.
  * Permissions are asked by Lumiverse's own dialog when you sit down (frontend.ts), not here.
  *
@@ -16,6 +17,8 @@ import type { ConnOption, ModelsState } from "../shared/protocol.js";
 import { credit, music } from "../room/music.js";
 import { sound, type Levels } from "../room/sound.js";
 import { SOUND_CREDITS } from "./soundcredits.js";
+import { loadRules, saveRules } from "./rulestore.js";
+import type { Rules } from "../engine/rules.js";
 
 export interface DrawerActions {
   /** Sit down at the table for the open chat. */
@@ -33,6 +36,37 @@ const THINK: [ReasoningPick, string][] = [
   ["auto", "Auto"],
   ["on", "Think"],
   ["off", "Don't think"],
+];
+
+/** The rules section: each choice, its name, a few words on it, and what can be picked (the usual one says so). */
+const RULE_ROWS: [keyof Rules, string, string, [string, string][]][] = [
+  ["dice", "Luck", "how the one roll of a try is thrown", [
+    ["1d100", "One die: every throw as likely as any other"],
+    ["2d50", "Two dice"],
+    ["4d25", "Four dice (usual)"],
+    ["10d10", "Ten dice"],
+    ["25d4", "Twenty-five dice"],
+    ["50d2", "Fifty coins: nearly always the middle"],
+    ["none", "No luck: every throw is a 10"],
+  ]],
+  ["hardship", "The table", "counted on every throw", [
+    ["kind", "Kind: every throw counts 4 higher on the die"],
+    ["even", "Even (usual)"],
+    ["harsh", "Harsh: every throw counts 3 lower on the die"],
+  ]],
+  ["fall", "Brought down", "what it costs you", [
+    ["wake", "You come round, hurt (usual)"],
+    ["lose", "You come round, most of your things gone"],
+    ["end", "The story ends there"],
+  ]],
+  ["saves", "A killing blow", "what stands between you and a fall", [
+    ["true", "Two saves take it first (usual)"],
+    ["false", "Nothing: no saves"],
+  ]],
+  ["refuse", "What cannot work", "a try the narrator judges impossible, or that needs what you lack", [
+    ["true", "It fails without a throw (usual)"],
+    ["false", "It is thrown for all the same, against long odds"],
+  ]],
 ];
 
 const ICON = `<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5c1.4 1.6 2 2.8 2 3.9a2 2 0 0 1-4 0c0-1.1.6-2.3 2-3.9z"/><rect x="7.5" y="9" width="5" height="8.5" rx="1"/><path d="M4 17.5h12"/></svg>`;
@@ -89,6 +123,9 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
     <section><h3>Models</h3>
       <div data-models class="row"><div class="hint">Loading…</div></div>
       <div class="saved" data-saved>Saved.</div></section>
+    <section><h3>Rules</h3>
+      <div data-rules class="row"></div>
+      <div class="hint">Kept for every story. A change counts from the next line you write. More dice means less luck: who your character is, and what you wrote, decide more.</div></section>
     <section><h3>Sound</h3>
       <div class="seg" data-mute><button data-on="1">Sound on</button><button data-on="0">Muted</button></div>
       <div class="vol"><span>Everything</span><input type="range" min="0" max="100" data-vol="master"><output data-out="master"></output></div>
@@ -101,6 +138,21 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
   const modelsEl = root.querySelector<HTMLElement>("[data-models]")!;
   const savedEl = root.querySelector<HTMLElement>("[data-saved]")!;
   root.querySelector("[data-sit]")!.addEventListener("click", () => actions.sit());
+
+  // The rules: read from where they are kept each time the tab is shown, and kept the moment one is changed.
+  const rulesEl = root.querySelector<HTMLElement>("[data-rules]")!;
+  const showRules = (): void => {
+    const now = loadRules();
+    rulesEl.innerHTML = RULE_ROWS.map(([key, label, sub, picks]) => `<div class="row"><span class="lbl">${label}<small>${sub}</small></span>
+      <select data-rule="${key}">${picks.map(([v, l]) => opt(v, l, String(now[key]) === v)).join("")}</select></div>`).join("");
+    rulesEl.querySelectorAll<HTMLSelectElement>("[data-rule]").forEach((sel) =>
+      sel.addEventListener("change", () => {
+        const key = sel.dataset.rule as keyof Rules;
+        saveRules({ ...loadRules(), [key]: key === "saves" || key === "refuse" ? sel.value === "true" : sel.value } as Rules);
+      }),
+    );
+  };
+  showRules();
 
   // Sound: the levels change at once, as the sliders move.
   const muteEl = root.querySelector<HTMLElement>("[data-mute]")!;
@@ -193,7 +245,7 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
       modelsEl.innerHTML = `<div class="hint">The models could not be read (${esc(e instanceof Error ? e.message : String(e))}).</div>`;
     }
   };
-  const offShown = tab.onActivate(() => void loadModels());
+  const offShown = tab.onActivate(() => (showRules(), void loadModels()));
   void loadModels();
 
   return () => {

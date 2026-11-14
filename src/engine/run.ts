@@ -10,6 +10,8 @@
  * Pure and seeded: nothing here asks a model or reads a clock.
  */
 
+import { drawsOf, HARDSHIP_BY, LOST_SHARE, readRules, USUAL, type Dice, type Rules } from "./rules.js";
+
 /* ------------------------------------------------- the sheet ------------------------------------------------- */
 
 export const ATTRIBUTES = ["strength", "dexterity", "intelligence", "charisma", "cunning"] as const;
@@ -100,7 +102,14 @@ export interface Run {
   downs: number;
   /** What each further system of the game keeps (game/systems), under its own name; see stateOf. */
   sys?: Record<string, unknown>;
+  /** How hard the game is, as the player last set it (engine/rules.ts); the usual rules when there is none. */
+  rules?: Rules;
+  /** True once the story has ended: the character was brought down where a fall ends it. */
+  over?: boolean;
 }
+
+/** The rules a run is played by. */
+export const rulesOf = (r: Run): Rules => (r.rules ? readRules(r.rules) : USUAL);
 
 /** A system's own state in a run, made the first time it is asked for (a run begun before the system existed has none). */
 export function stateOf<T>(r: Run, name: string, make: () => T): T {
@@ -124,10 +133,15 @@ export function draw(r: Run): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
-/** A roll from 0 to 1 as the sum of four dice, so that middling rolls are common and extremes rare. */
-export function rawRoll(r: Run): number {
+/**
+ * A roll from 0 to 1 as the sum of some dice: four as the game is usually played, so that middling rolls are common
+ * and extremes rare. More dice is less luck, one is the most, and with none every roll is the middle (engine/rules.ts).
+ */
+export function rawRoll(r: Run, dice: Dice = rulesOf(r).dice): number {
+  const { n, each } = drawsOf(dice);
+  if (!n) return 0.5;
   let sum = 0;
-  for (let i = 0; i < 4; i++) sum += draw(r) * 0.25;
+  for (let i = 0; i < n; i++) sum += draw(r) * each;
   return Math.round(sum * 100) / 100;
 }
 
@@ -243,6 +257,9 @@ export function ruleModifiers(r: Run, j: Judged): Modifier[] {
     const apart = t.power - tierOf(r.sheet.level);
     if (Math.abs(apart) > 0.2) out.push({ what: apart > 0 ? `${t.name} is stronger than you` : `${t.name} is weaker than you`, by: Math.round(-apart * 10) });
   }
+  // How hard the player has set the game: the same on every roll.
+  const hardship = HARDSHIP_BY[rulesOf(r).hardship];
+  if (hardship) out.push({ what: hardship > 0 ? "a kind table" : "a harsh table", by: hardship });
   return out;
 }
 
@@ -460,10 +477,26 @@ export function pass(r: Run): void {
   for (const a of r.sheet.abilities) if (a.wait > 0) a.wait--;
 }
 
-/** The character is brought down: they come round with a third of their health, and it is counted. */
-export function fall(r: Run): void {
+/**
+ * The character is brought down, and it is counted. As the game is usually played they come round with a third of
+ * their health. The player may have set a fall to cost more (engine/rules.ts): most of what they carried and do not
+ * wear is gone too, drawn from the run's own dice, or the story ends there. Returns what was lost.
+ */
+export function fall(r: Run): string[] {
   r.downs++;
+  const how = rulesOf(r).fall;
+  if (how === "end") {
+    r.sheet.hp = 0;
+    r.over = true;
+    return [];
+  }
   r.sheet.hp = Math.round(MAX_HP * 0.3);
+  if (how !== "lose") return [];
+  const loose = r.sheet.items.filter((i) => !i.worn);
+  const lost: Item[] = [];
+  for (let n = Math.ceil(loose.length * LOST_SHARE); n > 0; n--) lost.push(...loose.splice(Math.min(loose.length - 1, Math.floor(draw(r) * loose.length)), 1));
+  r.sheet.items = r.sheet.items.filter((i) => !lost.includes(i));
+  return lost.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}`);
 }
 
 /* ------------------------------------------------- a new run ------------------------------------------------- */

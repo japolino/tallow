@@ -23,6 +23,7 @@ import { SOUND_FILES } from "./room/soundfiles.js";
 import { normalLevels, sound, type Levels } from "./room/sound.js";
 import { mountRoom, type RoomHandle } from "./room/room.js";
 import { loadCardPictures } from "./room/cardart.js";
+import { loadRules } from "./frontend/rulestore.js";
 import type { ToBackend, ToFrontend } from "./shared/protocol.js";
 
 /** What the extension needs, and why, in the words of the host's own permission dialog. */
@@ -171,7 +172,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     table.clock(16.5);
     void runSit({
       table,
-      deps: { ask, ...(granted.includes("decisions") ? { decide } : {}), log: (m) => console.warn(`tallow: ${m}`) },
+      deps: { ask, ...(granted.includes("decisions") ? { decide } : {}), log: (m) => console.warn(`tallow: ${m}`), rules: loadRules },
       card: { world: cardText(card as CardInfo, 7000), who: persona ? `${persona.name}. ${persona.who}` : "Nothing is written about them: someone newly arrived in this world, as the card would have a newcomer be.", name: persona?.name ?? "", ...(first ? { first: unmacro(first, (card as CardInfo).name) } : {}), retell: true },
       seed: parseInt(randomSeed().slice(0, 8), 16),
       saved: kept,

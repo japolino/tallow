@@ -22,6 +22,8 @@ import {
 } from "../engine/run.js";
 import { sureChoice } from "./decide.js";
 import type { Message } from "./ask.js";
+import { readRules } from "../engine/rules.js";
+import { rulesOf } from "../engine/run.js";
 import { asked, head, int, list, obj, said, tail, type Card, type More, type Page, type Readback, type RunDeps, type Settling, type Show, type System, type Told, type Verdict } from "./system.js";
 import { SYSTEMS } from "./systems/index.js";
 
@@ -64,6 +66,15 @@ async function safelyAsync<T>(d: RunDeps, sys: System, what: string, otherwise: 
     return otherwise;
   }
 }
+
+/** The rules the player has set, written into the run, so that every part of the game reads the same ones. */
+export function ruled(d: RunDeps, r: Run): Run {
+  if (d.rules) r.rules = readRules(d.rules());
+  return r;
+}
+
+/** What is answered to a line written after the story has ended. */
+export const OVER_SAYS = 'This story is over: your character was brought down, and by the rules you set it ends there. Write "new game" to begin another.';
 
 /** The scene as every model is shown it: where the character is and who is there, and what each system adds. */
 export function sceneOf(d: RunDeps, r: Run): string {
@@ -126,7 +137,7 @@ Rules:
 
 /** A new run for a card. A sheet the builder could not write is a plain one, and the run still opens. */
 export async function begin(d: RunDeps, c: Card, seed: number): Promise<Run> {
-  const r = newRun(seed, c.world, c.who, c.name);
+  const r = ruled(d, newRun(seed, c.world, c.who, c.name));
   const built = await asked(d, beginMessages(c), "builder", (j) => {
     const place = obj(j.place);
     const skills = list(j.skills).map(obj).map((s) => ({ name: said(s.name, 30), level: int(s.level, 1, 4, 1) })).filter((s) => s.name && s.name.split(" ").length <= 3 && !ATTRIBUTES.includes(s.name.toLowerCase() as Attribute));
@@ -718,9 +729,10 @@ export async function turn(d: RunDeps, before: Run, line: string, o: TurnOptions
 
 /** The first half of a turn: the line is judged and, where anything is in doubt, rolled. The run given is not changed. */
 export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<Judging> {
-  const r = structuredClone(before);
+  const r = ruled(d, structuredClone(before));
   const s = r.sheet;
   const report: Report = { kind: "action", act: "", verdict: null, reason: "", pro: [], con: [], second: "", roll: null, changes: [], ms: { judge: 0, tell: 0, read: 0 } };
+  if (r.over) return { run: r, line, report: { ...report, kind: "ooc" }, result: "", reply: OVER_SAYS };
   let at = Date.now();
 
   // Judge, with the second look beside it; and each system reads the line for what is its own to settle.
@@ -773,6 +785,8 @@ export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<
     let verdict: Verdict = (second && second !== "none" && second !== j.verdict) || (toHand && j.verdict === "implausible") ? "challenge" : j.verdict;
     if (second) report.second = second === j.verdict ? `agreed (${second})` : `said ${second}; the judge said ${j.verdict}`;
     if (j.needs && verdict !== "trivial") verdict = "missing";
+    // Where the player has set that nothing is refused, what cannot work is tried all the same: the judge's doubts are in its scores already.
+    if (!rulesOf(r).refuse && (verdict === "implausible" || verdict === "missing")) verdict = "challenge";
     report.verdict = verdict;
     const rest = "Whatever else the player wrote happens as they wrote it, as far as this result allows.";
     // An ability called on rests afterwards, rolled for or not.
@@ -897,10 +911,18 @@ export async function tellTurn(d: RunDeps, p: Judging, o: TurnOptions = {}): Pro
     }
   }
   if (s.hp <= 0) {
-    fall(r);
-    report.changes.push(`You are brought down. You come round with ${s.hp} health.`);
+    const lost = fall(r);
+    let ending: string;
+    if (r.over) {
+      report.changes.push("You are brought down, and this story ends here.");
+      ending = `${s.name} has been brought down and will not get up again: this is the end of their story. Tell, in one short paragraph, how it ends for them here, and what those who brought them down do next.`;
+    } else {
+      report.changes.push(`You are brought down. You come round with ${s.hp} health.`);
+      if (lost.length) report.changes.push(`Gone when you come round: ${lost.join(", ")}.`);
+      ending = `${s.name} has been brought down: they can take no more and lose their senses. Tell, in one short paragraph, how they come round some time later, alive but badly worse off, and where. Those who brought them down have done what they would with the chance.${lost.length ? ` When they come round, these are gone, taken or lost: ${lost.join(", ")}.` : ""}`;
+    }
     try {
-      const after = (await d.ask(tellMessages(r, null, `${s.name} has been brought down: they can take no more and lose their senses. Tell, in one short paragraph, how they come round some time later, alive but badly worse off, and where. Those who brought them down have done what they would with the chance.`, "One paragraph, 60 to 120 words.", sceneOf(d, r)), "teller")).trim();
+      const after = (await d.ask(tellMessages(r, null, ending, "One paragraph, 60 to 120 words.", sceneOf(d, r)), "teller")).trim();
       if (after) {
         story = `${story}\n\n${after}`;
         r.beats[r.beats.length - 1]!.story = story;

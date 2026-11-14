@@ -10,7 +10,7 @@ import { ATTRIBUTES, MAX_HP, outcomeName, outcomeOf, spend, standingWord, xpToNe
 import { hourOf } from "../engine/upkeep.js";
 import { CARDS_OUT, type Table, type Written } from "./table.js";
 import { firstJson } from "./ask.js";
-import { begin, judgeTurn, pagesOf, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
+import { begin, judgeTurn, OVER_SAYS, pagesOf, ruled, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
 import type { Show } from "./system.js";
 import { pickMusic } from "./music.js";
 
@@ -185,7 +185,8 @@ export async function runSit(o: RunSitOptions): Promise<void> {
   table.theatre?.(true);
   /** The run as the table shows it, written out again whenever it changes: your sheets, and what the systems put out. */
   const lay = (r: Run): void => {
-    const shows = inOrder(showsOf(deps, r));
+    // By the rules as the player has them set now: a save from a killing blow is not laid out where there are none.
+    const shows = inOrder(showsOf(deps, ruled(deps, r)));
     table.sheets?.(allSheets(deps, r, shows));
     table.show?.(shows);
     // The room's own clock and the light in its window follow the story's hour.
@@ -215,7 +216,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     const before = run.beats[run.beats.length - 1];
     score(run, before?.story ?? run.opening);
     table.notes?.(before ? { mine: before.you, his: paragraphs(before.story) } : openingNotes(run));
-    await table.say([`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
+    await table.say(run.over ? [OVER_SAYS] : [`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
   } else {
     if (o.mute) {
       await table.say([NO_VOICE]);
@@ -331,6 +332,10 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     table.notes?.({ mine: line, ...(roll ? { heading: cap(x.act).slice(0, 60) } : {}), his: [...(roll ? [rollSaid(roll)] : []), ...aside, ...paragraphs(t.story), ...changes] });
     if (after || changes.length) await table.say([...paragraphs(after), ...changes]);
     if (roll) await table.page({ heading: cap(x.act).slice(0, 60), his: [rollSaid(roll), ...paragraphs(t.story), ...changes] });
+    if (run.over) {
+      await table.say(['Write "new game" to begin another.']);
+      continue;
+    }
     if (run.sheet.points > 0) await table.say([`You have ${run.sheet.points} points to place among ${ATTRIBUTES.join(", ")}. Write where they go.`]);
   }
 }

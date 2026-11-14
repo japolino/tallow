@@ -59,7 +59,9 @@ const decide = async (_what: string, state: unknown, questions: Record<string, D
   }
 };
 const only = arg("only");
-const deps = { ask, ...(env.DECISION_URL ? { decide } : {}), log: (m: string) => out(`_(${m})_`), ...(only !== undefined ? { systems: systemsNamed(only.split(",").map((x) => x.trim())) } : {}) };
+// --rules '{"dice":"1d100","hardship":"harsh","fall":"end","saves":false,"refuse":false}' sets how hard the game is (src/engine/rules.ts).
+const rules = arg("rules");
+const deps = { ask, ...(env.DECISION_URL ? { decide } : {}), log: (m: string) => out(`_(${m})_`), ...(only !== undefined ? { systems: systemsNamed(only.split(",").map((x) => x.trim())) } : {}), ...(rules ? { rules: () => JSON.parse(rules) as unknown } : {}) };
 /** The sheet, the scene and what every system keeps, as text. */
 const whole = (r: Run): string => [sheetText(r), sceneOf(deps, r), ...pagesOf(deps, r).map((p) => `${p.heading.toUpperCase()}\n${p.his.join("\n")}`), tableText(r)].filter(Boolean).join("\n\n");
 /** What the systems put on the table, as lines: the map, the cards, the meters and the counters. */

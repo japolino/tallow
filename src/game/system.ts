@@ -40,6 +40,8 @@ export interface RunDeps {
   log?: (m: string) => void;
   /** The systems played with; all of them (game/systems/index.ts) when not given. */
   systems?: readonly System[];
+  /** How hard the game is, as the player has it set now (engine/rules.ts): read at every line. The usual rules when not given. */
+  rules?: () => unknown;
 }
 
 /** What a run is set up from: a card, the player's character page, and how the card opens (when it says). */
