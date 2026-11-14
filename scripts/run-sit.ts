@@ -10,6 +10,7 @@
  *
  *   bun run build && bun scripts/run-sit.ts
  */
+import { SAMPLES } from "../preview/propsamples.js";
 import { withPage } from "./browser.js";
 
 const W = 1280, H = 800;
@@ -62,6 +63,10 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   check("a sheet is written from the card", await until(`localStorage.getItem(${JSON.stringify(KEY)})`, 40000));
   check("for the name on the page, with the game's attributes", (await run<string>("run.sheet.name + ' ' + run.sheet.attributes.dexterity + ' ' + run.sheet.skills.length")) === "Ash 6 8", String(await run("run.sheet.name + ' ' + run.sheet.attributes.dexterity + ' ' + run.sheet.skills.length")));
   check("the opening is said, and how to play", await until(`${heard("Lamplighters' Stair")} && ${heard("Write what you do")}`, 30000));
+  // What the table's props are for is said once, as each first comes up: the satchel, since something is carried.
+  check("the satchel is explained after the opening", await until(heard("That satchel at your right hand"), 30000), await page.run<string>("window.heard.slice(-4).join(' / ')"));
+  check("and the run remembers that it was", await until(`(() => { const run = JSON.parse(localStorage.getItem(${JSON.stringify(KEY)}) ?? "null")?.run; return run?.taught?.includes("pack"); })()`, 10000));
+  check("your satchel is on the table", await until("room.desk.props.out.includes('pack')", 10000), String(await page.run("room.desk.props.out.join(' ')")));
   // Your own three, and each system's pages after them.
   check("your sheets lie by your hand", await until("room.desk.sheaf.length >= 3", 10000), String(await page.run("room.desk.sheaf.length")));
   check("you are asked to write", await until(ASKED, 40000));
@@ -83,6 +88,7 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   check("the run is kept, a turn on", (await run<string>("run.turn + ' ' + run.beats.length + ' ' + run.sheet.xp + ' ' + run.people.length")) === "1 1 8 2", String(await run("run.turn + ' ' + run.beats.length + ' ' + run.sheet.xp + ' ' + run.people.length")));
   check("the skill thrown on is practised", (await run<number>("run.sheet.skills.find((k) => k.name === 'Stealth').xp")) === 440);
   check("a page of it is handed over", await until("room.desk.pages.some((p) => (p.heading ?? '').startsWith('Get close'))", 40000));
+  check("the satchel is not explained a second time", (await page.run<number>("window.heard.filter((t) => t.includes('That satchel at your right hand')).length")) === 1);
   await until(ASKED, 40000);
   await page.wait(600);
   await shot("03-told");
@@ -119,6 +125,87 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   // What the systems put on the table, driven straight from here so every kind and every change is seen whatever the
   // run has come to: a map of known places, cards on your side, meters in the reckoning's frame and counters on its slip.
   // The next real turn lays out what the systems themselves show instead.
+  const thing = (name: string, text: string, qty: number, worn: boolean) => {
+    const called = `the ${name.toLowerCase()}`;
+    return {
+      id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"), name, text, quality: "common", qty, worn, called, makes: !worn,
+      choices: [{ say: "Use it", line: `I use ${called} ` }, ...(worn ? [] : [{ say: "Leave it behind", line: `I leave ${called} behind for good.` }])],
+    };
+  };
+  /** What is carried, as the goods system gives it to the satchel (src/game/systems/goods.ts, packShow). */
+  const PACK = {
+    kind: "pack",
+    items: [thing("Hemp rope", "Thirty feet of tarred rope.", 1, false), thing("Lamp oil", "A flask of whale oil.", 3, false), thing("Belt knife", "Short and plain.", 1, true)],
+    money: 12,
+    coin: "silver",
+    notes: ["One silver buys a meal."],
+    making: { say: "Make something with it", before: "Out of ", between: ", ", last: " and ", after: " I make ", most: 3 },
+  };
+  /**
+   * The satchel: laid out when touched, a thing's choice writes its line and sends nothing, and things set in the
+   * chalk ring keep a line that makes something of them on the pad.
+   */
+  const satchel = async (on: string): Promise<void> => {
+    const turn = await run<number>("run.turn");
+    check(`${on}the satchel is on the table and in the picture`, await until("room.desk.props.out.includes('pack') && !!room.desk.screenOf('prop:pack')", 10000) && (await inPicture("prop:pack")), JSON.stringify(await page.run("room.desk.screenOf('prop:pack')")));
+    check(`${on}touching the satchel lays it out`, (await touch("prop:pack")) && (await until("room.desk.props.openKey === 'pack' && room.desk.glance.k > 0.95 && room.desk.props.partsOf().includes('tag:hemp-rope')", 8000)), String(await page.run("room.desk.props.openKey + ' ' + room.desk.props.partsOf().join(' ')")));
+    await page.wait(700);
+    await shot(`${on ? "21-phone" : "19"}-satchel-open`);
+    check(`${on}touching a thing shows what it is and what can be written with it`, (await touch("prop:pack:tag:hemp-rope")) && (await until("room.desk.props.partsOf().includes('choice:1')", 5000)), String(await page.run("room.desk.props.partsOf().join(' ')")));
+    await page.wait(500);
+    await shot(`${on ? "22-phone" : "20"}-satchel-thing`);
+    check(`${on}touching a choice writes its line`, (await touch("prop:pack:choice:0")) && (await until("room.desk.mode === 'writing' && room.desk.draft === 'I use the hemp rope '", 5000)), JSON.stringify(await page.run("room.desk.draft")));
+    check(`${on}and sends nothing`, (await run<number>("run.turn")) === turn && (await page.run<boolean>("room.desk.inviting")));
+    check(`${on}and the satchel is closed again`, await until("room.desk.props.openKey === null", 5000));
+    await rubOut();
+    // A making: two things set in the ring, and the line that makes something of them kept on the pad, unsent.
+    const ringed = (await touch("prop:pack")) && (await until("room.desk.props.partsOf().includes('tag:hemp-rope')", 8000)) && (await touch("prop:pack:tag:hemp-rope")) && (await until("room.desk.props.partsOf().includes('choice:2')", 5000)) &&
+      (await touch("prop:pack:choice:2")) && (await until("!room.desk.props.partsOf().includes('choice:0')", 5000)) && (await touch("prop:pack:tag:lamp-oil")) && (await until("room.desk.props.partsOf().includes('choice:2')", 5000)) && (await touch("prop:pack:choice:2"));
+    check(`${on}things set in the chalk ring keep a making on the pad`, ringed && (await until("room.desk.draft === 'Out of the hemp rope and the lamp oil I make ' && room.desk.props.openKey === 'pack'", 5000)), JSON.stringify(await page.run("room.desk.draft")));
+    check(`${on}which sends nothing either`, (await run<number>("run.turn")) === turn);
+    await page.key("Escape");
+    check(`${on}Escape rolls it up and sits you back`, await until("room.desk.props.openKey === null && room.desk.glance.k < 0.05", 6000));
+    await page.type("I ");
+    await page.wait(400);
+    await rubOut();
+  };
+  /**
+   * The other five props, laid out with the samples their own systems' Shows are modelled on (preview/propsamples.ts):
+   * each is on the table and in the picture, opens when touched, and a part's choice writes the game's line and sends
+   * nothing. They are taken off the table again afterwards.
+   */
+  const OTHERS: [key: string, name: string, parts: string[], line: string][] = [
+    ["stall", "the seller's cloth", ["ware:heavy wool cloak", "choice:0"], "I buy the heavy wool cloak from Oren, just one."],
+    ["ring", "the fight ring", ["foe:woman-in-grey", "choice:0"], "I attack The Woman in Grey "],
+    ["board", "the quest board", ["slip:q2", "task:q2-4", "choice:1"], "To search the drying sheds by the ferry, I "],
+    ["self", "the character board", ["attr:strength", "choice:0"], "I put one point into Strength."],
+    ["rack", "the faction rack", ["pennant:lamplighters-guild", "choice:0"], "I call on the Lamplighters' Guild for their help: A word in the right ear."],
+  ];
+  const others = async (on: string, base: object[]): Promise<void> => {
+    const turn = await run<number>("run.turn");
+    await page.run(`(room.show(${JSON.stringify([...base, ...OTHERS.flatMap(([key]) => SAMPLES[key]!(6))])}), 1)`);
+    check(`${on}every prop is on the table at once`, await until("room.desk.props.out.length === 6", 15000), String(await page.run("room.desk.props.out.join(' ')")));
+    await page.wait(2500);
+    await shot(`${on ? "24-phone" : "23"}-every-prop`);
+    for (const [key, name, parts, line] of OTHERS) {
+      const there = (await until(`!!room.desk.screenOf('prop:${key}')`, 5000)) && (await inPicture(`prop:${key}`));
+      check(`${on}${name} is in the picture`, there, JSON.stringify(await page.run(`room.desk.screenOf('prop:${key}')`)));
+      let ok = (await touch(`prop:${key}`)) && (await until(`room.desk.props.openKey === '${key}' && room.desk.glance.k > 0.95`, 8000));
+      check(`${on}touching ${name} opens it`, ok, String(await page.run("room.desk.props.openKey")));
+      for (const part of parts) ok = ok && (await until(`room.desk.props.partsOf().includes(${JSON.stringify(part)})`, 6000)) && (await touch(`prop:${key}:${part}`)) && ((await page.wait(500)), true);
+      check(`${on}and a choice of it writes the game's line`, ok && (await until(`room.desk.mode === 'writing' && room.desk.draft === ${JSON.stringify(line)}`, 6000)), `${JSON.stringify(await page.run("room.desk.draft"))}; parts ${await page.run("room.desk.props.partsOf().join(' ')")}`);
+      check(`${on}and sends nothing, and it is closed`, (await run<number>("run.turn")) === turn && (await until("room.desk.props.openKey === null", 5000)));
+      await rubOut();
+      await page.wait(600);
+    }
+    await page.run(`(room.show(${JSON.stringify(base)}), 1)`);
+    check(`${on}and they leave the table when there is nothing of theirs to show`, await until("room.desk.props.out.join(' ') === 'pack'", 15000), String(await page.run("room.desk.props.out.join(' ')")));
+  };
+  /** Whether something of the desk's is inside the picture, in the page's own pixels. */
+  const inPicture = async (what: string): Promise<boolean> => {
+    const at = await page.run<{ x: number; y: number; w: number; h: number } | null>(`(() => { const p = room.desk.screenOf(${JSON.stringify(what)}); return p && { ...p, w: innerWidth, h: innerHeight }; })()`);
+    return !!at && at.x > 0 && at.x < at.w && at.y > 0 && at.y < at.h;
+  };
   const FIRST = [
     {
       kind: "map",
@@ -139,6 +226,7 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
     { kind: "bar", id: "b1", group: "needs", name: "Hunger", value: 3, max: 10, good: "down" },
     { kind: "bar", id: "b2", group: "fight", name: "The boy's nerve", value: 6, max: 8, good: "none", note: "wavering" },
     { kind: "tokens", id: "t1", name: "Saves from death", count: 2, max: 3 },
+    PACK,
   ];
   const SECOND = [
     {
@@ -157,6 +245,7 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
     { kind: "bar", id: "b4", group: "fight", name: "Grey woman's guard", value: 14, max: 20, good: "down" },
     { kind: "bar", id: "b3", group: "needs", name: "Fatigue", value: 2, max: 6, good: "down" },
     { ...FIRST[6], count: 1 },
+    PACK,
   ];
   const sideIds = "room.desk.cards.sideCards.map((c) => c.id).join(' ')";
   const piece = "[...room.pieces.values()].find((p) => p.kind === 'player')";
@@ -191,6 +280,10 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   await shot("12-card-held");
   check("touching it again writes the line pencilled on it", (await touch("held")) && (await until("room.desk.mode === 'writing' && room.desk.draft === 'I ask the boy who sent him.'", 5000)), String(await page.run("room.desk.draft")));
   await rubOut();
+
+  // Your satchel, with everything else out.
+  await satchel("");
+  await others("", FIRST);
 
   // A second list: what is the same stays, the rest is added, changed and taken away.
   await page.run(`(room.show(${JSON.stringify(SECOND)}), 1)`);
@@ -293,6 +386,8 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   await page.wait(1200);
   await shot("16-phone-writing");
   await rubOut();
+  await satchel("on a phone, ");
+  await others("on a phone, ", SECOND);
   check("on a phone, the reckoning can be leaned over", (await touch("tally")) && (await until("room.desk.glance.k > 0.95", 5000)));
   await page.wait(500);
   await shot("17-phone-reckoning");

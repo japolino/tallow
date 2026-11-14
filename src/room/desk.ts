@@ -29,6 +29,7 @@ import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
 import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
 import { kindOfGroup, SIDE_MOST, TableCards } from "./tablecards.js";
 import { Reckoning } from "./tally.js";
+import { TableProps } from "./props/index.js";
 import { ease, Held, Tracks, type Reacher, type Step } from "./track.js";
 import { Voice } from "./voice.js";
 import type { Show } from "../game/system.js";
@@ -164,9 +165,22 @@ export class Desk {
   readonly cards: TableCards;
   /** The reckoning at the left of the table: meters as beads on wires, counters as stones on slips (tally.ts). */
   readonly tally: Reckoning;
+  /**
+   * The props: one thing for each mechanic of the game, each with its own home on the table, opened by a touch
+   * (props/index.ts). Scripts drive them through this.
+   */
+  readonly props: TableProps;
+  /** Which turn of the head is the lean over an open prop: when you have turned to anything else, the prop is shut. */
+  private propsTurn = -1;
+  /** The line a prop keeps up to date on the pad (a making being put together), as it was last written there. */
+  private keptLine = "";
   /** The places on a run's map that a touch writes a line for, while it is out (room.ts sets them). */
   places: { id: string; line: string }[] = [];
   private glanceFov = 32;
+  private glanceExact = false;
+  /** Where the glance is going, and the lens it has now: a glance that is turned to something else goes there, it does not jump. */
+  private glanceTo = { eye: V(-0.3, 0.34, 0.58), look: V(-0.64, 0.12, -0.2) };
+  private glanceFovNow = -1;
   /** Called when you reach for the dice box (set by the game while a throw is wanted). */
   onDie: (() => void) | null = null;
   mode: DeskMode = "idle";
@@ -253,6 +267,10 @@ export class Desk {
     this.group.add(this.dread.group);
     this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
     this.group.add(this.luck.group);
+    // The bowl of dread and the narrator's die tray are of the earlier game too, and stood where the seller's cloth
+    // and the quest board now have their homes (props/layout.ts).
+    this.dread.group.visible = false;
+    this.luck.group.visible = false;
     this.dice = new HandDice(this.tracks, h.reduced);
     this.group.add(this.dice.group);
     this.roster = new Roster(h.narrator, this.tracks, h.reduced, h.camera);
@@ -266,6 +284,39 @@ export class Desk {
       glance: (eye, look, fov, settled, hold) => this.lookAt(eye, look, fov, settled, hold),
     });
     this.group.add(this.cards.group);
+    const propsRoot = new Group();
+    this.group.add(propsRoot);
+    this.props = new TableProps({
+      root: propsRoot,
+      host: h.host,
+      camera: h.camera,
+      tracks: this.tracks,
+      reduced: h.reduced,
+      narrator: h.narrator,
+      now: () => this.t,
+      free: () => {
+        if (this.mode === "writing") this.close();
+        return this.mode === "idle" && !this.cards.choosing && !this.roster.choosing;
+      },
+      lean: (view) => {
+        if (!view) {
+          if (this.glanceTurn === this.propsTurn) this.lookBack();
+          return;
+        }
+        h.sitBack();
+        void this.cards.unlook();
+        this.lookAt(V(...view.eye), V(...view.look), view.fov, new Promise(() => undefined), 0, true);
+        this.propsTurn = this.glanceTurn;
+      },
+      write: (line) => this.writeIn(line),
+      keep: (line) => this.keepLine(line),
+      kept: () => !!this.keptLine && this.field.value.includes(this.keptLine),
+      notebook: () => {
+        this.open();
+        if (this.mode === "writing") this.field.setSelectionRange(this.field.value.length, this.field.value.length);
+      },
+      tell: (text) => (this.read.textContent = text),
+    });
 
     const mat = <T extends Material>(m: T): T => {
       this.mats.push(m);
@@ -376,6 +427,11 @@ export class Desk {
     return !!this.held || this.cards.looking;
   }
 
+  /** True while a prop is open and leaned over: its tags and slips are small writing, drawn finely too (room.ts). */
+  get propUp(): boolean {
+    return !!this.props.openKey && this.glance.k > 0.4;
+  }
+
   /** True while you are turned from your writing to what happened last: the room draws that finely too (room.ts). */
   get notesUp(): boolean {
     return this.notesK > 0.4;
@@ -425,12 +481,15 @@ export class Desk {
     const groups = [...new Set(bars.map((b) => b.group))];
     this.tally.meters([...bars].sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group)));
     this.tally.kept(shows.flatMap((s) => (s.kind === "tokens" ? [s] : [])));
+    // Each prop takes what is its own from the whole list, and is on the table only while it has something.
+    this.props.show(shows);
   }
 
   /**
    * Write a line in the notebook for the player, as if they had written it, ready to send or change: the notebook is
    * opened if it can be, and what was on the pad already is kept, the line going after it. It is never sent from here.
-   * When the narrator is not waiting for a line, it waits on the pad until the notebook is next opened.
+   * When the narrator is not waiting for a line, it waits on the pad until the notebook is next opened. A line given
+   * with a space at its end is unfinished ("I use the rope to "): the space is kept, so the player writes straight on.
    */
   writeIn(text: string): void {
     const line = text.replace(/\s+/g, " ").trim();
@@ -438,7 +497,7 @@ export class Desk {
     if (this.mode === "idle" && this.wanted) this.open();
     this.sheet ??= this.padPage();
     const before = this.field.value.replace(/\s+$/, "");
-    this.field.value = (before ? `${before} ${line}` : line).slice(0, MOST);
+    this.field.value = `${before ? `${before} ${line}` : line}${/\s$/.test(text) ? " " : ""}`.slice(0, MOST);
     this.notesWant = false;
     this.setDraft(this.field.value.replace(/\n/g, " "));
     this.scribble = 1;
@@ -447,6 +506,32 @@ export class Desk {
       this.field.focus({ preventScroll: true });
       this.field.setSelectionRange(this.field.value.length, this.field.value.length);
     }
+  }
+
+  /**
+   * Keep one line up to date on the pad for a prop that is still open (props/base.ts, keep): it takes the place of
+   * the line kept before, where that still stands as it was written, and goes after what is on the pad otherwise;
+   * "" takes the kept line off again. The notebook is not opened, and nothing is sent.
+   */
+  keepLine(text: string): void {
+    const line = text.replace(/\s+/g, " ").trim();
+    const old = this.keptLine;
+    const now = this.field.value;
+    let next: string;
+    if (old && now.includes(old)) next = now.replace(old, line);
+    else if (!line) next = now;
+    else next = now.trim() ? `${now.replace(/\s+$/, "")} ${line}` : line;
+    next = next.replace(/\s+/g, " ").replace(/^\s+/, "");
+    // An unfinished line that ends the pad keeps the space after it, for the pencil to go on from.
+    if (line && next.replace(/\s+$/, "").endsWith(line)) next = `${next.replace(/\s+$/, "")}${/\s$/.test(text) ? " " : ""}`;
+    else if (!next.trim()) next = "";
+    this.keptLine = line;
+    if (next === now) return;
+    this.sheet ??= this.padPage();
+    this.field.value = next.slice(0, MOST);
+    this.setDraft(this.field.value);
+    this.scribble = 1;
+    sound.write(this.pencil.position.x);
   }
 
   /** Turn from the notebook to what happened last, or back to the notebook. */
@@ -870,6 +955,7 @@ export class Desk {
 
   /** Put down whatever you have picked up to look at, and shut the notebook, before the narrator hands you something. */
   private async calm(): Promise<void> {
+    this.props.close();
     await this.cards.unlook();
     if (this.mode === "writing") this.close();
     if (this.mode === "reading") await this.setDown();
@@ -891,11 +977,21 @@ export class Desk {
     this.lookAt(V(at.x, 0.44, at.z + 0.34), at.clone().add(V(0, 0, 0.01)), 30, settled, 0.2);
   }
 
-  /** Turn your head toward something (a card being turned, say) until `settled`, and `hold` seconds more. */
-  lookAt(eye: Vector3, look: Vector3, fov: number, settled: Promise<void>, hold = 1.5): void {
-    this.glance.eye.copy(eye);
-    this.glance.look.copy(look);
+  /**
+   * Turn your head toward something (a card being turned, say) until `settled`, and `hold` seconds more. Turned to
+   * something already, your head goes from that to this rather than jumping.
+   * @param exact the lens is `fov` whatever the shape of the picture (else an upright one is given a wider lens)
+   */
+  lookAt(eye: Vector3, look: Vector3, fov: number, settled: Promise<void>, hold = 1.5, exact = false): void {
+    this.glanceTo.eye.copy(eye);
+    this.glanceTo.look.copy(look);
+    if (this.glance.k < 0.02 || this.h.reduced) {
+      this.glance.eye.copy(eye);
+      this.glance.look.copy(look);
+      this.glanceFovNow = -1;
+    }
     this.glanceFov = fov;
+    this.glanceExact = exact;
     const mine = ++this.glanceTurn;
     this.glanceWant = 1;
     this.glanceEnd = Infinity;
@@ -1089,8 +1185,9 @@ export class Desk {
     if (this.mode !== "idle" || !this.wanted) return;
     this.h.sitBack();
     this.voice.hush();
-    // A card held up to be read goes back down: the notebook needs both eyes.
+    // A card held up to be read goes back down, and an open prop is shut: the notebook needs both eyes.
     void this.cards.unlook();
+    this.props.close();
     this.mode = "writing";
     if (!this.sheet) {
       this.sheet = this.padPage();
@@ -1154,6 +1251,8 @@ export class Desk {
     const got = this.wanted;
     this.wanted = null;
     this.notesWant = false;
+    this.keptLine = "";
+    this.props.sent();
     this.dropTurned();
     sheet.mode = "turn";
     sheet.writing.mine = line;
@@ -1268,13 +1367,15 @@ export class Desk {
 
   /**
    * Where on the screen something of yours is drawn, for scripted checks: "place:<id>" on a run's map, "card:<i>" on
-   * your side, "held" for a card held up to read, "tally" for the reckoning, or the notebook and the rest (where).
+   * your side, "held" for a card held up to read, "tally" for the reckoning, "prop:<key>" for a prop and
+   * "prop:<key>:<part>" for a part of the open one (props/index.ts, screenOf), or the notebook and the rest (where).
    */
   screenOf(what: string): { x: number; y: number } | null {
     let at: Vector3 | null | undefined = null;
     if (what.startsWith("place:")) at = this.h.stops?.get(what.slice(6));
     else if (what.startsWith("card:")) at = this.cards.sideAt()[Number(what.slice(5))];
     else if (what === "held") at = this.cards.eyedAt();
+    else if (what.startsWith("prop:")) return this.props.screenOf(what.slice(5));
     else if (what === "tally") at = this.tally.spots()[0];
     else if (["book", "notes", "pile", "sheaf", "box"].includes(what)) at = this.where(what as "book");
     if (!at) return null;
@@ -1308,6 +1409,8 @@ export class Desk {
 
   /** True where a click would do something of the desk's, so the room can show it. */
   hot(e: { clientX: number; clientY: number }): boolean {
+    // The props: which part of the open one the pointer is over, or which closed one.
+    const prop = this.props.hot(e);
     // A line of the paper of who you may be, while a box can be ticked.
     if (this.roster.choosing) {
       const i = this.roster.lineAt(e, this.h.host);
@@ -1324,6 +1427,8 @@ export class Desk {
     const free = this.mode === "idle" || this.mode === "writing";
     this.cards.sideHover = free ? this.sideCard(e) : -1;
     if (this.cards.sideHover >= 0 || this.cards.looking) return true;
+    // An open prop takes every touch; a closed one can be opened whenever your hands are free.
+    if (this.props.openKey || (prop && free)) return true;
     // A place on a run's map writes a line that goes there; the reckoning can be leaned over and read.
     if (this.mode === "idle" && (this.placeAt(e) >= 0 || this.onTally(e))) return true;
     return this.mode === "holding" || this.mode === "reading" || this.voice.speaking || this.glanceWant > 0 || (this.mode === "idle" && !!on) || (this.mode === "writing" && on === "notes");
@@ -1365,12 +1470,16 @@ export class Desk {
       this.dice.pick(die);
       return true;
     }
+    // An open prop: a touch on one of its parts is that part's; anywhere else closes it.
+    if (this.props.openKey) return this.props.click(e);
     if ((this.mode === "idle" || this.mode === "writing") && !this.voice.speaking) {
       const i = this.sideCard(e);
       if (i >= 0) {
         void this.cards.look(i);
         return true;
       }
+      // A prop is opened by a touch, with the notebook open or shut (it is shut for it).
+      if (this.props.at(e) && this.props.click(e)) return true;
     }
     if (this.voice.hurry()) return true;
     // Turned to the balance, the dice box and the notebook are out of sight: a click turns you back to them.
@@ -1435,7 +1544,9 @@ export class Desk {
     const go = e.key === "Enter" || e.key === " ";
     let used = true;
     const looking = this.cards.lookingAt;
-    if (looking >= 0 && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.cards.look(Math.max(0, looking - 1));
+    // An open prop: Escape closes it, the arrows go from part to part, Enter touches the one chosen.
+    if (this.props.openKey && this.props.key(e)) used = true;
+    else if (looking >= 0 && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.cards.look(Math.max(0, looking - 1));
     else if (looking >= 0 && (e.key === "ArrowRight" || e.key === "ArrowDown")) void this.cards.look(looking + 1);
     else if (looking >= 0 && e.key === "Enter" && this.cards.lookingLine) {
       // Enter on a card held up writes the line pencilled on it.
@@ -1510,7 +1621,15 @@ export class Desk {
     this.now = t;
     if (this.glanceWant && (t >= this.glanceEnd || this.mode !== "idle")) this.lookBack();
     this.glance.k = to(this.glance.k, this.glanceWant, this.glanceWant ? 2.6 : 3);
-    this.glance.fov = this.h.camera.aspect < 1 ? this.glanceFov + 18 : this.glanceFov;
+    const lens = this.h.camera.aspect < 1 && !this.glanceExact ? this.glanceFov + 18 : this.glanceFov;
+    const swing = still || this.glanceFovNow < 0 ? 1 : Math.min(1, dt * 4.5);
+    this.glance.eye.lerp(this.glanceTo.eye, swing);
+    this.glance.look.lerp(this.glanceTo.look, swing);
+    this.glanceFovNow = this.glanceFovNow < 0 ? lens : this.glanceFovNow + (lens - this.glanceFovNow) * swing;
+    this.glance.fov = this.glanceFovNow;
+    // An open prop is leaned over; once you have turned to anything else, or sat back, it folds up.
+    if (this.props.openKey && (!this.glanceWant || this.glanceTurn !== this.propsTurn)) this.props.shut();
+    this.props.update(dt, t);
     this.cards.update(dt, still);
     // The cover is turned back once the pencil is off it.
     this.coverK = to(this.coverK, this.focusWant && this.inkK > 0.2 ? 1 : 0, 5);
@@ -1615,6 +1734,7 @@ export class Desk {
     this.dice.dispose();
     this.roster.dispose();
     this.cards.dispose();
+    this.props.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();
     for (const page of new Set([this.sheet, this.turned, this.last, this.his, this.held, ...this.pile, ...this.heap, ...this.sheaf])) page?.dispose();

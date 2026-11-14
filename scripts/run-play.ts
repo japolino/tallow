@@ -70,7 +70,14 @@ function tableText(r: Run): string {
     if (s.kind === "map") return `map "${s.title}": ${s.places.map((p) => `${p.id === s.at ? "*" : ""}${p.name}${p.seen ? "" : " (unvisited)"}`).join(", ")}; ways ${s.ways.length}`;
     if (s.kind === "card") return `card [${s.group}] ${s.title}: ${s.text}${s.line ? ` -> writes "${s.line}"` : ""}`;
     if (s.kind === "bar") return `bar [${s.group}] ${s.name} ${s.value}/${s.max}${s.note ? ` (${s.note})` : ""}`;
-    return `tokens ${s.name} ${s.count}${s.max !== undefined ? `/${s.max}` : ""}`;
+    if (s.kind === "tokens") return `tokens ${s.name} ${s.count}${s.max !== undefined ? `/${s.max}` : ""}`;
+    if (s.kind === "pack") return `satchel: ${s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}${i.worn ? " (worn)" : ""}`).join(", ") || "nothing"}; ${s.money} ${s.coin}${s.making?.at ? `; making ${s.making.at}` : ""}${s.sellTo ? `; ${s.sellTo} buys` : ""}`;
+    if (s.kind === "stall") return `seller's cloth, ${s.seller} (${s.purse} ${s.coin}): ${s.wares.map((w) => `${w.name}${w.qty > 1 ? ` x${w.qty}` : ""} ${w.price}`).join(", ") || "nothing"}; ${s.about}`;
+    if (s.kind === "fight") return `fight ring "${s.name}": ${s.foes.map((f) => `${f.name} ${f.down ? "down" : `${f.hp}/${f.max}`} (${f.odds})`).join(", ") || "nobody"}${s.others.length ? `; also ${s.others.map((o) => `${o.name} [${o.stance}]`).join(", ")}` : ""}${s.measures.length ? `; ${s.measures.map((m) => `${m.name} ${m.value}/${m.max}`).join(", ")}` : ""}; you ${s.you.hp}/${s.you.max}${s.saves ? `, saves ${s.saves.count}/${s.saves.max}` : ""}${s.lines.length ? `; offers ${s.lines.map((l) => `"${l.line}"`).join(" ")}` : ""}`;
+    if (s.kind === "quests") return `quest board: ${s.quests.map((q) => `${q.title} [${q.state}${q.end ? `: ${q.end}` : ""}]${q.tasks.length ? ` (${q.tasks.map((t) => `${t.text}: ${t.state}`).join("; ")})` : ""}`).join(" | ") || "nothing"}`;
+    if (s.kind === "self") return `character board: level ${s.level}, ${s.points} attribute ${s.points === 1 ? "point" : "points"} to place; perks: ${s.perks.note} ${s.perks.trees.map((t) => `${t.name} (${t.perks.map((p) => `${p.name}${p.active ? " [active]" : p.state === "learned" ? " [learned]" : p.state === "reach" ? " [within reach]" : ""}`).join(", ")})`).join(" | ")}${s.perks.old.length ? `; from before: ${s.perks.old.map((p) => p.name).join(", ")}` : ""}`;
+    if (s.kind === "standing") return `faction rack: ${s.groups.map((g) => `${g.name} ${g.standing} (${g.label})${g.aid.length ? ` [${g.aid.map((a) => `${a.say}: ${a.state}`).join("; ")}]` : ""}`).join(" | ") || "nobody"}`;
+    return "";
   });
   return lines.length ? `ON THE TABLE\n${lines.join("\n")}` : "";
 }

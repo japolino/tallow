@@ -116,9 +116,14 @@ export interface FightState {
   downs: number;
   /** The turn a save was last spent, or -1. */
   spared: number;
+  /**
+   * Who has fought the character in the fight that is on, by name: kept only so the table can go on showing the ones
+   * brought down where they fell (game/systems/fight.ts, ringShow). It decides nothing, and is emptied once the fight is over.
+   */
+  seen: string[];
 }
 
-export const freshFight = (r: Run): FightState => ({ saves: SAVES_MOST, savesMost: SAVES_MOST, contest: null, bag: [], move: null, after: null, ended: [], downs: r.downs, spared: -1 });
+export const freshFight = (r: Run): FightState => ({ saves: SAVES_MOST, savesMost: SAVES_MOST, contest: null, bag: [], move: null, after: null, ended: [], downs: r.downs, spared: -1, seen: [] });
 
 /** The state as it stands, without writing anything into the run (a run saved before this system has none). */
 export function viewFight(r: Run): FightState {
@@ -136,6 +141,7 @@ export function viewFight(r: Run): FightState {
     ended: Array.isArray(k.ended) ? k.ended : [],
     downs: n(k.downs, f.downs),
     spared: n(k.spared, f.spared),
+    seen: Array.isArray(k.seen) ? k.seen.filter((x): x is string => typeof x === "string") : [],
   };
 }
 

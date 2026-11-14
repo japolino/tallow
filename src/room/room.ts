@@ -884,7 +884,11 @@ class Room implements RoomHandle {
     this.scene.add(this.mapMesh);
   }
 
-  /** The things on the table: candles, the narrator's book, a few coins. */
+  /**
+   * The things on the table: the candles. The narrator's book and its few coins used to lie at its right hand; that
+   * end of the table is now where the props stand (props/layout.ts), and loose coins that are not yours would be
+   * taken for your own beside the purse.
+   */
   private props(): void {
     const brass = new MeshStandardMaterial({ color: 0x8a6a2c, roughness: 0.32, metalness: 0.9 });
     const pewter = new MeshStandardMaterial({ color: 0x55585c, roughness: 0.45, metalness: 0.8 });
@@ -943,42 +947,6 @@ class Room implements RoomHandle {
     black.notch([1, 2, 3, 4, 5].map((k) => k / 6), new MeshBasicMaterial({ color: 0x5a4a3a }));
     this.scene.add(black.group);
 
-    // The narrator's book, closed, at its right hand.
-    const tome = new Group();
-    const cover = new MeshStandardMaterial({ map: this.tex(leatherCanvas(4, [70, 26, 20])), roughness: 0.6 });
-    const pages = new MeshStandardMaterial({ color: 0xb8a57e, roughness: 0.9 });
-    const block = new Mesh(new BoxGeometry(0.21, 0.046, 0.29), pages);
-    block.position.y = 0.031;
-    const c1 = new Mesh(new RoundedBoxGeometry(0.225, 0.008, 0.3, 2, 0.003), cover);
-    c1.position.y = 0.004;
-    const c2 = c1.clone();
-    c2.position.y = 0.058;
-    const spine = new Mesh(new BoxGeometry(0.008, 0.062, 0.3), cover);
-    spine.position.set(-0.112, 0.031, 0);
-    for (const m of [block, c1, c2, spine]) {
-      m.castShadow = m.receiveShadow = true;
-      tome.add(m);
-    }
-    const clasp = new Mesh(new BoxGeometry(0.03, 0.066, 0.02), brass);
-    clasp.position.set(0.108, 0.031, 0);
-    tome.add(clasp);
-    tome.position.set(0.72, 0, -0.14);
-    tome.rotation.y = 0.24;
-    this.scene.add(tome);
-    this.standIn("tome", ...tome.children);
-    this.anchor.set("tome", tome);
-
-    // A few coins by the narrator's book.
-    const gold = new MeshStandardMaterial({ color: 0xb08a34, roughness: 0.3, metalness: 1 });
-    for (let i = 0; i < 6; i++) {
-      const coin = new Mesh(new CylinderGeometry(0.013, 0.013, 0.0025, 18), gold);
-      const stack = i < 3;
-      coin.position.set(stack ? 0.5 : 0.47 + this.rnd() * 0.09, stack ? 0.00125 + i * 0.0026 : 0.00125, stack ? -0.36 : -0.31 + this.rnd() * 0.06);
-      coin.rotation.y = this.rnd() * 3;
-      coin.castShadow = coin.receiveShadow = true;
-      this.scene.add(coin);
-      this.standIn("coin", coin);
-    }
   }
 
   /** An open box of dice by your right hand. The die you roll is taken from it. */
@@ -1074,22 +1042,18 @@ class Room implements RoomHandle {
     const at = (name: string) => this.anchor.get(name) ?? this.scene;
     const scene = this.scene;
 
-    // In place of the plain ones: the table, the dish and the brass stick under the candles, the narrator's book, its coins, your dice box.
+    // In place of the plain ones: the table, the dish and the brass stick under the candles, your dice box.
     put("table", scene, 0, 0, -0.1);
     put("dish", at("dish"), 0, 0, 0);
     put("candlestick", at("candlestick"), 0, 0, 0);
-    put("tome", at("tome"), 0, 0, 0);
     put("dice_box", at("dice_box"), 0, 0, 0);
-    for (const c of this.stands.get("coin") ?? []) {
-      const high = Math.round((c.position.y - 0.00125) / 0.0026);
-      put("coin", scene, c.position.x, high * 0.0034, c.position.z, c.rotation.y);
-    }
 
-    // On the table, out of the way of the map, your things and the narrator's dealing space, and inside the seat's view.
-    // The bottle and the tankard stand in the far corner, outside the way the narrator's left arm goes to the candles:
-    // beside its elbow, the sleeve went through the bottle every evening.
+    // On the table, out of the way of the map, your things, the props' homes (props/layout.ts) and the narrator's
+    // dealing space, and inside the seat's view. The bottle and the tankard stand in the far corner, outside the way
+    // the narrator's left arm goes to the candles: beside its elbow, the sleeve went through the bottle every evening.
+    // The inkwell stands with them, at the table's end beyond the candle dish: its old corner is the faction rack's.
     const tall: [Object3D | null, number][] = [
-      [put("inkwell", scene, 0.86, 0, -0.64, -0.5), 0.1],
+      [put("inkwell", scene, -0.9, 0, -0.4, 0.9), 0.1],
       [put("tankard", scene, -0.87, 0, -0.6, 1.9), 0],
       [put("bottle", scene, -0.95, 0, -0.7, 2.4), 0],
     ];
@@ -1591,7 +1555,9 @@ class Room implements RoomHandle {
   }
 
   private onWheel = (e: WheelEvent): void => {
-    if (this.desk.mode === "reading") void this.desk.leaf(e.deltaY > 0 ? 1 : -1);
+    // The wheel sits you back from an open prop, as it does from the map.
+    if (this.desk.props.openKey) this.desk.props.close();
+    else if (this.desk.mode === "reading") void this.desk.leaf(e.deltaY > 0 ? 1 : -1);
     else if (!this.grab && this.desk.mode === "idle" && Math.abs(e.deltaY) > 4) this.lean(e.deltaY < 0);
   };
 
@@ -1679,7 +1645,7 @@ class Room implements RoomHandle {
     if (struck && !this.reduced) this.jolt = 1;
     else if (this.jolt) this.jolt = this.jolt < 0.004 ? 0 : this.jolt * Math.exp(-dt / 0.2);
     // A page in your hands: the picture is drawn finer and plainer for as long as it is up, so it can be read.
-    const reading = this.desk.pageUp || this.desk.notesUp;
+    const reading = this.desk.pageUp || this.desk.notesUp || this.desk.propUp;
     if (this.fine !== (reading && this.fineOk)) {
       this.fine = reading && this.fineOk;
       this.resize();
@@ -2233,7 +2199,8 @@ class Room implements RoomHandle {
     eye.lerp(f.eye, wk);
     look.lerp(f.look, wk);
     if (!this.reduced) {
-      const free = (1 - rk * 0.75) * (1 - wk * 0.85) * (1 - gk * 0.7);
+      // Leant over an open prop the view hardly follows the pointer: what you reach for should stay where it is.
+      const free = (1 - rk * 0.75) * (1 - wk * 0.85) * (1 - gk * (this.desk.propUp ? 0.96 : 0.7));
       eye.x += Math.sin(t * 0.45) * 0.006 * (1 - k);
       eye.y += Math.sin(t * 0.8) * 0.004;
       look.x += this.view.x * 0.16 * (1 - k * 0.6) * free;

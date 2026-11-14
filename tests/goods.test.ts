@@ -10,8 +10,8 @@ import {
 import { attributesFrom, meet, newRun, stateOf, take, type Outcome, type Run } from "../src/engine/run.js";
 import type { Message, Role } from "../src/game/ask.js";
 import { turn } from "../src/game/runturn.js";
-import type { Readback, RunDeps, Settling, Told } from "../src/game/system.js";
-import { goods, goodsOf, readPlan, readStock, type GoodsState, type Plan, type Result } from "../src/game/systems/goods.js";
+import { makingLine, type Readback, type RunDeps, type Settling, type Show, type Told } from "../src/game/system.js";
+import { goods, goodsOf, MAKING_MOST, PACK_LESSON, packShow, readPlan, readStock, type GoodsState, type Plan, type Result } from "../src/game/systems/goods.js";
 
 /* ------------------------------------------------- the numbers ------------------------------------------------- */
 
@@ -382,22 +382,105 @@ describe("reading the line", () => {
 });
 
 describe("the table and the sheet", () => {
-  test("a merchant here lays out wares as cards whose prices hold still between turns; nothing is made in a run that has no state", () => {
+  test("a merchant here lays out their cloth, whose prices hold still between turns, and no wares as cards; nothing is made in a run that has no state", () => {
     const r = start();
     goods.settle!(r, settling(), plan({ deal: "browse", with: "Baker", seller: true, stock: STOCK }));
+    const stalls = (shows: Show[]) => shows.filter((s): s is Extract<Show, { kind: "stall" }> => s.kind === "stall");
     const a = goods.shows!(r), b = goods.shows!(r);
     expect(a).toEqual(b);
-    expect(a).toHaveLength(2);
-    expect(a[0]).toMatchObject({ kind: "card", line: "I buy the bread from Baker." });
+    expect(a.filter((s) => s.kind === "card")).toEqual([]);
+    expect(stalls(a)).toHaveLength(1);
+    expect(stalls(a)[0]!.wares.map((w) => w.name)).toEqual(["Bread", "Honey cake"]);
     expect(goods.scene!(r).join("\n")).toContain("Baker sells things here");
     expect(goods.pages!(r).map((p) => p.heading)).toContain("Baker's wares");
     r.people[0]!.here = false;
-    expect(goods.shows!(r)).toEqual([]);
+    expect(stalls(goods.shows!(r))).toEqual([]);
     const old = newRun(1, "", "", "Jay");
     goods.scene!(old);
     goods.pages!(old);
     goods.shows!(old);
     expect(old.sys).toBeUndefined();
+  });
+
+  test("the satchel is given what is carried, the coin, and the same few lines for every thing", () => {
+    const r = start();
+    take(r.sheet, { name: "Travelling cloak", text: "Grey wool, patched", quality: "uncommon", qty: 1 })!.worn = true;
+    // The pelt was said to be wearable when it came into being; the plank is from a save from before that was asked.
+    r.sheet.items.find((i) => i.name === "Wolf pelt")!.wearable = true;
+    stateOf<Partial<GoodsState>>(r, "goods", () => ({})).kinds = { "wolf pelt": { kind: 3, precious: false } };
+    const p = packShow(r);
+    expect(goods.shows!(r)[0]).toEqual(p);
+    expect(p).toMatchObject({ kind: "pack", money: 40, coin: "silver" });
+    expect(p.items.map((i) => [i.name, i.qty, i.worn, i.called, i.makes])).toEqual([
+      ["Wolf pelt", 3, false, "the wolf pelt", true],
+      ["Plank", 2, false, "the plank", true],
+      ["Travelling cloak", 1, true, "the travelling cloak", false],
+    ]);
+    expect(new Set(p.items.map((i) => i.id)).size).toBe(3);
+    // Nobody here sells for a living yet: a thing can be used, put on (only one said to be wearable) or left behind; a
+    // worn thing used or taken off; a thing never asked about is offered neither.
+    expect(p.sellTo).toBeUndefined();
+    expect(p.items[0]!.choices).toEqual([{ say: "Use it", line: "I use the wolf pelt " }, { say: "Put it on", line: "I put on the wolf pelt." }, { say: "Leave it behind", line: "I leave the wolf pelt behind for good." }]);
+    expect(p.items[1]!.choices.map((c) => c.say)).toEqual(["Use it", "Leave it behind"]);
+    r.sheet.items.find((i) => i.name === "Plank")!.wearable = false;
+    expect(packShow(r).items[1]!.choices.map((c) => c.say)).toEqual(["Use it", "Leave it behind"]);
+    expect(p.items[2]!.choices).toEqual([{ say: "Use it", line: "I use the travelling cloak " }, { say: "Take it off", line: "I take off the travelling cloak." }]);
+    // While a fight is on, nothing is offered to put on or take off (the original refuses both then).
+    meet(r, { name: "Wolf", text: "", power: 2, hostile: true });
+    expect(packShow(r).items.map((i) => i.choices.map((c) => c.say))).toEqual([["Use it", "Leave it behind"], ["Use it", "Leave it behind"], ["Use it"]]);
+    r.people.find((x) => x.name === "Wolf")!.hostile = false;
+    // What the game knows a thing is worth is written by it; a thing it has not been told the kind of has no note.
+    const ref = worthRef({ kind: 3, precious: false }, "common");
+    expect(p.items[0]!.note).toBe(`Worth about ${inCoins(ref, 3)} silver each; would sell for about ${sellPrice(ref, 3, r.sheet.attributes.charisma, 0)}.`);
+    expect(p.items[1]!.note).toBeUndefined();
+    expect(p.notes[0]).toContain("silver");
+    // A making takes three things at the most and is written the same way wherever it is done.
+    expect(p.making).toEqual({ say: "Make something with it", before: "Out of ", between: ", ", last: " and ", after: " I make ", most: MAKING_MOST });
+    expect(MAKING_MOST).toBe(3);
+    expect(makingLine(p.making!, [])).toBe("");
+    expect(makingLine(p.making!, ["the plank"])).toBe("Out of the plank I make ");
+    expect(makingLine(p.making!, ["the plank", "the wolf pelt"])).toBe("Out of the plank and the wolf pelt I make ");
+    expect(makingLine(p.making!, ["the plank", "the wolf pelt", "the rope"])).toBe("Out of the plank, the wolf pelt and the rope I make ");
+  });
+
+  test("a seller who is here can be sold to from the satchel, a debt is written by the coin, and a forge is named in a making", () => {
+    const r = start();
+    r.sheet.items.find((i) => i.name === "Wolf pelt")!.wearable = true;
+    goods.settle!(r, settling(), plan({ deal: "browse", with: "Baker", seller: true, stock: STOCK }));
+    stateOf<Partial<GoodsState>>(r, "goods", () => ({})).debts = [{ to: "Baker", amount: 30, favour: false }];
+    r.sys!.places = { list: [{ id: "p1", name: "Market square", things: [{ name: "Forge", use: "craft" }, { name: "Well", use: "other" }] }], at: "p1" };
+    const p = packShow(r);
+    expect(p.sellTo).toBe("Baker");
+    expect(p.items[0]!.choices.map((c) => c.line)).toEqual(["I use the wolf pelt ", "I put on the wolf pelt.", "I sell the wolf pelt to Baker.", "I leave the wolf pelt behind for good."]);
+    expect(p.notes).toContain("You owe Baker 30 silver.");
+    expect(p.making).toMatchObject({ at: "at the forge", before: "At the forge, out of " });
+    expect(makingLine(p.making!, ["the plank", "the wolf pelt"])).toBe("At the forge, out of the plank and the wolf pelt I make ");
+    // Reading the place writes nothing into the run.
+    const before = JSON.stringify(r);
+    packShow(r);
+    expect(JSON.stringify(r)).toBe(before);
+    // Someone who will not deal is not offered; nor is anyone once they have gone.
+    r.people[0]!.hostile = true;
+    expect(packShow(r).sellTo).toBeUndefined();
+    r.people[0]!.hostile = false;
+    r.people[0]!.here = false;
+    expect(packShow(r).sellTo).toBeUndefined();
+  });
+
+  test("the satchel is taught only once there is something in it, in the narrator's words, with no keys or mouse in them", () => {
+    const empty = newRun(1, "", "", "Jay");
+    empty.sheet.money = 0;
+    empty.sheet.items = [];
+    expect(goods.teach!(empty)).toEqual([]);
+    expect(goods.teach!(start())).toEqual([PACK_LESSON]);
+    expect(PACK_LESSON.key).toBe("pack");
+    expect(PACK_LESSON.lines.length).toBeGreaterThanOrEqual(2);
+    expect(PACK_LESSON.lines.length).toBeLessThanOrEqual(3);
+    for (const line of PACK_LESSON.lines) {
+      expect(line).toMatch(/[.!?]$/);
+      expect(line).not.toMatch(/click|mouse|keyboard|press|\btap\b|\u2014/i);
+    }
+    expect(PACK_LESSON.lines.join(" ")).toContain("Touch");
   });
 
   test("asking what a thing costs gets code's price, from the seller's own wares when they have it", () => {

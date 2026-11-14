@@ -9,6 +9,7 @@
  * A reel is one sitting, played in order; a clip that is not wanted is played through without pictures, so the ones
  * after it still find the table as they expect. Reels can be filmed side by side, each with its own TALLOW_PORT.
  */
+import { SAMPLES, type Fill } from "../preview/propsamples.js";
 import { FPS, H, W, heard, hurry, reel, sitDown, type Film, type View } from "./film.js";
 
 /** The field the keys go into: the one with the keyboard, inside the room's own shadow tree. */
@@ -391,6 +392,231 @@ async function phoneReel(f: Film, clip: Clip): Promise<void> {
     await touchSlow(f, "place:gate");
     await f.rollUntil("room.desk.mode === 'writing'", 6, 2.5);
   });
+  await rubOut(f);
+  await show(f, [MAP2]);
+  await f.run("(room.setClock(21), 1)");
+  await f.skip(16);
+  await clip("02-the-props-on-a-phone", async () => {
+    await f.roll(0.8);
+    await show(f, [MAP2, ...SAMPLES.pack!(6), ...SAMPLES.board!(6), ...SAMPLES.ring!(6)]);
+    await f.rollUntil("room.desk.props.out.length === 3", 10, 4);
+    await touchSlow(f, prop("ring"));
+    await f.rollUntil(propOpen("ring"), 6, 3);
+    await part(f, "ring", "foe:woman-in-grey", 2.8);
+    await part(f, "ring", "choice:0", 0.2);
+    await f.rollUntil("room.desk.mode === 'writing'", 6, 2.4);
+  });
+}
+
+/* ------------------------------------------------- the props ------------------------------------------------- */
+
+/** Something of a prop's, by the name the desk knows it by: "pack", or a part of the open one, "pack:tag:hemp-rope". */
+const prop = (what: string): string => `prop:${what}`;
+const propOpen = (key: string): string => `room.desk.props.openKey === ${JSON.stringify(key)}`;
+const hasPart = (id: string): string => `room.desk.props.partsOf().includes(${JSON.stringify(id)})`;
+/** Touch a part of the open prop once it can be touched, with the pointer brought over it first. */
+async function part(f: Film, key: string, id: string, after = 1.6): Promise<void> {
+  await f.rollUntil(hasPart(id), 6, 0.3);
+  if (!(await touchSlow(f, prop(`${key}:${id}`)))) console.log(`   (no part ${id} of ${key}: ${await f.run<string>("room.desk.props.partsOf().join(' ')")})`);
+  await f.roll(after);
+}
+/** Shut whatever is open and clear the pad, without pictures. */
+async function shut(f: Film): Promise<void> {
+  await f.run("(room.desk.props.close(), 1)");
+  await f.skip(0.8);
+  if (await f.run<boolean>("room.desk.mode === 'writing'")) await rubOut(f);
+  await f.skip(0.6);
+}
+
+/** Each mechanic's own thing on the table: it arrives, it is opened, something of it is touched, and a line is written. */
+async function propsReel(f: Film, clip: Clip): Promise<void> {
+  await sitDown(f);
+  await quickTurn(f, "I sneak up the stair toward the nearest lamp.");
+  await f.run("(room.desk.voice.hush(), 1)");
+  await f.skip(1.5);
+  await show(f, [MAP2]);
+  await f.wait(`room.mapMesh.visible && room.mapMesh.scale.z > 0.99`, 12);
+  // By candlelight, as most of a sitting is played: the narrator sets the candles out and lights them.
+  await f.run("(room.setClock(21), 1)");
+  await f.skip(16);
+  const out = (key: string): string => `room.desk.props.out.includes(${JSON.stringify(key)})`;
+  const sample = (key: string, fill: Fill = 6): object[] => SAMPLES[key]!(fill);
+
+  await clip("01-the-satchel-arrives", async () => {
+    f.drift(true);
+    await f.roll(1);
+    await show(f, [MAP2, ...sample("pack")]);
+    await f.rollUntil(out("pack"), 8, 4.5);
+  });
+  await clip("02-the-satchel-opens", async () => {
+    f.drift(false);
+    await touchSlow(f, prop("pack"));
+    await f.rollUntil(propOpen("pack"), 6, 3);
+    await part(f, "pack", "tag:hemp-rope", 2.6);
+    await part(f, "pack", "choice:0", 0.2);
+    await f.rollUntil("room.desk.mode === 'writing' && room.desk.draft.startsWith('I use the hemp rope')", 6, 1);
+    await typeLine(f, "to climb down to the quay.");
+    await f.roll(1.5);
+  });
+  await rubOut(f);
+  await clip("03-making-something", async () => {
+    await touchSlow(f, prop("pack"));
+    await f.rollUntil(propOpen("pack"), 6, 1.6);
+    await part(f, "pack", "tag:hemp-rope", 1.8);
+    const make = await f.run<number>(`room.desk.props.partsOf().filter((p) => p.startsWith("choice:")).length - 1`);
+    await part(f, "pack", `choice:${make}`, 2);
+    await part(f, "pack", "tag:lamp-oil", 1.8);
+    const again = await f.run<number>(`room.desk.props.partsOf().filter((p) => p.startsWith("choice:")).length - 1`);
+    await part(f, "pack", `choice:${again}`, 2.4);
+    await part(f, "pack", "write", 0.2);
+    await f.rollUntil("room.desk.mode === 'writing'", 6, 1);
+    await typeLine(f, "a torch.");
+    console.log(`   on the pad: ${await f.run<string>("room.desk.draft")}`);
+    await f.roll(1.5);
+  });
+  await shut(f);
+
+  const pack = sample("pack");
+  /** Lay a prop's Show beside the map and the satchel, and wait until it stands on the table. */
+  const lay = async (key: string, shows: object[], pictures: boolean, after = 3): Promise<void> => {
+    await show(f, [MAP2, ...pack, ...shows]);
+    if (pictures) await f.rollUntil(out(key), 8, after);
+    else {
+      await f.wait(out(key), 8);
+      await f.skip(after);
+    }
+  };
+  /** Take everything but the map and the satchel off the table, without pictures. */
+  const clear = async (): Promise<void> => {
+    await shut(f);
+    await show(f, [MAP2, ...pack]);
+    await f.skip(2.5);
+  };
+  /** Open a prop by touching it, from your own seat. */
+  const open = async (key: string, after = 2.2): Promise<void> => {
+    await f.cam(null);
+    f.drift(false);
+    await f.roll(0.6);
+    await touchSlow(f, prop(key));
+    await f.rollUntil(propOpen(key), 6, after);
+  };
+  const written = (start: string): string => `room.desk.mode === 'writing' && room.desk.draft.startsWith(${JSON.stringify(start)})`;
+
+  await clip("04-the-sellers-cloth", async () => {
+    await f.cam({ eye: [0.62, 0.34, -0.02], look: [0.39, 0.02, -0.6], fov: 34 }, { eye: [0.5, 0.26, -0.16], look: [0.39, 0.02, -0.6], fov: 34 }, 6);
+    await f.roll(0.8);
+    await lay("stall", sample("stall"), true, 4.4);
+    await open("stall");
+    await part(f, "stall", "ware:heavy wool cloak", 3);
+    await part(f, "stall", "choice:0", 0.2);
+    await f.rollUntil(written("I buy the heavy wool cloak from Oren"), 6, 2.4);
+  });
+  await rubOut(f);
+  await clip("05-haggling", async () => {
+    await open("stall", 1.4);
+    await part(f, "stall", "ware:crystal lantern", 2.6);
+    await part(f, "stall", "choice:2", 0.2);
+    await f.rollUntil(written("I haggle with Oren"), 6, 2.6);
+  });
+  await clear();
+
+  // The fight: it is laid, a blow lands, a foe goes down, and a piece is touched for what could be tried against it.
+  const fight = sample("ring")[0] as { foes: { id: string; hp: number; down: boolean }[] };
+  const blow = (hp: number, down = false): object => ({ ...fight, foes: fight.foes.map((x) => (x.id === "woman-in-grey" ? { ...x, hp, down } : x)) });
+  await clip("06-the-fight-ring", async () => {
+    await f.cam({ eye: [0.98, 0.36, 0.46], look: [0.72, 0.03, -0.01], fov: 34 }, { eye: [0.84, 0.3, 0.4], look: [0.72, 0.03, -0.01], fov: 34 }, 12);
+    await f.roll(0.8);
+    await lay("ring", [fight], true, 3.4);
+    await show(f, [MAP2, ...pack, blow(38)]);
+    await f.roll(2.6);
+    await show(f, [MAP2, ...pack, blow(0, true)]);
+    await f.roll(3.2);
+  });
+  await clip("07-a-foe-is-touched", async () => {
+    await open("ring");
+    await part(f, "ring", "foe:boy-with-the-hooked-knife", 3);
+    await part(f, "ring", "choice:0", 0.2);
+    await f.rollUntil(written("I attack The Boy with the Hooked Knife"), 6, 0.8);
+    await typeLine(f, "with the flat of my blade.");
+    await f.roll(1.5);
+  });
+  await rubOut(f);
+  await clip("08-what-you-could-try", async () => {
+    // Leaning over the ring shows your own piece's offers at once.
+    await open("ring", 3.6);
+    await part(f, "ring", "choice:0", 0.2);
+    await f.rollUntil(written("I fight my way toward the stair"), 6, 2.4);
+  });
+  await clear();
+
+  await clip("09-the-quest-board", async () => {
+    await f.cam({ eye: [-0.02, 0.3, -0.12], look: [-0.295, 0.08, -0.64], fov: 32 }, { eye: [-0.14, 0.24, -0.24], look: [-0.295, 0.08, -0.64], fov: 32 }, 9);
+    await f.roll(0.8);
+    await lay("board", sample("board", 1), true, 3);
+    await show(f, [MAP2, ...pack, ...sample("board")]);
+    await f.roll(5.2);
+  });
+  await clip("10-a-quest-and-its-tasks", async () => {
+    await open("board");
+    await part(f, "board", "slip:q2", 3.4);
+    await part(f, "board", "task:q2-4", 2.8);
+    await part(f, "board", "choice:1", 0.2);
+    await f.rollUntil(written("To search the drying sheds by the ferry, I"), 6, 0.8);
+    await typeLine(f, "go after dark with the lantern shut.");
+    await f.roll(1.5);
+  });
+  await clear();
+
+  await clip("11-the-character-board", async () => {
+    await f.cam({ eye: [-0.44, 0.3, 0.56], look: [-0.67, 0.02, 0.15], fov: 34 }, { eye: [-0.52, 0.24, 0.5], look: [-0.67, 0.02, 0.15], fov: 34 }, 9);
+    await f.roll(0.8);
+    await lay("self", sample("self", 1), true, 2.6);
+    await show(f, [MAP2, ...pack, ...sample("self")]);
+    await f.roll(5.4);
+  });
+  await clip("12-the-perk-trees", async () => {
+    await open("self", 2.8);
+    await part(f, "self", "perk:t1-1", 3.2);
+    await part(f, "self", "choice:0", 0.2);
+    await f.rollUntil(written("I learn the perk Second Wind"), 6, 2.6);
+  });
+  await rubOut(f);
+  await clip("13-a-point-is-placed", async () => {
+    await open("self", 1.6);
+    await part(f, "self", "attr:cunning", 2.8);
+    await part(f, "self", "choice:0", 0.2);
+    await f.rollUntil(written("I put one point into Cunning"), 6, 2.4);
+  });
+  await clear();
+
+  // Where you stand: the pennants are hung, one group comes to think better of you, and its help is called on.
+  const rack = sample("rack")[0] as { groups: { id: string; standing: number }[] };
+  const better = { ...rack, groups: rack.groups.map((g) => (g.id === "night-market-traders" ? { ...g, standing: 46, step: 6, label: "esteemed", tone: "for" } : g)) };
+  await clip("14-the-faction-rack", async () => {
+    await f.cam({ eye: [0.98, 0.34, -0.06], look: [0.815, 0.09, -0.58], fov: 31 }, { eye: [0.905, 0.3, -0.155], look: [0.815, 0.09, -0.58], fov: 31 }, 9);
+    await f.roll(0.8);
+    await lay("rack", [rack], true, 3.2);
+    await show(f, [MAP2, ...pack, better]);
+    await f.roll(4.4);
+  });
+  await clip("15-calling-on-a-group", async () => {
+    await open("rack");
+    await part(f, "rack", "pennant:drowned-chapel", 3.2);
+    await f.run(`(room.desk.props.touch("back"), 1)`);
+    await f.roll(1.2);
+    await part(f, "rack", "pennant:house-varrow", 3.2);
+    await part(f, "rack", "choice:0", 0.2);
+    await f.rollUntil(written("I call on House Varrow"), 6, 2.6);
+  });
+  await clear();
+
+  await clip("16-every-prop-on-the-table", async () => {
+    await f.cam({ eye: [-0.75, 0.62, 0.95], look: [-0.1, 0.02, -0.25], fov: 40 }, { eye: [0.75, 0.62, 0.95], look: [0.12, 0.02, -0.25], fov: 40 }, 14);
+    await f.roll(1);
+    await show(f, [MAP2, ...pack, ...sample("board"), ...sample("stall"), ...sample("self"), ...sample("rack"), fight]);
+    await f.roll(13);
+  });
+  await f.cam(null);
 }
 
 const words = process.argv.slice(2);
@@ -398,6 +624,7 @@ const REELS: [string, string, (f: Film, clip: Clip) => Promise<void>, { w: numbe
   ["room", "card=maren&run=1", roomReel],
   ["turn", "card=maren&run=1", turnReel],
   ["systems", "card=maren&run=1", systemsReel],
+  ["props", "card=maren&run=1", propsReel],
   ["deck", "/cards", deckReel],
   ["phone", "card=maren&run=1", phoneReel, { w: 608, h: 1080 }],
 ];

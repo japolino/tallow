@@ -18,16 +18,20 @@
  * The open quests and their next tasks are in the scene, so the judge and the storyteller know what the character is
  * about; after a task is done, the storyteller may be pointed toward what it led to. Nothing makes the player follow a
  * quest: a quest they walk away from is left alone, and one they plainly give up is let go.
+ *
+ * On the table the quests are the quest board (boardShow, room/props/board.ts): a slip for each, its tasks as a tree
+ * with where each stands, and lines that set about a task; the narrator explains the board the first time there is a
+ * quest (teach).
  */
 import { person, stateOf, type Run } from "../../engine/run.js";
 import {
   addLead, addQuest, BUILD_MOST, childrenOf, closeTask, emptyQuests, fateOf, findTask, finish, finishedQuests, isEssential, isLive, KINDS, known, liveOf, makeRoom,
   MAX_OPEN, nextOf, openQuests, OTHER_WAY_MOST, otherWay, parentOf, progressOf, questOf, questWorth, questXp, readQuests, repair, setValue, sizeOf, status,
-  STALE_TURNS, targetFor, taskOf, unblock, whoAsked, type Kind, type Quest, type Quests, type Task, type TaskSpec,
+  STALE_TURNS, targetFor, taskOf, topOf, unblock, whoAsked, type Kind, type Quest, type Quests, type Task, type TaskSpec,
 } from "../../engine/quests.js";
 import type { Message } from "../ask.js";
 import { sureChoice } from "../decide.js";
-import { asked, head, list, obj, recentStory, said, tail, type Card, type More, type Page, type RunDeps, type Show, type System, type Told } from "../system.js";
+import { asked, head, list, obj, recentStory, said, tail, type Card, type Lesson, type More, type Page, type QuestTask, type RunDeps, type Show, type System, type Told } from "../system.js";
 
 /** A quest noticed in a passage, to be written down. */
 export interface Notice {
@@ -522,12 +526,107 @@ function pages(r: Run): Page[] {
   return out;
 }
 
-function shows(r: Run): Show[] {
-  return openQuests(peek(r)).map((q) => {
-    const n = nextOf(q);
-    const out = n && status(q, n) === "blocked" ? " Not yet within reach." : "";
-    return { kind: "card", id: q.id, group: "quests", title: q.title, text: `${q.goal}${n ? ` Next: ${n.do}${n.kind !== "done" ? ` (${progressOf(n)})` : ""}.${out}` : ""}` };
-  });
+/** An instruction as it is written inside a line: "Find the ring" is "find the ring". */
+const inLine = (s: string): string => {
+  const t = s.trim().replace(/[.!?]+$/, "");
+  // A word written all in capitals (a name, "I") keeps its first letter.
+  return /^\p{Lu}\p{Ll}/u.test(t) ? t.charAt(0).toLowerCase() + t.slice(1) : t;
+};
+
+/**
+ * The words of the quest board (room/props/board.ts): where each task stands, the lines its pencilled choices write,
+ * and how a quest ended. Where a task stands follows the labels the game this one follows puts on each task of a quest
+ * (the original, JournalModal.PopulateQuestDetailsV4OrV5): available; steps beneath that need not come first; steps
+ * beneath that should; more to be found out; done; failed. Its "complete this task" button asks a model for a few
+ * actions toward the quest's current task (the original, GameplayManager.OnQuest): here a task's own lines set about it,
+ * plainly or for the player to say how, and a task out of reach is looked into, since such a task cannot be done yet but
+ * can yield clues (the original, Q5Obj.GetContextWithAtomStatusesAndAntiBlockedGuidance). Its button that adds a side
+ * quest from a few words of the player's (the original, JournalModal.OnAddSideQuestClicked) is a line that sets
+ * themselves a goal, which the reader takes as a quest begun. Nothing here judges what a task means.
+ */
+export const QUEST_WORDS = {
+  open: "Can be done now.",
+  waiting: "The steps under it come first, though it may be done outright.",
+  blockedSteps: "Out of reach until enough of the steps under it are done.",
+  blockedFind: "Out of reach until more is found out.",
+  done: "Done.",
+  closed: (why: string): string => (why ? `No longer to be done: ${why}.` : "No longer to be done."),
+  setAbout: "Set about it",
+  setAboutLine: (task: string): string => `I set about this: ${inLine(task)}.`,
+  sayHow: "Say how",
+  sayHowLine: (task: string): string => `To ${inLine(task)}, I `,
+  lookInto: "Look for a way",
+  lookIntoLine: (task: string): string => `I look for a way to ${inLine(task)}.`,
+  own: "Set yourself a quest",
+  ownLine: "I set myself a goal: ",
+  ended: (state: Quest["state"], end: string): string =>
+    state === "done" ? "Achieved." : state === "lost" ? `Lost: ${end || "it could not be done"}.` : end && end !== "given up" ? `Given up: ${end}.` : "Given up.",
+} as const;
+
+/** What the narrator says of the quest board, once, the first time the run has a quest. */
+export const QUESTS_LESSON: Lesson = {
+  key: "quests",
+  lines: [
+    "That board at the left of my hands holds what you have taken on: a slip for each quest, with what is left to do in it.",
+    "Touch it, then a slip, to read it. Touch a task to have a line begun on your pad for setting about it; change it or ignore it, nothing happens until you send it.",
+    "A finished quest is stamped, a lost one torn, and a new one pinned up when it comes.",
+  ],
+};
+
+/** One task as the board shows it, with the tasks beneath it after it. */
+function boardTasks(q: Quest): QuestTask[] {
+  const out: QuestTask[] = [];
+  const walk = (t: Task): void => {
+    const st = status(q, t);
+    // What lay beneath a task done or closed is not shown, as the original leaves out the steps of a task once it is done.
+    const under = st === "done" || st === "closed" ? [] : childrenOf(q, t).filter((c) => !c.moot);
+    const beneath = under.some(isLive);
+    const note =
+      st === "open" ? QUEST_WORDS.open
+      : st === "waiting" ? QUEST_WORDS.waiting
+      : st === "blocked" ? (beneath ? QUEST_WORDS.blockedSteps : QUEST_WORDS.blockedFind)
+      : st === "done" ? QUEST_WORDS.done
+      : QUEST_WORDS.closed(t.why);
+    const choices =
+      st === "open" || st === "waiting"
+        ? [{ say: QUEST_WORDS.setAbout, line: QUEST_WORDS.setAboutLine(t.do) }, { say: QUEST_WORDS.sayHow, line: QUEST_WORDS.sayHowLine(t.do) }]
+        : st === "blocked"
+          ? [{ say: QUEST_WORDS.lookInto, line: QUEST_WORDS.lookIntoLine(t.do) }]
+          : [];
+    out.push({
+      id: t.id,
+      text: t.do,
+      state: st,
+      note,
+      main: t.main,
+      ...(t.kind !== "done" ? { progress: progressOf(t) } : {}),
+      ...(st === "closed" && t.why ? { why: t.why } : {}),
+      needs: under.map((c) => c.id),
+      choices,
+    });
+    for (const c of under) walk(c);
+  };
+  const top = topOf(q);
+  if (top) walk(top);
+  return out;
 }
 
-export const quests: System = { name: "quests", seed, scene, hint, read, apply, follow, pages, shows };
+/** The quests as the board lays them out: the open ones, then those that have ended, the latest first. */
+export function boardShow(r: Run): Extract<Show, { kind: "quests" }> | null {
+  const s = peek(r);
+  if (!s.list.length) return null;
+  const open = openQuests(s).map((q) => ({ id: q.id, title: q.title, text: q.goal, from: whoAsked(q), state: q.state, fresh: q.begun >= r.turn, tasks: boardTasks(q) }));
+  const ended = [...finishedQuests(s)].sort((a, b) => b.ended - a.ended).map((q) => ({ id: q.id, title: q.title, text: q.goal, from: whoAsked(q), state: q.state, end: QUEST_WORDS.ended(q.state, q.end), fresh: false, tasks: [] }));
+  return { kind: "quests", quests: [...open, ...ended], own: { say: QUEST_WORDS.own, line: QUEST_WORDS.ownLine } };
+}
+
+function shows(r: Run): Show[] {
+  const b = boardShow(r);
+  return b ? [b] : [];
+}
+
+function teach(r: Run): Lesson[] {
+  return peek(r).list.length ? [QUESTS_LESSON] : [];
+}
+
+export const quests: System = { name: "quests", seed, scene, hint, read, apply, follow, pages, shows, teach };

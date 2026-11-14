@@ -149,6 +149,8 @@ export interface Ware extends Kind {
   qty: number;
   /** How many there were when stocked: a restock brings it back to this. */
   stocked: number;
+  /** Whether it is worn or held ready, as the stocking model said (engine/run.ts, Item.wearable); carried to the bought thing. */
+  wearable?: boolean;
 }
 
 export interface Merchant {

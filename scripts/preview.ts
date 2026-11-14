@@ -2,6 +2,9 @@
  * Preview server: serves the built extension in a pretend host (preview/host.ts) at http://localhost:4184/host
  * (PORT overrides), and every card face at /cards. Run `bun run build` first; the host page itself is bundled on
  * each load, so a refresh picks up edits to it. No Lumiverse needed.
+ *
+ * /props is the room with the table's props laid out from sample data (preview/props.ts): it is bundled from source
+ * on each load, so it needs no build, and several of these servers can run side by side, each on its own PORT.
  */
 import { join } from "node:path";
 
@@ -27,6 +30,9 @@ Bun.serve({
     if (url.pathname === "/host.js") return bundle("preview/host.ts");
     if (url.pathname === "/dist/frontend.js") return new Response(Bun.file(join(root, "dist/frontend.js")), { headers: { "content-type": "text/javascript", "cache-control": "no-store" } });
     if (url.pathname === "/host") return new Response('<!doctype html><meta charset="utf-8"><title>Tallow in a pretend host</title><style>html,body{margin:0;height:100%;background:#111}</style><script type="module" src="/host.js"></script>', { headers: { "content-type": "text/html", "cache-control": "no-store" } });
+    // The table's props laid out from sample data (preview/props.ts): bundled from source on each load, so no build is needed.
+    if (url.pathname === "/props.js") return bundle("preview/props.ts");
+    if (url.pathname === "/props") return new Response('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tallow props</title><script type="module" src="/props.js"></script>', { headers: { "content-type": "text/html", "cache-control": "no-store" } });
     // Every card face and back, for looking at the art.
     if (url.pathname === "/cards") return new Response('<!doctype html><meta charset="utf-8"><title>Tallow cards</title><script type="module" src="/cards.js"></script>', { headers: { "content-type": "text/html", "cache-control": "no-store" } });
     // Models and other files the room loads at run time.

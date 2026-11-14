@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { attributesFrom, meet, newRun, stateOf, type Run } from "../src/engine/run.js";
 import type { Message, Role } from "../src/game/ask.js";
-import { begin, pagesOf, sceneOf, showsOf, turn } from "../src/game/runturn.js";
+import { begin, lessonOf, pagesOf, sceneOf, showsOf, turn } from "../src/game/runturn.js";
 import type { RunDeps, Show, System } from "../src/game/system.js";
 import { SYSTEMS, systemsNamed } from "../src/game/systems/index.js";
 
@@ -41,6 +41,44 @@ const start = (): Run => {
   meet(r, { name: "Goblin", power: 2 });
   return r;
 };
+
+describe("teaching", () => {
+  test("each lesson is said once in a run, one at a time, in the systems' order, and a broken system teaches nothing", () => {
+    const a: System = { name: "a", teach: (r) => (r.sheet.money > 0 ? [{ key: "coin", lines: ["You have coin."] }, { key: "purse", lines: ["It is in the purse."] }] : []) };
+    const b: System = { name: "b", teach: () => [{ key: "coin", lines: ["Said by another."] }, { key: "", lines: ["No key."] }, { key: "none", lines: [] }, { key: "fight", lines: ["A fight is on."] }] };
+    const broken: System = { name: "broken", teach: () => { throw new Error("boom"); } };
+    const d = deps([broken, a, b]);
+    const r = start();
+    r.sheet.money = 0;
+    // The first system has nothing to teach yet; the second one's first lesson is taught, under its key.
+    expect(lessonOf(d, r)).toEqual({ key: "coin", lines: ["Said by another."] });
+    expect(r.taught).toEqual(["coin"]);
+    r.sheet.money = 5;
+    // A key already taught is not said again, whoever has it; the next one is.
+    expect(lessonOf(d, r)?.key).toBe("purse");
+    expect(lessonOf(d, r)?.key).toBe("fight");
+    expect(lessonOf(d, r)).toBeNull();
+    expect(r.taught).toEqual(["coin", "purse", "fight"]);
+    expect(d.logged.some((m) => m.includes("broken, teach"))).toBe(true);
+    // The run carries what it was taught, so a run taken up again is not taught twice; a run that is over is taught nothing.
+    const again: Run = JSON.parse(JSON.stringify(r));
+    expect(lessonOf(d, again)).toBeNull();
+    const over = start();
+    over.over = true;
+    expect(lessonOf(d, over)).toBeNull();
+    expect(over.taught).toBeUndefined();
+  });
+
+  test("the game's own systems teach the satchel, once, when something is carried", () => {
+    const d = deps([...SYSTEMS]);
+    const r = start();
+    r.sheet.money = 3;
+    const keys: string[] = [];
+    for (let l = lessonOf(d, r); l && keys.length < 20; l = lessonOf(d, r)) keys.push(l.key);
+    expect(keys.filter((k) => k === "pack")).toEqual(["pack"]);
+    expect(r.taught).toEqual(keys);
+  });
+});
 
 describe("the frame of a turn", () => {
   test("every moment reaches a system, in order, with what it is promised", async () => {
@@ -162,6 +200,6 @@ describe("what the table is given to lay out", () => {
       card("choices", "c1"), card("choices", "c2"),
       card("perks", "p1"), card("perks", "p2"), card("perks", "p3"),
     ];
-    expect(inOrder(shows).map((s) => (s.kind === "map" ? "map" : s.id))).toEqual(["s", "p1", "p2", "p3", "c1", "c2", "q1", "q2", "q3"]);
+    expect(inOrder(shows).map((s) => ("id" in s ? s.id : s.kind))).toEqual(["s", "p1", "p2", "p3", "c1", "c2", "q1", "q2", "q3"]);
   });
 });

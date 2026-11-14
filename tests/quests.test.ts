@@ -269,7 +269,9 @@ describe("quests at a turn", () => {
     expect(t.report.changes.join("\n")).toContain("A new quest: Mara's ring. Find Mara's stolen ring. First: Find the ring.");
     expect(sceneOf(d, t.run)).toContain("Mara's ring: Find Mara's stolen ring (asked by Mara) Next: Find the ring.");
     expect(pagesOf(d, t.run)[0]!.heading).toBe("Quests");
-    expect(showsOf(d, t.run)).toEqual([{ kind: "card", id: "q1", group: "quests", title: "Mara's ring", text: "Find Mara's stolen ring Next: Find the ring." }]);
+    const board = showsOf(d, t.run).find((s) => s.kind === "quests");
+    expect(board).toMatchObject({ kind: "quests", quests: [{ id: "q1", title: "Mara's ring", text: "Find Mara's stolen ring", from: "asked by Mara", state: "open", fresh: true }] });
+    expect(showsOf(d, t.run).some((s) => s.kind === "card" && s.group === "quests")).toBe(false);
   });
 
   test("one who asked but is only named so far is kept as the asker, and the builder is told they asked", async () => {

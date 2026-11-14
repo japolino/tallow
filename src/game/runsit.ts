@@ -10,8 +10,8 @@ import { ATTRIBUTES, MAX_HP, outcomeName, outcomeOf, spend, standingWord, xpToNe
 import { hourOf } from "../engine/upkeep.js";
 import { CARDS_OUT, type Table, type Written } from "./table.js";
 import { firstJson } from "./ask.js";
-import { begin, judgeTurn, OVER_SAYS, pagesOf, ruled, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
-import type { Show } from "./system.js";
+import { begin, judgeTurn, lessonOf, OVER_SAYS, pagesOf, ruled, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
+import { sentence, type Show } from "./system.js";
 import { pickMusic } from "./music.js";
 
 export interface RunSitOptions {
@@ -59,7 +59,11 @@ export function runSheets(r: Run): { heading: string; his: string[] }[] {
       heading: "What you have",
       his: [
         ...s.abilities.map((a) => `${a.name}${a.wait ? ` (resting, ${a.wait})` : ""}: ${a.text}`),
-        `Carrying: ${s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}`).join(", ") || "nothing"}.`,
+        // Each thing with what it is, as the satchel on the table has it (room/props/pack.ts): a room that cannot
+        // show the satchel still says all of it here.
+        ...(s.items.length
+          ? s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}${i.quality !== "common" && i.quality !== "mundane" ? ` [${i.quality}]` : ""}${i.worn ? ", worn" : ""}${i.text ? `: ${sentence(i.text)}` : "."}`)
+          : ["You carry nothing."]),
         `${s.money} ${s.coin}.`,
       ],
     },
@@ -127,18 +131,27 @@ export function rollSaid(roll: Roll): string {
   return `${faceOf(roll)} on the die${need > 1 && need <= 20 ? `, needing about ${need}` : ""}: ${outcomeName(roll.outcome)}.`;
 }
 
-/** Where a level's points go, read from a line: by a model when there is one, else by the attributes it names. */
+/**
+ * Where a level's points go, read from a line: by a model when there is one, else by the attributes it names. The
+ * model is asked first whether the line places points at all: a line of the story that only names an attribute ("I
+ * gather my strength and shove the door") places none and is played as the line it is. Only with no answer from the
+ * model do the line's own words stand in.
+ */
 async function placePoints(d: RunDeps, r: Run, line: string): Promise<string[]> {
   const s = r.sheet;
   let want: Partial<Record<Attribute, number>> = {};
+  let answered = false;
   try {
     const j = firstJson(await d.ask([
       { role: "system", content: "Answer with one JSON object and nothing else." },
-      { role: "user", content: `A player has ${s.points} points to add to their character's attributes (${ATTRIBUTES.join(", ")}). They wrote: "${line.replace(/"/g, "'").slice(0, 400)}". How many go to each? Write {"strength": n, "dexterity": n, "intelligence": n, "charisma": n, "cunning": n}, the numbers adding up to at most ${s.points}. If they named only one attribute, all of them go there.` },
+      { role: "user", content: `A player of a text adventure has ${s.points} points to add to their character's attributes (${ATTRIBUTES.join(", ")}), and may place them whenever they like. They wrote: "${line.replace(/"/g, "'").slice(0, 400)}". Is this line the player saying where points go, and how many go to each? Write {"placing": true or false, "strength": n, "dexterity": n, "intelligence": n, "charisma": n, "cunning": n}, the numbers adding up to at most ${s.points}. placing is true only when the line itself puts points into attributes; a line of the story, in which their character does or says something, is false even when it names an attribute, and then every number is 0. Where they say how many, that many go there and no more. If they named only one attribute and said no number, all of them go there.` },
     ], "reader")) as Record<string, unknown> | null;
-    if (j) for (const a of ATTRIBUTES) want[a] = Math.max(0, Math.round(Number(j[a]) || 0));
+    if (j) {
+      answered = true;
+      if (j.placing !== false) for (const a of ATTRIBUTES) want[a] = Math.max(0, Math.round(Number(j[a]) || 0));
+    }
   } catch { /* by its words, below */ }
-  if (!Object.values(want).some((n) => n! > 0)) {
+  if (!answered) {
     const named = ATTRIBUTES.filter((a) => line.toLowerCase().includes(a));
     want = named.length ? { [named[0]!]: s.points } : {};
   }
@@ -209,6 +222,16 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       })
       .catch(() => undefined);
   };
+  /**
+   * One thing of the table explained, when a system has something to teach that this run has not been taught: at most
+   * one a time, each once in a run (runturn.ts, lessonOf). It is only ever said; nothing waits on it.
+   */
+  const teach = async (r: Run): Promise<void> => {
+    const lesson = lessonOf(deps, r);
+    if (!lesson) return;
+    o.save(r);
+    await table.say(lesson.lines);
+  };
   let run: Run;
   if (o.saved) {
     run = o.saved;
@@ -217,6 +240,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     score(run, before?.story ?? run.opening);
     table.notes?.(before ? { mine: before.you, his: paragraphs(before.story) } : openingNotes(run));
     await table.say(run.over ? [OVER_SAYS] : [`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
+    await teach(run);
   } else {
     if (o.mute) {
       await table.say([NO_VOICE]);
@@ -229,6 +253,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     table.notes?.(openingNotes(run));
     score(run, run.opening);
     await table.say([...paragraphs(run.opening), RUN_HOW, RUN_NOTES]);
+    await teach(run);
   }
 
   let next: Written | null = null;
@@ -257,6 +282,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       playing = null;
       score(run, run.opening);
       await table.say([...paragraphs(run.opening), RUN_HOW]);
+      await teach(run);
       continue;
     }
     // A level's points wait to be placed before anything else is played.
@@ -337,5 +363,6 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       continue;
     }
     if (run.sheet.points > 0) await table.say([`You have ${run.sheet.points} points to place among ${ATTRIBUTES.join(", ")}. Write where they go.`]);
+    await teach(run);
   }
 }

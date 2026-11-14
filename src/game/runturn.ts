@@ -24,7 +24,7 @@ import { sureChoice } from "./decide.js";
 import type { Message } from "./ask.js";
 import { readRules } from "../engine/rules.js";
 import { rulesOf } from "../engine/run.js";
-import { asked, head, int, list, obj, said, tail, type Card, type More, type Page, type Readback, type RunDeps, type Settling, type Show, type System, type Told, type Verdict } from "./system.js";
+import { asked, head, int, list, obj, said, sentence, tail, type Card, type Lesson, type More, type Page, type Readback, type RunDeps, type Settling, type Show, type System, type Told, type Verdict } from "./system.js";
 import { SYSTEMS } from "./systems/index.js";
 
 export type { Card, RunDeps, Verdict } from "./system.js";
@@ -91,6 +91,24 @@ export function pagesOf(d: RunDeps, r: Run): Page[] {
 /** What the systems put on the table, for a room that can show it. */
 export function showsOf(d: RunDeps, r: Run): Show[] {
   return systemsOf(d).flatMap((sys) => safely(d, sys, "shows", [] as Show[], () => sys.shows?.(r) ?? []));
+}
+
+/**
+ * The next thing the narrator should explain, if any: the first lesson a system has for the run as it stands that has
+ * not been taught in it yet. It is marked as taught here (the run keeps the keys), so each is said once, and the caller
+ * says at most this one. A run that is over is taught nothing.
+ */
+export function lessonOf(d: RunDeps, r: Run): Lesson | null {
+  if (r.over) return null;
+  const taught = (r.taught ??= []);
+  for (const sys of systemsOf(d)) {
+    for (const l of safely(d, sys, "teach", [] as Lesson[], () => sys.teach?.(r) ?? [])) {
+      if (!l.key || !l.lines.length || taught.includes(l.key)) continue;
+      taught.push(l.key);
+      return l;
+    }
+  }
+  return null;
 }
 
 /* ------------------------------------------------- setting up ------------------------------------------------- */
@@ -430,7 +448,7 @@ function hpBands(r: Run): string {
   return `a scratch, a bruise, a knock: 1 to ${between(4, 9)}; a real but minor wound: ${between(10, 15)} to ${between(20, 25)}; a serious wound: ${between(25, 30)} to ${between(40, 45)}; a grave one that could kill: ${between(45, 55)} to 100`;
 }
 
-function readMessages(r: Run, line: string | null, story: string, bands: string): Message[] {
+function readMessages(r: Run, line: string | null, story: string, bands: string, settled: readonly string[] = []): Message[] {
   const s = r.sheet;
   const here = r.people.filter((p) => p.here && !p.dead);
   const away = r.people.filter((p) => !p.here && !p.dead).slice(-12);
@@ -440,7 +458,9 @@ function readMessages(r: Run, line: string | null, story: string, bands: string)
       role: "user",
       content: `THE RECORDS BEFORE THIS PASSAGE
 The player's character: ${s.name}. Health ${s.hp} of ${MAX_HP}.
-Carrying: ${s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}`).join("; ") || "nothing"}. Money: ${s.money} ${s.coin}.
+Carrying: ${s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}${i.worn ? " (worn)" : ""}`).join("; ") || "nothing"}. Money: ${s.money} ${s.coin}.${settled.length ? `
+Already settled and written into these records before the passage was told (the passage may call these things by other words; they are not found, lost or paid a second time):
+${settled.map((l) => `- ${l}`).join("\n")}` : ""}
 Abilities: ${s.abilities.map((a) => a.name).join("; ") || "none"}.
 Place: ${r.place.name || "unknown"}.
 Here: ${here.map((p) => `${p.name}${p.hostile ? " (hostile)" : ""}${p.follows ? " (travelling with the player's character)" : ""}, health ${p.hp}`).join("; ") || "nobody else"}.
@@ -465,8 +485,9 @@ Report it. Write this, with every <note> replaced; most of it will be empty for 
   "back": ["<a name from Elsewhere>"],
   "beaten": ["<name>"],
   "dead": ["<name>"],
-  "found": [{ "name": "<the thing, in 1 to 4 words>", "text": "<one short sentence>", "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "qty": <how many>, "worn": <true only if the passage shows them putting it on or keeping it ready in hand> }],
+  "found": [{ "name": "<the thing, in 1 to 4 words>", "text": "<one short sentence>", "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "qty": <how many>, "worn": <true only if the passage shows them putting it on or keeping it ready in hand>, "wearable": <true or false> }],
   "lost": [{ "name": "<exact name from Carrying>", "qty": <how many> }],
+  "wear": [{ "name": "<exact name from Carrying>", "on": <true if put on or taken ready in hand, false if taken off or put away> }],
   "money": <${s.coin} gained, or negative for spent or lost; 0 if none>,
   "ability": { "name": "<2 to 4 words>", "text": "<one sentence: what it does>" },
   "xp": { "why": "<a few words>", "size": <0 to 5> },
@@ -492,8 +513,9 @@ Each field:
 - back: someone from Elsewhere who is plainly in the scene in this passage: they walk in, are found here, or speak face to face. Not someone only spoken of, remembered, written to or sent for.
 - beaten: someone who in this passage is knocked out, pinned, bound, or otherwise left unable to act or fight on, but alive.
 - dead: someone killed or destroyed in this passage, beyond doubt: the passage says they die. Limp, unconscious, choked out or badly hurt is beaten, not dead. Only the very one the records name: another creature of the same sort that dies is not them.
-- found: a thing ${s.name} comes to hold or own in this passage and did not before: picked up, handed over, bought, looted, made, including a thing the player wrote them taking, if the story lets them have it. Not money. Not a meal or a drink served to be had there and then. Not something only seen, offered, pointed at or lying nearby. Not anything already in Carrying. Most things are mundane or common.
+- found: a thing ${s.name} comes to hold or own in this passage and did not before: picked up, handed over, bought, looted, made, including a thing the player wrote them taking, if the story lets them have it. Not money. Not a meal or a drink served to be had there and then. Not something only seen, offered, pointed at or lying nearby. Not anything already in Carrying. Most things are mundane or common. wearable: true if it is a thing a person wears or holds ready to use (clothing, armour, a weapon, a tool carried in hand, jewellery); false for anything else (food, drink, supplies, a container, a document).
 - lost: a thing from Carrying that is gone for good in this passage: used up, given away, sold, broken beyond use, stolen. Not something put down, dropped within reach or lent for the moment. Not a purse or pouch because coins were paid out of it (coins are money, below). Not clothes or gear that are only torn, dirtied or damaged but still worn. Not a thing the character never carried.
+- wear: a thing from Carrying that ${s.name} puts on, or takes ready in hand to wield, in this passage (on: true); or takes off, or puts away out of hand, when it was worn (on: false). Not a thing found in this passage (that is found, with its own worn). Not a thing only used for a moment.
 - ability: null, unless in this passage ${s.name} gains a new lasting power or technique they can use again, which is not in Abilities. Doing something well once is not a new ability.
 - xp: what ${s.name} achieved in this passage. 0 nothing to speak of; 1 ordinary doings (talk, travel, chores); 2 a small useful thing done; 3 a real obstacle got past: a foe beaten or driven off, a danger come through, a lie or a plea that landed where it mattered, something of worth won or learned; 4 a hard-won victory or a major discovery; 5 a feat that changes the course of the story. What was attempted and failed earns nothing.
 - place: where the passage is set by its end, if that is not ${r.place.name || "where they were"}: another building, village, road, room of a different kind. Give it even when the journey there is not shown, or when the player wrote the move themselves. null when they are still in the same place; moving about within it is not a new place.
@@ -520,8 +542,9 @@ export function readReadback(j: Record<string, unknown>): Readback {
     back: names(j.back),
     beaten: names(j.beaten),
     dead: names(j.dead),
-    found: list(j.found).map(obj).map((x) => ({ name: said(x.name, 60), text: said(x.text, 200), quality: String(x.quality).toLowerCase(), qty: int(x.qty, 1, 99, 1), ...(x.worn === true ? { worn: true } : {}) })).filter((x) => x.name).slice(0, 4),
+    found: list(j.found).map(obj).map((x) => ({ name: said(x.name, 60), text: said(x.text, 200), quality: String(x.quality).toLowerCase(), qty: int(x.qty, 1, 99, 1), ...(x.worn === true ? { worn: true } : {}), ...(typeof x.wearable === "boolean" ? { wearable: x.wearable } : {}) })).filter((x) => x.name).slice(0, 4),
     lost: list(j.lost).map(obj).map((x) => ({ name: said(x.name, 60), qty: int(x.qty, 1, 99, 1) })).filter((x) => x.name).slice(0, 6),
+    wear: list(j.wear).map(obj).filter((x) => typeof x.on === "boolean").map((x) => ({ name: said(x.name, 60), on: x.on === true })).filter((x) => x.name).slice(0, 6),
     money: int(j.money, -100000, 100000),
     ability: said(ability.name, 50) && said(ability.text, 200) ? { name: said(ability.name, 50), text: said(ability.text, 200) } : null,
     xp: int(obj(j.xp).size, 0, 5),
@@ -592,7 +615,19 @@ export function apply(r: Run, b: Readback, outcome: Outcome | null): string[] {
     const fine = QUALITIES.indexOf(x.quality as never) >= 5;
     const it = take(s, { ...x, quality: fine && outcome !== null && outcome < 1 ? "rare" : x.quality });
     if (it && x.worn) it.worn = true;
-    if (it) told.push(`Gained: ${it.name}${x.qty > 1 ? ` x${x.qty}` : ""}${it.quality !== "common" && it.quality !== "mundane" ? ` [${it.quality}]` : ""}.`);
+    // Whether it can be worn or held ready is said when it comes into being, as the original does (GameItem.Create).
+    if (it && typeof x.wearable === "boolean" && it.wearable === undefined) it.wearable = x.wearable;
+    // What was gained is said with what it is: a name alone tells nobody what they now carry.
+    if (it) told.push(`Gained: ${it.name}${x.qty > 1 ? ` x${x.qty}` : ""}${it.quality !== "common" && it.quality !== "mundane" ? ` [${it.quality}]` : ""}.${it.text ? ` ${sentence(it.text)}` : ""}`);
+  }
+  // Put on or taken off (the original, GameplayManager.EquipItemFromInventory and UnequipItemToInventory): only a thing
+  // that is carried, and only when that changes something.
+  for (const x of b.wear ?? []) {
+    const have = itemOf(s, x.name);
+    if (!have || (have.worn === true) === x.on) continue;
+    if (x.on) have.worn = true;
+    else delete have.worn;
+    told.push(`${x.on ? "Now worn" : "Taken off"}: ${have.name}.`);
   }
   if (b.money) {
     const before = s.money;
@@ -719,6 +754,8 @@ export interface Judging {
   before?: Run;
   settling?: Settling;
   plans?: unknown[];
+  /** What the systems settled before the story was told: the read-back is shown it, so it is not written down twice. */
+  settled?: string[];
 }
 
 /** Play one line. The run given is not changed; the one returned is the run after the turn. */
@@ -787,6 +824,8 @@ export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<
     if (j.needs && verdict !== "trivial") verdict = "missing";
     // Where the player has set that nothing is refused, what cannot work is tried all the same: the judge's doubts are in its scores already.
     if (!rulesOf(r).refuse && (verdict === "implausible" || verdict === "missing")) verdict = "challenge";
+    // What a system knows will simply happen (a group's help, called on when it stands ready) is not thrown for.
+    if (verdict === "challenge" && systems.some((sys, i) => safely(d, sys, "what is sure", false, () => sys.sure?.(r, plans[i]) ?? false))) verdict = "trivial";
     report.verdict = verdict;
     const rest = "Whatever else the player wrote happens as they wrote it, as far as this result allows.";
     // An ability called on rests afterwards, rolled for or not.
@@ -817,7 +856,7 @@ export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<
   const offered = systems.flatMap((sys, i) => safely(d, sys, "hinting", [] as string[], () => sys.hint?.(r, settling, plans[i]) ?? [])).map((l) => clean(l, 400)).filter(Boolean);
   if (offered.length) result += `\n\nYou may bring in one of these if it fits what is happening, and may leave them all:\n${offered.map((l) => `- ${l}`).join("\n")}`;
   report.ms.judge = Date.now() - at;
-  return { run: r, line, report, result, before, settling, plans };
+  return { run: r, line, report, result, before, settling, plans, settled: fixed };
 }
 
 /** The second half: the story is told to the result, read back, and what changed is written down. */
@@ -854,7 +893,7 @@ export async function tellTurn(d: RunDeps, p: Judging, o: TurnOptions = {}): Pro
   // Each system reads the passage beside the turn's own read-back, all of them on the run as it stood.
   const asIs = structuredClone(r);
   const [back, , reads] = await Promise.all([
-    asked(d, readMessages(r, line, story, bands), "reader", (x) => readReadback(x), "reading back"),
+    asked(d, readMessages(r, line, story, bands, p.settled ?? []), "reader", (x) => readReadback(x), "reading back"),
     fold(d, r),
     Promise.all(systems.map((sys, i) => safelyAsync(d, sys, "reading the passage", null as unknown, async () => (await sys.read?.(d, asIs, told, plans[i])) ?? null))),
   ]);

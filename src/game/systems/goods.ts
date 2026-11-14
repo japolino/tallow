@@ -9,7 +9,12 @@
  *             happened, at code's price, and if they could not pay, it was for fewer, on credit, or for a favour owed.
  *   merchants Someone who sells for a living has stock, written once by the strong model when first dealt with and held
  *             to ordinary quality unless the seller is plainly special; each ware is priced by code and restocked every
- *             eight hours of the story. A merchant who is here lays their wares on the table as cards.
+ *             eight hours of the story. A merchant who is here and will deal lays their wares on the table as their
+ *             cloth (system.ts, Show "stall"): each ware with its price, what your coin pays for, and the lines that
+ *             buy it or haggle over it; their purse and when they restock. The narrator explains the cloth once.
+ *   satchel   What is carried, the coin, and what can be written with a thing are given to the table as one "pack"
+ *             (system.ts): the same few lines for every thing, and how a making is written. The narrator explains the
+ *             satchel once, the first time there is anything in it (teach).
  *   making    A line that makes something is read with three possible results (the thing named, a close one, a loose
  *             one) and how plausible the thing is from what goes into it. Code picks the result from that and the roll,
  *             sets its quality from the materials and the roll, and uses the materials up. A making never simply fails:
@@ -18,16 +23,18 @@
  * What this system settles is struck from the turn's own read-back, so nothing is gained or paid for twice.
  */
 import {
-  clean, isPlayer, itemOf, lose, person, same, sceneText, sheetText, standing, stateOf, take,
+  isPlayer, itemOf, lose, person, same, sceneText, sheetText, standing, stateOf, take,
   type Outcome, type Person, type Quality, type Run,
 } from "../../engine/run.js";
 import {
   affordable, alike, buyPrice, capQuality, COINS, coinOk, coinSays, finestForSale, inCoins, intoStock, keyOf, KINDS, kindOk, madeQty, madeQuality, madeStep,
-  MOST_QTY, MOST_STOCK, MOST_WARES, PLAUSIBILITIES, purseFor, qualityOf, restock, sellPrice, startingMoney, worthRef,
+  MOST_QTY, MOST_STOCK, MOST_WARES, PLAUSIBILITIES, purseFor, qualityOf, restock, RESTOCK_MINUTES, sellPrice, startingMoney, worthRef,
   type Kind, type Merchant, type Plausibility, type Ware,
 } from "../../engine/goods.js";
+import { foesOf } from "../../engine/fight.js";
 import type { Message } from "../ask.js";
-import { asked, head, int, list, obj, recentStory, said, type Page, type RunDeps, type Settling, type Show, type System } from "../system.js";
+import { here as spotHere, readPlaces } from "../../engine/places.js";
+import { asked, head, int, list, obj, recentStory, said, sentence, type Choice, type Lesson, type PackItem, type Page, type RunDeps, type Settling, type Show, type System } from "../system.js";
 
 /** Set GOODS_DEBUG when playing in a terminal to see what was planned and what the storyteller was told; never set in a browser. */
 const DEBUG = typeof process !== "undefined" && !!process.env?.GOODS_DEBUG;
@@ -114,12 +121,24 @@ export interface Goods extends Kind {
   qty: number;
   quality: Quality;
   service: boolean;
+  /** Worn or held ready (engine/run.ts, Item.wearable), as the reader said; kept on the thing when it is bought. */
+  wearable?: boolean;
 }
 export interface Result extends Kind {
   name: string;
   text: string;
   qty: number;
+  /** Worn or held ready, as the reader said; kept on the thing made. */
+  wearable?: boolean;
 }
+
+/**
+ * How every model that brings a thing into being is asked whether it is worn or held ready (the original asks this
+ * when it makes an item: GameItem.Create, AIAsker.ChatgptGeneratedItemTypeSurvivalValuable). The satchel offers
+ * "Put it on" only on a thing that has it.
+ */
+const WEARABLE_RULE = "wearable: true if it is a thing a person wears or holds ready to use (clothing, armour, a weapon, a tool carried in hand, jewellery); false for anything else (food, drink, supplies, a container, a document).";
+const wearableOf = (v: unknown): { wearable?: boolean } => (typeof v === "boolean" ? { wearable: v } : {});
 export interface Making {
   from: { name: string; qty: number }[];
   want: string;
@@ -184,10 +203,10 @@ Write this, with every <note> replaced:
   "haggle": <true or false>,
   "with": "<the exact name, from HERE, of the one the deal is with; or null>",
   "sells_for_a_living": <true or false>,
-  "goods": [{ "name": "<the thing>", "qty": <a whole number>, "kind": <1 to 7>, "precious": <true or false>, "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "service": <true or false> }],
+  "goods": [{ "name": "<the thing>", "qty": <a whole number>, "kind": <1 to 7>, "precious": <true or false>, "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "service": <true or false>, "wearable": <true or false> }],
   "sum": <a whole number of ${coin}, or null>,
   "size": <1 to 7, or null>,
-  "make": null or { "from": [{ "name": "<a thing that goes into it>", "qty": <how many> }], "want": "<what they mean to make, in their words>", "tool": "<what they make it with or at; or null>", "plausibility": "<plausible, barely or implausible>", "named": { "name": "<a thing>", "text": "<one sentence>", "qty": <how many>, "kind": <1 to 7>, "precious": <true or false> }, "near": { <the same fields> }, "loose": { <the same fields> } }${askCoin ? `,\n  "coin": <1 to 6>` : ""}
+  "make": null or { "from": [{ "name": "<a thing that goes into it>", "qty": <how many> }], "want": "<what they mean to make, in their words>", "tool": "<what they make it with or at; or null>", "plausibility": "<plausible, barely or implausible>", "named": { "name": "<a thing>", "text": "<one sentence>", "qty": <how many>, "kind": <1 to 7>, "precious": <true or false>, "wearable": <true or false> }, "near": { <the same fields> }, "loose": { <the same fields> } }${askCoin ? `,\n  "coin": <1 to 6>` : ""}
 }
 
 deal. Only what ${s.name}, the player's own character, does in this message: now in the scene, or, if the player writes it as done, in the time the message covers.
@@ -207,6 +226,7 @@ goods. For buy: what they get, one entry for each kind of thing. If it is one of
 - precious: true only for things made of or prized as precious: gold, silver, jewels, fine art.
 - quality: most things are common; mundane for plain cheap things; trash for junk; uncommon for things well made; rare, epic and legendary only for things plainly remarkable.
 - service: true for something done or used there rather than carried away.
+- ${WEARABLE_RULE}
 - A price the player names for goods counts for nothing: the game sets prices.
 sum. For pay only: the sum the player names, as a whole number; null when they name none.
 size. For pay only, when no sum is named and no debt is being paid: how big a payment it is, on the same ladder as kind (a tip is 1 or 2, a toll or a bribe to a guard 2 or 3). null otherwise.
@@ -214,7 +234,7 @@ make. Only for make; null otherwise.
 - from: what goes into the thing, never the tools or the fire: the exact name from Carrying for each thing they carry, else a few words for an ordinary thing to hand.
 - plausibility: could what they want be made from exactly these materials? plausible: it makes some sense by the logic of a game in this world; it need not be realistic. barely: a big stretch, but not nonsense. implausible: there is no sensible way from these materials to that thing. The world may move it one step (a thing that belongs to this world is easier here), but nonsense stays implausible anywhere.
 - named: the very thing they asked for, with any slip of spelling put right. near: a closely related thing that really can be made from exactly these materials (from a plank, not a longsword but a wooden sword); the same as named when that can already be made. loose: a thing only loosely like what they wanted, but certainly makeable from exactly these materials.
-- Each result is one particular thing, not a class of things, and not just the materials' names run together. qty: how many of it these materials would make. kind and precious as for goods.${askCoin ? `\ncoin. What one ${coin} is worth in this world, from this list: ${COINS.map((c, i) => `${i + 1} ${c.says}`).join("; ")}. If the world has several coins, answer for the ${coin}.` : ""}`,
+- Each result is one particular thing, not a class of things, and not just the materials' names run together. qty: how many of it these materials would make. kind, precious and wearable as for goods.${askCoin ? `\ncoin. What one ${coin} is worth in this world, from this list: ${COINS.map((c, i) => `${i + 1} ${c.says}`).join("; ")}. If the world has several coins, answer for the ${coin}.` : ""}`,
     },
   ];
 }
@@ -225,7 +245,7 @@ function readResult(v: unknown): Result | null {
   const x = obj(v);
   const name = said(x.name, 60), kind = kindOk(x.kind);
   if (!name || !kind) return null;
-  return { name: cap(name), text: said(x.text, 200), qty: int(x.qty, 1, MOST_STOCK, 1), kind, precious: x.precious === true };
+  return { name: cap(name), text: said(x.text, 200), qty: int(x.qty, 1, MOST_STOCK, 1), kind, precious: x.precious === true, ...wearableOf(x.wearable) };
 }
 
 export function readPlan(r: Run, st: GoodsState, j: Record<string, unknown>): Plan | null {
@@ -244,7 +264,7 @@ export function readPlan(r: Run, st: GoodsState, j: Record<string, unknown>): Pl
     for (const g of list(j.goods).map(obj).slice(0, 4)) {
       const name = said(g.name, 60), kind = kindOk(g.kind);
       if (!name || !kind) continue;
-      const one: Goods = { name: cap(name), qty: int(g.qty, 1, MOST_QTY, 1), kind, precious: g.precious === true, quality: qualityOf(g.quality), service: g.service === true };
+      const one: Goods = { name: cap(name), qty: int(g.qty, 1, MOST_QTY, 1), kind, precious: g.precious === true, quality: qualityOf(g.quality), service: g.service === true, ...wearableOf(g.wearable) };
       if (deal === "sell") {
         const have = itemOf(r.sheet, name);
         if (!have) {
@@ -295,7 +315,7 @@ Write this, with every <note> replaced:
 
 {
   "special": <true or false>,
-  "wares": [{ "name": "<1 to 5 words, no count>", "text": "<one sentence>", "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "qty": <how many they have>, "kind": <1 to 7>, "precious": <true or false> }]
+  "wares": [{ "name": "<1 to 5 words, no count>", "text": "<one sentence>", "quality": "<trash, mundane, common, uncommon, rare, epic or legendary>", "qty": <how many they have>, "kind": <1 to 7>, "precious": <true or false>, "wearable": <true or false> }]
 }
 
 Rules:
@@ -305,6 +325,7 @@ Rules:
 - qty: how many of it they have on hand, 1 to ${MOST_STOCK}.
 - kind: what kind of thing one of it is, judged as an ordinary one of its kind, from this ladder: ${KIND_LADDER}.
 - precious: true only for things made of or prized as precious: gold, silver, jewels, fine art.
+- ${WEARABLE_RULE}
 - Write in the language the world is written in.`,
     },
   ];
@@ -318,7 +339,7 @@ export function readStock(r: Run, j: Record<string, unknown>): { special: boolea
     const name = said(w.name, 60), kind = kindOk(w.kind);
     if (!name || !kind || wares.some((x) => alike(x.name, name))) continue;
     const qty = int(w.qty, 1, MOST_STOCK, 1);
-    wares.push({ name: cap(name), text: said(w.text, 200), quality: capQuality(qualityOf(w.quality), most), qty, stocked: qty, kind, precious: w.precious === true });
+    wares.push({ name: cap(name), text: said(w.text, 200), quality: capQuality(qualityOf(w.quality), most), qty, stocked: qty, kind, precious: w.precious === true, ...wearableOf(w.wearable) });
     if (wares.length >= MOST_WARES) break;
   }
   return wares.length >= 2 ? { special, wares } : null;
@@ -438,6 +459,8 @@ function settleBuy(r: Run, st: GoodsState, t: Settling, plan: Plan, done: boolea
       const text = ware?.text ?? "";
       const it = take(s, { name, text, quality, qty });
       if (it) {
+        const wearable = ware?.wearable ?? g.wearable;
+        if (it.wearable === undefined && wearable !== undefined) it.wearable = wearable;
         st.kinds[keyOf(it.name)] ??= kind;
         rec.gained.push(it.name);
       }
@@ -490,7 +513,7 @@ function settleSell(r: Run, st: GoodsState, t: Settling, plan: Plan, done: boole
     rec.lost.push(name);
     if (m) {
       m.purse = Math.max(0, m.purse - total);
-      intoStock(m, { name, text, quality, qty, kind: kind.kind, precious: kind.precious });
+      intoStock(m, { name, text, quality, qty, kind: kind.kind, precious: kind.precious, ...wearableOf(item.wearable) });
     } else if (p) st.purses[keyOf(p.name)] = Math.max(0, (st.purses[keyOf(p.name)] ?? 0) - total);
     const haggleSays = haggle !== null && unit !== plain ? `, haggled ${unit > plain ? "up" : "down"} from ${plain * qty}` : "";
     facts.push(`${done ? "As the player wrote, " : ""}${s.name} ${done ? "sold" : "sells"} ${many(name, qty)} to ${to} for ${total} ${cn}${haggleSays}; they now have ${s.money} ${cn}.${note}`);
@@ -551,6 +574,7 @@ function settleMake(r: Run, st: GoodsState, t: Settling, plan: Plan, done: boole
   }
   const it = take(s, { name: result.name, text: result.text, quality, qty });
   if (!it) return [];
+  if (it.wearable === undefined && result.wearable !== undefined) it.wearable = result.wearable;
   st.kinds[keyOf(it.name)] ??= { kind: result.kind, precious: result.precious };
   rec.gained.push(it.name);
   const materials = mk.from.map((f) => f.name).join(", ");
@@ -562,7 +586,7 @@ function settleMake(r: Run, st: GoodsState, t: Settling, plan: Plan, done: boole
     : told === 1
       ? `What ${s.name} ${done ? "made" : "makes"} from ${materials} is not quite ${mk.want} but ${made}, as near as those materials allow`
       : `${s.name}'s attempt at ${mk.want} from ${materials} falls short of it: what comes of it is ${made}, only loosely like what they meant, and all those materials could give`;
-  rec.told.push(`Made: ${it.name}${qty > 1 ? ` x${qty}` : ""}${quality !== "common" ? ` [${quality}]` : ""}.`);
+  rec.told.push(`Made: ${it.name}${qty > 1 ? ` x${qty}` : ""}${quality !== "common" ? ` [${quality}]` : ""}.${result.text ? ` ${sentence(result.text)}` : ""}`);
   if (used.length) rec.told.push(`Used up: ${used.map((u) => `${u.name}${u.qty > 1 ? ` x${u.qty}` : ""}`).join(", ")}.`);
   return [`${how}${mk.tool ? `, using ${mk.tool}` : ""}. ${result.text}${used.length ? ` The ${used.map((u) => u.name).join(" and the ")} ${used.length > 1 || used[0]!.qty > 1 ? "are" : "is"} used up in the making.` : ""}`];
 }
@@ -586,6 +610,193 @@ function settleBrowse(r: Run, st: GoodsState, plan: Plan): string[] {
     out.push(on.length ? `What ${p.name} has for sale, and the price of each (if prices come up, they are these): ${on.join("; ")}.` : `${p.name} has nothing left to sell just now.`);
   }
   return out;
+}
+
+/* ------------------------------------------------- the satchel ------------------------------------------------- */
+
+/**
+ * The words of the satchel: what its pencilled choices say and the lines they write, the same for every thing. They
+ * follow what the game this one follows lets you do with a thing you carry, as far as a rule is kept here: use it (on
+ * something, so the line is left open), leave it behind, sell it to a seller who is here, and set it aside with others
+ * to be made into something. Nothing here judges what a thing is.
+ */
+export const PACK_WORDS = {
+  use: "Use it",
+  useLine: (called: string): string => `I use ${called} `,
+  leave: "Leave it behind",
+  leaveLine: (called: string): string => `I leave ${called} behind for good.`,
+  /** Putting a carried thing on or in hand, and taking a worn one off (the original, GameplayManager.OnItemSlotClicked: equip, unequip). */
+  wear: "Put it on",
+  wearLine: (called: string): string => `I put on ${called}.`,
+  doff: "Take it off",
+  doffLine: (called: string): string => `I take off ${called}.`,
+  sell: (to: string): string => `Sell it to ${to}`,
+  sellLine: (called: string, to: string): string => `I sell ${called} to ${to}.`,
+  make: "Make something with it",
+  /** A making is written "Out of the rope and the hook I make ", with where it is made in front when the place has somewhere. */
+  makeBefore: (at: string): string => (at ? `${cap(at)}, out of ` : "Out of "),
+  makeBetween: ", ",
+  makeLast: " and ",
+  makeAfter: " I make ",
+  at: (thing: string): string => `at the ${thing.toLowerCase()}`,
+  called: (name: string): string => `the ${name.toLowerCase()}`,
+  owes: (to: string, amount: number, coin: string, favour: boolean): string => (favour ? `You owe ${to} a favour (worth about ${amount} ${coin}).` : `You owe ${to} ${amount} ${coin}.`),
+  worth: (each: number, sells: number, coin: string, many: boolean): string => `Worth about ${each} ${coin}${many ? " each" : ""}; would sell for about ${sells}.`,
+} as const;
+
+/** The most things one making takes: the three places of the crafting screen this follows. */
+export const MAKING_MOST = 3;
+
+/** What the narrator says of the satchel, once, the first time there is anything in it. */
+export const PACK_LESSON: Lesson = {
+  key: "pack",
+  lines: [
+    "That satchel at your right hand holds what you carry, and the purse beside it your coin.",
+    "Touch it and it is laid out. Touch a thing to read what it is and to have a line begun on your pad: to use it, to leave it behind, to sell it when a seller is here. Nothing happens until you send the line.",
+    "Things can be made out of other things. Touch a thing and choose to make something with it, three at the most, then write what you are making.",
+  ],
+};
+
+/** The place's own thing made for making, by its name, or "" (the places system keeps them; this only reads). */
+function stationHere(r: Run): string {
+  const raw = r.sys?.places;
+  if (!raw) return "";
+  try {
+    const spot = spotHere(readPlaces(structuredClone(raw)));
+    return spot?.things?.find((t) => t.use === "craft")?.name ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** A seller who is here and would deal: the first of them, the one a thing is sold to from the satchel. */
+function buyerHere(r: Run, st: GoodsState): string {
+  return merchantsHere(r, st).find(({ p }) => !p.hostile && standing(p.feeling) > -2)?.m.name ?? "";
+}
+
+/** What is carried and the coin, as the satchel lays it out. */
+export function packShow(r: Run): Extract<Show, { kind: "pack" }> {
+  const st = peek(r);
+  const s = r.sheet, cn = coinName(r), coin = coinOf(st);
+  const to = buyerHere(r, st);
+  const station = stationHere(r);
+  const at = station ? PACK_WORDS.at(station) : "";
+  // The original lets nothing be put on or taken off while a fight is on (GameplayManager.EquipItemFromInventory and
+  // OnItemSlotClicked, CombatBlocksActions): those choices are not offered then. The player may still write it.
+  const fighting = foesOf(r).length > 0;
+  const ids = new Map<string, number>();
+  const items: PackItem[] = s.items.map((it) => {
+    // Two things whose names come to the same key still get tags of their own.
+    const key = keyOf(it.name) || "thing";
+    const n = (ids.get(key) ?? 0) + 1;
+    ids.set(key, n);
+    const called = PACK_WORDS.called(it.name);
+    const k = kindOf(st, it.name);
+    const ref = k ? worthRef(k, it.quality) : null;
+    const choices: PackItem["choices"] = [{ say: PACK_WORDS.use, line: PACK_WORDS.useLine(called) }];
+    // "Take it off" on anything worn; "Put it on" only on a thing the model called wearable when it came into being,
+    // as the original offers equip only by an item's equipment type (GameplayManager.OnItemSlotClicked, IsEquippableType).
+    // A thing from an old save, never asked, has neither: the player can still write the line, and the read-back applies it.
+    if (!fighting && it.worn) choices.push({ say: PACK_WORDS.doff, line: PACK_WORDS.doffLine(called) });
+    else if (!fighting && it.wearable === true) choices.push({ say: PACK_WORDS.wear, line: PACK_WORDS.wearLine(called) });
+    if (!it.worn) {
+      if (to) choices.push({ say: PACK_WORDS.sell(to), line: PACK_WORDS.sellLine(called, to) });
+      choices.push({ say: PACK_WORDS.leave, line: PACK_WORDS.leaveLine(called) });
+    }
+    return {
+      id: n > 1 ? `${key}~${n}` : key,
+      name: it.name,
+      text: it.text,
+      quality: it.quality,
+      qty: it.qty,
+      worn: it.worn === true,
+      ...(ref !== null ? { note: PACK_WORDS.worth(inCoins(ref, coin), sellPrice(ref, coin, s.attributes.charisma ?? 2, 0), cn, it.qty > 1) } : {}),
+      called,
+      choices,
+      makes: !it.worn,
+    };
+  });
+  const notes: string[] = [];
+  if (st.coin) notes.push(coinSays(st.coin, cn));
+  for (const x of st.debts) notes.push(PACK_WORDS.owes(x.to, x.amount, cn, x.favour));
+  return {
+    kind: "pack",
+    items,
+    money: s.money,
+    coin: cn,
+    notes,
+    making: { say: PACK_WORDS.make, before: PACK_WORDS.makeBefore(at), between: PACK_WORDS.makeBetween, last: PACK_WORDS.makeLast, after: PACK_WORDS.makeAfter, most: MAKING_MOST, ...(at ? { at } : {}) },
+    ...(to ? { sellTo: to } : {}),
+  };
+}
+
+/* ------------------------------------------------- the seller's cloth ------------------------------------------------- */
+
+/**
+ * The words of the seller's cloth: what a ware's pencilled choices say and the lines they write, and what is written
+ * about a ware, the seller's purse and their restock. They follow the original's merchant screen (MerchantInventory,
+ * ItemTooltip, GameplayManager.BuyItemFromMerchant): a ware is bought by touching it, one or as many as are asked for.
+ * The haggle is this game's own: the original has none (NpcActionsHandler.OnBarterPressed does nothing).
+ */
+export const STALL_WORDS = {
+  buyIt: "Buy it",
+  buyOne: "Buy one",
+  buyOneLine: (thing: string, seller: string, several: boolean): string => (several ? `I buy the ${thing} from ${seller}, just one.` : `I buy the ${thing} from ${seller}.`),
+  buySome: "Buy several",
+  /** Left unfinished: the player writes how many after it. */
+  buySomeLine: (thing: string, seller: string): string => `I buy the ${thing} from ${seller}, this many: `,
+  /**
+   * The haggle choice says how a haggle goes, as the goods rule settles it (engine/goods.ts, haggled): it follows the
+   * throw, so it can bring the price down and can push it up. The slip has no aside under a choice, so it is in its words.
+   */
+  haggle: "Haggle over the price (a poor throw raises it)",
+  haggleLine: (thing: string, seller: string): string => `I haggle with ${seller} over the price of the ${thing}, and buy it at whatever price we settle on.`,
+  have: (money: number, coin: string): string => `You have ${money} ${coin}.`,
+  short: (money: number, coin: string, price: number): string => `You have ${money} ${coin}; one costs ${price}, so you cannot afford it.`,
+  some: (money: number, coin: string, can: number): string => `You have ${money} ${coin}: enough for ${can} of them.`,
+  purse: (seller: string, purse: number, coin: string): string => `${seller} has ${purse} ${coin} on hand to buy from you with. To sell, touch a thing in your satchel.`,
+  restock: (minutes: number): string => (minutes <= 0 ? "Fresh stock and a full purse are due now." : minutes < 60 ? "Fresh stock and a full purse within the hour." : `Fresh stock and a full purse in about ${Math.round(minutes / 60)} hour${Math.round(minutes / 60) === 1 ? "" : "s"} of the story.`),
+} as const;
+
+/** What the narrator says of the seller's cloth, once, the first time someone here will trade. */
+export const STALL_LESSON: Lesson = {
+  key: "stall",
+  lines: [
+    "When someone here will trade, I lay their cloth out on my side of the table: each ware with its price, and their purse at the end.",
+    "Touch a ware to read it and have a line begun on your pad to buy it, or to haggle, which goes by your throw and can bring the price down or push it up. Nothing happens until you send the line.",
+    "To sell them something, touch it in your satchel; they can pay only what their purse holds.",
+  ],
+};
+
+/** The sellers here who will deal, each with their cloth. */
+export function stallShows(r: Run): Extract<Show, { kind: "stall" }>[] {
+  const st = peek(r);
+  const s = r.sheet, cn = coinName(r), coin = coinOf(st);
+  return merchantsHere(r, st).flatMap(({ m, p }) => {
+    // The same as who will deal at all (settle): nobody hostile, nobody who thinks too ill of the character.
+    if (p.hostile || standing(p.feeling) <= -2) return [];
+    // A ware bought out is gone from the cloth, as the original takes it off the merchant's list.
+    const wares = m.wares.filter((w) => w.qty > 0).map((w) => {
+      const price = priceOf(r, worthRef(w, w.quality), coin, p, null);
+      const can = Math.min(w.qty, affordable(s.money, price));
+      const thing = w.name.toLowerCase();
+      const several = w.qty > 1;
+      const choices: Choice[] = [{ say: several ? STALL_WORDS.buyOne : STALL_WORDS.buyIt, line: STALL_WORDS.buyOneLine(thing, m.name, several) }];
+      if (several) choices.push({ say: STALL_WORDS.buySome, line: STALL_WORDS.buySomeLine(thing, m.name) });
+      choices.push({ say: STALL_WORDS.haggle, line: STALL_WORDS.haggleLine(thing, m.name) });
+      const means = can <= 0 ? STALL_WORDS.short(s.money, cn, price) : can < w.qty ? STALL_WORDS.some(s.money, cn, can) : STALL_WORDS.have(s.money, cn);
+      return { id: keyOf(w.name) || "ware", name: w.name, text: w.text, quality: w.quality, qty: w.qty, price, can, note: means, choices };
+    });
+    // Two wares whose names come to the same key still get places of their own.
+    const seen = new Map<string, number>();
+    for (const w of wares) {
+      const n = (seen.get(w.id) ?? 0) + 1;
+      seen.set(w.id, n);
+      if (n > 1) w.id = `${w.id}~${n}`;
+    }
+    const left = Math.max(0, m.stockedAt + RESTOCK_MINUTES - r.minutes);
+    return [{ kind: "stall" as const, id: keyOf(m.name) || "seller", seller: m.name, text: p.text, wares, coin: cn, money: s.money, purse: m.purse, restock: left, about: `${STALL_WORDS.purse(m.name, m.purse, cn)} ${STALL_WORDS.restock(left)}` }];
+  });
 }
 
 /* ------------------------------------------------- the system ------------------------------------------------- */
@@ -713,23 +924,14 @@ export const goods: System<Plan, null> = {
   },
 
   shows(r) {
-    const st = peek(r);
-    const coin = coinOf(st), cn = coinName(r);
-    const out: Show[] = [];
-    for (const { m, p } of merchantsHere(r, st)) {
-      if (p.hostile) continue;
-      for (const w of m.wares) {
-        if (w.qty <= 0) continue;
-        out.push({
-          kind: "card",
-          id: `ware:${keyOf(m.name)}:${keyOf(w.name)}`,
-          group: `${m.name}'s wares`,
-          title: `${w.name}: ${priceOf(r, worthRef(w, w.quality), coin, p, null)} ${cn}`,
-          text: clean(`${w.text}${w.quality !== "common" ? ` (${w.quality})` : ""} ${w.qty} left.`, 300),
-          line: `I buy the ${w.name.toLowerCase()} from ${m.name}.`,
-        });
-      }
-    }
+    return [packShow(r), ...stallShows(r)];
+  },
+
+  teach(r) {
+    const out: Lesson[] = [];
+    // A seller's cloth first when one is out: it is what has just come up.
+    if (stallShows(r).length) out.push(STALL_LESSON);
+    if (r.sheet.items.length > 0 || r.sheet.money > 0) out.push(PACK_LESSON);
     return out;
   },
 };

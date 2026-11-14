@@ -290,6 +290,7 @@ describe("old runs", () => {
     expect(v.savesMost).toBe(2);
     expect(v.bag).toEqual([]);
     expect(v.spared).toBe(-1);
+    expect(v.seen).toEqual([]);
     fightOf(r);
     expect((r.sys.fight as FightState).ended).toEqual([]);
   });
@@ -447,10 +448,15 @@ describe("the fight, in a turn", () => {
     expect(c.name).toBe("A chase through the market");
     expect(c.measures[0]).toMatchObject({ value: 3, max: 5 });
     expect(sceneOf(d, a.run)).toContain("UNDER WAY: A chase through the market.");
+    // On the table it is all one thing, the ring: no bars, cards or counters of its own beside it (tests/ring.test.ts).
     const shows = showsOf(d, a.run);
-    expect(shows.filter((s) => s.kind === "bar").map((s) => s.name)).toEqual(["Goblin", "Jay's lead", "The crowd"]);
-    expect(shows.filter((s) => s.kind === "card").map((s) => (s as { line?: string }).line)).toEqual(["I run harder", "I duck into an alley"]);
-    expect(shows.find((s) => s.kind === "tokens")).toMatchObject({ count: 2, max: 2 });
+    expect(shows.map((s) => s.kind)).toEqual(["fight"]);
+    const ring = shows[0] as Extract<(typeof shows)[number], { kind: "fight" }>;
+    expect(ring.name).toBe("A chase through the market");
+    expect(ring.foes.map((f) => f.name)).toEqual(["Goblin"]);
+    expect(ring.measures.map((m) => m.name)).toEqual(["Jay's lead", "The crowd"]);
+    expect(ring.lines.map((l) => l.line)).toEqual(["I run harder", "I duck into an alley", "I attack Goblin "]);
+    expect(ring.saves).toEqual({ count: 2, max: 2 });
     expect(pagesOf(d, a.run)[0]!.heading).toBe("A chase through the market");
     const xp = a.run.sheet.xp;
     const b = await turn(d, a.run, "I run harder.");

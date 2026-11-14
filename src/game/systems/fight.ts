@@ -18,15 +18,24 @@
  *
  * A blow that would bring the character down costs a save from a killing blow instead, and a flat 20 health. Saves come
  * back when the character is healed.
+ *
+ * On the table all of it is one thing, the ring (room/props/ring.ts, Show "fight"; ringShow below): a piece for each
+ * foe with its health, a piece for everyone else on a contest's sides, the contest's measures, the saves, and the few
+ * lines that can be written with any of them. The ring only offers: every line it writes is one the player could have
+ * typed, read by the same readers as any other. The narrator explains it once, the first time a fight is on (teach).
  */
-import { isPlayer, MAX_HP, person, rulesOf, same, sheetText, type Judged, type Modifier, type Run } from "../../engine/run.js";
+import { isPlayer, MAX_HP, person, rulesOf, same, sheetText, type Judged, type Modifier, type Person, type Run } from "../../engine/run.js";
+import { keyOf } from "../../engine/goods.js";
 import {
   able, addXp, chooseMove, contestGap, contestWords, contestXp, deedXp, endOf, FIGHT_MINUTES_MOST, fightOf, foesOf, foeWords, gapModifier, gapOf, LENGTHS, makeContest,
-  moveMeasure, moveSide, opposing, spend, stepOf, viewFight, YOU, type After, type Contest, type Draft, type End, type Ending, type FightState, type Length, type Measure,
-  type Move, type Reading,
+  moveMeasure, moveSide, opposing, SAVE_COST, spend, stepOf, viewFight, YOU, type After, type Contest, type Draft, type End, type Ending, type FightState, type Length,
+  type Measure, type Move, type Reading,
 } from "../../engine/fight.js";
 import type { Message } from "../ask.js";
-import { asked, head, int, list, obj, recentStory, said, type Page, type Settling, type Show, type System, type Told } from "../system.js";
+import {
+  asked, head, int, list, obj, recentStory, said, type Choice, type FightFoe, type FightMeasure, type FightOther, type Lesson, type Page, type Settling, type Show, type System,
+  type Told,
+} from "../system.js";
 
 /** What the passage was read for. */
 export interface Passage {
@@ -308,6 +317,199 @@ export function readDraft(r: Run, j: Record<string, unknown>, b: { name: string;
   return makeContest(r, d);
 }
 
+/* ------------------------------------------------- the ring ------------------------------------------------- */
+
+/** The most pencilled lines the ring offers by your own piece: as many as the screen this follows has buttons for (the original, Encounter.MAX_ACTIONS). */
+export const RING_LINES_MOST = 5;
+/** The most names kept of those who have fought the character in the fight that is on. */
+export const RING_SEEN_MOST = 16;
+
+/** A gap in power in a few words, for each of its seven steps. */
+const STANDS: Record<number, string> = {
+  [-3]: "far weaker than you",
+  [-2]: "much weaker than you",
+  [-1]: "a little weaker than you",
+  0: "about your match",
+  1: "a little stronger than you",
+  2: "much stronger than you",
+  3: "far stronger than you",
+};
+/** How hard a contest is for you in a few words, for each of the seven steps. */
+const TESTS: Record<number, string> = {
+  [-3]: "Very easy for you.",
+  [-2]: "Easy for you.",
+  [-1]: "Somewhat easy for you.",
+  0: "A fair test for you.",
+  1: "Hard for you.",
+  2: "Very hard for you.",
+  3: "Overwhelming for you.",
+};
+const stepped = (step: number): number => Math.max(-3, Math.min(3, Math.round(step)));
+
+/** Names as a list in a sentence: "Goblin", "Goblin and Rat", "Goblin, Rat and Wolf". */
+function listed(names: readonly string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]!}`;
+}
+
+/**
+ * The words of the ring: what is written about each thing on it, what its pencilled choices say and the lines they
+ * write. The choices follow what the game this one follows lets you do with someone in an encounter (the original,
+ * GameplayManager.GetActions for a character: talk to them; use an item or an ability on them) and with the foe you
+ * are fighting (the original, EnemyActionsHandler.DoAttack: attack them). Each line names who it is aimed at and is
+ * left open for the player to say how, with what, or what is said. Someone's tier and how they stand against you are
+ * what that game shows when a character is pointed at (the original, GameCharacter.GetTooltipLvlOrPowerLvlTxt), and a
+ * measure's ends what it shows for a bar (the original, UiEncProgBar.OnPointerEnter). Nothing here judges anything.
+ */
+export const RING_WORDS = {
+  /** What a fight is called when it is only that someone here is fighting you. */
+  fight: "The fight",
+  attack: "Attack them",
+  attackSay: (name: string): string => `Attack ${name}`,
+  attackLine: (name: string): string => `I attack ${name} `,
+  speak: "Speak to them",
+  speakLine: (name: string): string => `I say to ${name}: `,
+  use: "Use something on them",
+  useLine: (name: string): string => `On ${name} I use `,
+  power: (tier: number, step: number): string => `Power ${tier} of 7, ${STANDS[stepped(step)]!}.`,
+  health: (hp: number, max: number): string => `Health ${hp} of ${max}.`,
+  beaten: "Beaten: they can do no more.",
+  dead: "Dead.",
+  yours: "On your side.",
+  against: (side: string): string => (side ? `With ${side}, against you.` : "Against you."),
+  other: (side: string): string => (side ? `With ${side}.` : "On neither side."),
+  test: (step: number): string => TESTS[stepped(step)]!,
+  fighting: (names: readonly string[]): string => (names.length ? `You are fighting ${listed(names)}.` : "Nobody is left fighting you."),
+  withYou: (names: readonly string[]): string => `With you: ${listed(names)}.`,
+  side: (name: string, stance: "yours" | "against" | "other", who: readonly string[]): string => `${name}${stance === "against" ? ", against you" : ""}: ${who.join(", ") || "nobody now"}.`,
+  you: "you",
+  saves: (count: number, max: number): string => `Saves from a killing blow: ${count} of ${max}. A blow that would bring you down costs one, and ${SAVE_COST} health, instead.`,
+  measure: (m: Measure): string => {
+    const end = (when: string, e: End): string => (e === "none" ? "" : ` ${when}, you ${e}.`);
+    const ends = `${end("Full", m.atFull)}${end("Empty", m.atEmpty)}`;
+    return `${m.value} of ${m.max}.${ends || ` It ends nothing; ${m.good === "up" ? "more" : "less"} of it is better for you.`}`;
+  },
+} as const;
+
+/** What the narrator says of the ring, once, the first time a fight is on. */
+export const RING_LESSON: Lesson = {
+  key: "fight",
+  lines: [
+    "That drum at your right is the fight. Each piece beyond the chalk line on it is someone against you; the pale one nearest you is yours.",
+    "The glowing band on a piece is its health: it sinks as the health goes, and the piece falls when it is beaten. The larger and darker a piece stands, the stronger it is than you.",
+    "Touch the drum to lean over it, then touch a piece to read it and to have a line begun on your pad: to attack, to speak, to use something. Nothing happens until you send the line, and you can always write your own instead.",
+  ],
+};
+
+/** What the narrator says of a contest's measures, once, the first time one is under way. */
+export const CONTEST_LESSON: Lesson = {
+  key: "contest",
+  lines: [
+    "This will take more than a few blows, so it has measures: the posts standing beside the drum, each with a bead that climbs and falls as it goes.",
+    "A large gold cap is an end where you win it; a large red one, an end where you lose it. Touch a post to read what it measures.",
+    "Touch your own piece for a few ways to go about it. They are only offers: nothing happens until you send a line.",
+  ],
+};
+
+/** Those who have fought the character in the fight that is on are kept by name, so the ones brought down stay where they fell. */
+function noteFoes(r: Run, st: FightState): void {
+  for (const p of foesOf(r)) if (!st.seen.some((n) => same(n, p.name))) st.seen.push(p.name);
+  if (st.seen.length > RING_SEEN_MOST) st.seen = st.seen.slice(-RING_SEEN_MOST);
+}
+
+/** Ids for the pieces: the same person keeps theirs, and two whose names come to the same key still differ. */
+function idsFor(): (name: string) => string {
+  const used = new Map<string, number>();
+  return (name) => {
+    const key = keyOf(name).replace(/\s+/g, "-") || "someone";
+    const n = (used.get(key) ?? 0) + 1;
+    used.set(key, n);
+    return n > 1 ? `${key}~${n}` : key;
+  };
+}
+
+/** What can be written with someone on the mat: the same few for everyone; only someone fighting you is attacked from here. */
+function choicesFor(name: string, foe: boolean): Choice[] {
+  return [
+    ...(foe ? [{ say: RING_WORDS.attack, line: RING_WORDS.attackLine(name) }] : []),
+    { say: RING_WORDS.speak, line: RING_WORDS.speakLine(name) },
+    { say: RING_WORDS.use, line: RING_WORDS.useLine(name) },
+  ];
+}
+
+/**
+ * The fight as the ring shows it, or null when there is none: those fighting the character, each with their health;
+ * those of them brought down in this fight, lying where they fell; everyone else on a contest's sides and anyone who
+ * goes with the character; the contest's measures and offered lines; the character's own health and saves. A fight
+ * whose last foe has fallen stays on the table, with everyone lying, until the next line is played.
+ */
+export function ringShow(r: Run): Extract<Show, { kind: "fight" }> | null {
+  const st = viewFight(r);
+  const c = live(r, st);
+  const foes = foesOf(r);
+  const fallen = st.seen.map((n) => person(r, n)).filter((p): p is Person => !!p && !foes.includes(p) && (p.dead || (p.here && p.hp <= 0)));
+  if (!foes.length && !c && !fallen.length) return null;
+  const id = idsFor();
+  const step = (p: Person): number => stepOf(gapOf(r, p.power));
+  const foeOf = (p: Person, down: boolean): FightFoe => ({
+    id: id(p.name),
+    name: p.name,
+    text: p.text,
+    hp: down ? 0 : p.hp,
+    max: MAX_HP,
+    tier: p.power,
+    step: step(p),
+    odds: down ? (p.dead ? RING_WORDS.dead : RING_WORDS.beaten) : `${RING_WORDS.health(p.hp, MAX_HP)} ${RING_WORDS.power(p.power, step(p))}`,
+    down,
+    choices: down ? [] : choicesFor(p.name, true),
+  });
+  const outFoes = [...foes.map((p) => foeOf(p, false)), ...fallen.map((p) => foeOf(p, true))];
+  const shown = new Set<Person>([...foes, ...fallen]);
+  const others: FightOther[] = [];
+  const other = (p: Person, side: string, stance: FightOther["stance"]): void => {
+    if (shown.has(p) || !p.here || p.dead || p.hp <= 0) return;
+    shown.add(p);
+    const says = stance === "yours" ? RING_WORDS.yours : stance === "against" ? RING_WORDS.against(side) : RING_WORDS.other(side);
+    others.push({ id: id(p.name), name: p.name, text: p.text, side, stance, tier: p.power, step: step(p), odds: `${says} ${RING_WORDS.power(p.power, step(p))}`, choices: choicesFor(p.name, false) });
+  };
+  const sides = (c?.sides ?? []).map((s) => ({ name: s.name, stance: s.you ? ("yours" as const) : s.against ? ("against" as const) : ("other" as const), members: [...s.members] }));
+  for (const s of sides) for (const m of s.members) {
+    const p = person(r, m);
+    if (p) other(p, s.name, s.stance);
+  }
+  // Whoever goes with the character stands with them, contest or none.
+  const mine = sides.find((s) => s.stance === "yours")?.name ?? "";
+  for (const p of r.people) if (p.follows && !p.hostile) other(p, mine, "yours");
+  const measures: FightMeasure[] = (c?.measures ?? []).map((m, i) => ({
+    id: `${keyOf(m.name).replace(/\s+/g, "-") || "measure"}~${i}`,
+    name: m.name,
+    value: m.value,
+    max: m.max,
+    good: m.good,
+    atFull: m.atFull,
+    atEmpty: m.atEmpty,
+    note: RING_WORDS.measure(m),
+  }));
+  // The contest's own ways to go about it come first; then, for each foe, the line that attacks them.
+  const lines: Choice[] = [...(c?.lines ?? []).map((l) => ({ say: l, line: l })), ...foes.map((p) => ({ say: RING_WORDS.attackSay(p.name), line: RING_WORDS.attackLine(p.name) }))].slice(0, RING_LINES_MOST);
+  const withYou = others.filter((o) => o.stance === "yours").map((o) => o.name);
+  const text = c
+    ? [RING_WORDS.test(stepOf(contestGap(r, c))), ...sides.map((s) => RING_WORDS.side(s.name, s.stance, [...(s.stance === "yours" ? [RING_WORDS.you] : []), ...s.members]))].join(" ")
+    : [RING_WORDS.fighting(foes.map((p) => p.name)), ...(withYou.length ? [RING_WORDS.withYou(withYou)] : [])].join(" ");
+  const saves = rulesOf(r).saves ? { count: st.saves, max: st.savesMost } : null;
+  return {
+    kind: "fight",
+    name: c ? c.name : RING_WORDS.fight,
+    text,
+    foes: outFoes,
+    others,
+    sides,
+    measures,
+    lines,
+    you: { name: r.sheet.name, hp: r.sheet.hp, max: MAX_HP, text: [RING_WORDS.health(r.sheet.hp, MAX_HP), ...(saves ? [RING_WORDS.saves(saves.count, saves.max)] : [])].join(" ") },
+    ...(saves ? { saves } : {}),
+  };
+}
+
 /* ------------------------------------------------- the system ------------------------------------------------- */
 
 export const fight: System<Reading, Passage> = {
@@ -351,6 +553,9 @@ export const fight: System<Reading, Passage> = {
       st.downs = r.downs;
     }
     st.move = null;
+    // A fight that is over is cleared off the table at the next line; while one is on, whoever is in it is kept by name.
+    if (!foesOf(r).length && !st.contest) st.seen = [];
+    else noteFoes(r, st);
     if (st.spared === r.turn - 1) facts.push(`The blow that should have brought ${you} down last time did not: whatever the last passage seemed to show, ${you} is still conscious and able to act, though badly hurt.`);
     const move = chooseMove(r, st, { kind: t.kind, verdict: t.verdict, outcome: t.outcome, target: t.target }, plan);
     if (move) {
@@ -398,6 +603,7 @@ export const fight: System<Reading, Passage> = {
       p.hostile = true;
       told.push(`${p.name} is fighting you.`);
     }
+    noteFoes(r, st);
     if (core?.place && read && !read.away) for (const was of t.before.people.filter(able)) {
       const p = person(r, was.name);
       const left = settled.some((n) => same(n, was.name));
@@ -522,15 +728,17 @@ export const fight: System<Reading, Passage> = {
     return [{ heading: c ? c.name : "The fight", his }];
   },
 
+  // While a fight or a contest is on, all of it is the ring's: the foes, the measures, the offered lines and the saves.
+  // With none, only the saves are on the table, as counters.
   shows(r): Show[] {
+    const ring = ringShow(r);
+    if (ring) return [ring];
     const st = viewFight(r);
-    const out: Show[] = rulesOf(r).saves ? [{ kind: "tokens", id: "fight-saves", name: "Saves from a killing blow", count: st.saves, max: st.savesMost }] : [];
-    for (const p of foesOf(r)) out.push({ kind: "bar", id: `foe-${p.name}`, group: "fight", name: p.name, value: p.hp, max: MAX_HP, good: "down", note: `power ${p.power} of 7` });
-    const c = live(r, st);
-    if (c) {
-      c.measures.forEach((m, i) => out.push({ kind: "bar", id: `contest-${i}`, group: c.name, name: m.name, value: m.value, max: m.max, good: m.good, note: measureText("you", m) }));
-      c.lines.forEach((l, i) => out.push({ kind: "card", id: `contest-line-${i}`, group: c.name, title: l, text: `A way to go about ${c.name}.`, line: l }));
-    }
-    return out;
+    return rulesOf(r).saves ? [{ kind: "tokens", id: "fight-saves", name: "Saves from a killing blow", count: st.saves, max: st.savesMost }] : [];
+  },
+
+  teach(r) {
+    const c = live(r, viewFight(r));
+    return [...(foesOf(r).length || c ? [RING_LESSON] : []), ...(c ? [CONTEST_LESSON] : [])];
   },
 };

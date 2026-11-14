@@ -42,6 +42,12 @@ export interface Item {
   quality: Quality;
   qty: number;
   worn?: boolean;
+  /**
+   * Whether it is a thing a person wears or holds ready (clothing, armour, a weapon, a tool carried in hand,
+   * jewellery), as the model said when the thing came into being (the original sets an item's equipment type then:
+   * GameItem.Create, from AIAsker.ChatgptGeneratedItemTypeSurvivalValuable). Absent on things from before it was asked.
+   */
+  wearable?: boolean;
 }
 
 export interface Person {
@@ -106,6 +112,8 @@ export interface Run {
   rules?: Rules;
   /** True once the story has ended: the character was brought down where a fall ends it. */
   over?: boolean;
+  /** What the narrator has already explained, by each lesson's key (game/system.ts, Lesson): each is said once in a run. */
+  taught?: string[];
 }
 
 /** The rules a run is played by. */
