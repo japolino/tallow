@@ -65,6 +65,8 @@ export class Voice {
   /** When the next word comes, and when the passage that is fully out gives way to the next. */
   private nextAt = 0;
   private turnAt = Infinity;
+  /** What is on the screen was told to go quiet: nothing waits for it. */
+  private hushed = true;
   private done: (() => void) | null = null;
   private want = 0;
   private k = 0;
@@ -111,7 +113,10 @@ export class Voice {
     this.want = 1;
     // The promise first: with reduced motion a single passage is all out at once, and must be able to say so.
     const said = new Promise<void>((done) => (this.done = done));
-    this.passage();
+    // What was just said keeps its time to be read before these words take its place: the last paragraph of a turn is
+    // not swept away by the line that happens to follow it. (Words still coming are cut short, as before.)
+    const held = !this.hushed && this.words.length > 0 && this.shown === this.words.length && Number.isFinite(this.turnAt) && this.t < this.turnAt;
+    if (!held) this.passage();
     return said;
   }
 
@@ -130,6 +135,7 @@ export class Voice {
   /** Let the words fade and the dark draw back. */
   hush(): void {
     this.want = 0;
+    this.hushed = true;
     this.queue = [];
     this.shown = this.words.length;
     this.finishIfOut();
@@ -145,6 +151,7 @@ export class Voice {
       return span;
     });
     this.shown = 0;
+    this.hushed = false;
     this.nextAt = this.t + (this.k < 0.5 ? 0.35 : 0.1);
     this.turnAt = Infinity;
     if (this.reduced) {

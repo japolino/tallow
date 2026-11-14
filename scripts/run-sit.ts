@@ -78,6 +78,8 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   check("the die is thrown and read out", await until(heard(" on the die"), 40000), await page.run<string>("window.heard.slice(-3).join(' / ')"));
   check("the story is told", await until(heard("more frightened than you are"), 40000));
   check("and what changed is said", await until(`${heard("The boy with the hooked knife enters the story")} && ${heard("8 experience")}`, 30000), await page.run<string>("window.heard.slice(-6).join(' / ')"));
+  // The room began at half past four; the story began at nine in the morning and the turn took five minutes.
+  check("the room's clock and window follow the story's hour", await until("Math.abs(room.hour - 9.08) < 0.15", 8000), String(await page.run("room.hour")));
   check("the run is kept, a turn on", (await run<string>("run.turn + ' ' + run.beats.length + ' ' + run.sheet.xp + ' ' + run.people.length")) === "1 1 8 2", String(await run("run.turn + ' ' + run.beats.length + ' ' + run.sheet.xp + ' ' + run.people.length")));
   check("the skill thrown on is practised", (await run<number>("run.sheet.skills.find((k) => k.name === 'Stealth').xp")) === 440);
   check("a page of it is handed over", await until("room.desk.pages.some((p) => (p.heading ?? '').startsWith('Get close'))", 40000));

@@ -144,6 +144,17 @@ describe("a turn", () => {
     expect(u.report.kind).toBe("action");
     expect(u.report.verdict).toBe("implausible");
   });
+  test("the judge and its second look are both told that going somewhere first is no reason to refuse", async () => {
+    // "I find the nearest inn and ask the innkeeper": they get there, and the asking is judged as done there.
+    const d = deps({ judge: { ...JUDGE, verdict: "trivial" }, back: {} });
+    let criteria = "";
+    d.decide = async (_what, _state, questions) => ((criteria ||= JSON.stringify(questions)), { verdict: choice("trivial") });
+    await turn(d, start(), "I walk into town and ask the smith what a knife costs.");
+    const judge = d.asked.find((x) => x.messages[0]!.content.includes("referee"))!.messages.at(-1)!.content;
+    expect(judge).toContain("the going is not the act and is not judged");
+    expect(judge).toContain("Nor because the character is not yet where it is done");
+    expect(criteria).toContain("Nor because the character is not yet where it is done");
+  });
   test("a thing the player did not name is dropped when the second look says it does not fit", async () => {
     const r = start();
     take(r.sheet, { name: "Rope" });

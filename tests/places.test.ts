@@ -167,6 +167,8 @@ interface Fakes {
   placed?: unknown;
   peopled?: unknown;
   seeded?: unknown;
+  /** What the model that fills in a first visit was shown. */
+  shown?: string[];
 }
 
 function deps(f: Fakes = {}): RunDeps & { told: Message[][]; asked: string[]; logged: string[] } {
@@ -182,7 +184,7 @@ function deps(f: Fakes = {}): RunDeps & { told: Message[][]; asked: string[]; lo
       const sys = messages[0]!.content;
       if (role === "teller") return (told.push(messages), "You go on your way.");
       if (sys.includes("set up the map")) return asked.push("seed"), say(f.seeded ?? {});
-      if (sys.includes("fill in a place")) return asked.push("people"), say(f.peopled ?? {});
+      if (sys.includes("fill in a place")) return asked.push("people"), f.shown?.push(messages.at(-1)!.content), say(f.peopled ?? {});
       if (sys.includes("referee")) return say(f.judge ?? WALK);
       if (sys.includes("keep the records")) return say(f.back ?? { minutes: 3 });
       if (sys.includes("goes to another place")) return asked.push("plan"), say(f.going ?? { going: null });
@@ -321,6 +323,30 @@ describe("places in a turn", () => {
     expect(d.asked).toEqual(["plan", "read", "place", "people"]);
     // Every model is shown the barred way.
     expect(sceneOf(d, t.run)).toContain("Flooded Crypt (inside, a moment away; the way in barred by a wall of black water)");
+  });
+
+  test("a first visit is shown what the story said before, and nobody it writes is fighting until the story shows them", async () => {
+    const r = start();
+    r.beats.push({ you: "I ask Mira what is out in the woods.", story: "Mira lowers her voice. \"A grey wolf dens under the split oak in Hollow Wood. Bring me its ferns and the room is yours.\"" });
+    const shown: string[] = [];
+    const d = deps({
+      shown,
+      back: { place: { name: "Hollow Wood", text: "Old trees, close and dark." }, minutes: 60 },
+      placed: { where: "far", of: "Port Kell", kind: "forest", size: 3, danger: 3, way: "an hour's walk" },
+      peopled: { people: [{ name: "a grey wolf", text: "Dens under the split oak.", power: 4, hostile: true }], things: [], inside: [] },
+    });
+    const t = await turn(d, r, "I walk out to Hollow Wood.");
+    // The warning given in the inn is in front of the model, so it writes that wolf and not some other danger.
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toContain("THE STORY BEFORE THEY CAME");
+    expect(shown[0]).toContain("A grey wolf dens under the split oak");
+    expect(shown[0]!.indexOf("A grey wolf dens")).toBeLessThan(shown[0]!.indexOf("HOW THEY CAME HERE"));
+    expect(shown[0]).toContain("no other danger is added beside them");
+    // It is here, and what it means to do is kept in words; but it takes no turn against the player until a passage shows it.
+    const wolf = person(t.run, "a grey wolf")!;
+    expect(wolf).toMatchObject({ here: true, hostile: false, power: 4 });
+    expect(wolf.text).toBe("Dens under the split oak. Will attack whoever comes near.");
+    expect(t.report.changes).toContain("In Hollow Wood: a grey wolf.");
   });
 
   test("nobody is written into a private place, or a room", async () => {

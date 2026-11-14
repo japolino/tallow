@@ -326,6 +326,16 @@ export function freshUpkeep(minutes = 0): Upkeep {
 export const nowOf = (u: Upkeep, r: Run): number => u.start + Math.max(0, r.minutes);
 
 /**
+ * The hour a run stands at, counted on from midnight of its first day (so it only ever goes forward: 33 is nine in the
+ * morning of the second day), for whatever shows the time of day. A run that keeps no calendar began in the morning.
+ */
+export function hourOf(r: Run): number {
+  const u = r.sys?.upkeep as Partial<Upkeep> | undefined;
+  const start = typeof u?.start === "number" && Number.isFinite(u.start) ? u.start : DEFAULT_START;
+  return (start + Math.max(0, r.minutes)) / 60;
+}
+
+/**
  * Read a saved state, with a default for everything: a run saved by an older build, or half written, still loads.
  * Returns the same object, repaired.
  */

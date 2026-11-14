@@ -332,6 +332,9 @@ ${head(r.world, 2500)}
 THE PLACE: ${p.name}${p.kind ? ` (${p.kind})` : ""}${p.within ? `, in ${pathText(st, p.within)}` : ""}. ${p.text}
 How big: ${SIZES[p.size]}. How dangerous: ${DANGERS[p.danger]}.${p.private ? " It is someone's home or private rooms." : ""}
 
+THE STORY BEFORE THEY CAME (what has been said of this place, and of who or what is met in it, stands):
+${r.summary ? `${tail(r.summary, 900)}\n\n` : ""}${recentStory({ ...r, beats: r.beats.slice(0, -1) }, 3, 900)}
+
 HOW THEY CAME HERE (the passage just told; what it shows of this place stands, and nothing may contradict it):
 ${tail(t.story, 2500)}
 
@@ -349,7 +352,9 @@ Write this, with every <note> replaced:
 }
 
 Rules:
-- people: 0 to 3 who would be found here at this moment, only as the description and the passage imply. None if the place is small, abandoned, private or quiet, or not a place where anyone would be about, or if the passage shows it empty. Most are not hostile. hostile only for people or creatures the description plainly implies will attack whoever comes in; never because the place is dark, eerie or mysterious; never in a safe, small or private place.
+- people: 0 to 3 who would be found here at this moment, only as the description, the story before and the passage imply. None if the place is small, abandoned, private or quiet, or not a place where anyone would be about, or if the passage shows it empty.
+- When the story before has already said who or what is met here (a warning, a rumour, a quarry, someone waiting), those are the ones to write, as the story described them, and no other danger is added beside them. The story is the player's and the storyteller's: you fill in what it implies, and add no creature or threat of your own to it.
+- Most are not hostile. hostile only for people or creatures the story or the description plainly says will attack whoever comes in; never because the place is dark, eerie or mysterious; never in a safe, small or private place. Nobody you write attacks yet: they are here, and the story decides when they are met.
 - power: ${POWER_SAYS}.
 - things: 2 or 3 fixed things someone could use here: furniture, fixtures, a well, an altar, a forge. use: craft only for a station made for making things (a forge, a loom, an alchemist's bench); trade only for a counter or stall where goods are bought and sold; keep only for something to store things in (a chest, a strongbox); otherwise other.
 - inside: places within this one that someone could walk into, each big enough to walk around in and smaller than this place (size: ${SIZE_SAYS}). None if this place is a single room or smaller. Otherwise 0 to 3, none of them already known.
@@ -625,12 +630,14 @@ export const places: System<Plan, Read> = {
 /** What a first visit writes, kept only where it checks: people the run can keep, things, inner places and a barrier. */
 function fillIn(r: Run, st: Places, p: Spot, got: Peopled): string[] {
   const told: string[] = [];
-  // A small, private or safe place has no one about to write; a place of little danger has no one hostile in it.
+  // A small, private or safe place has no one about to write.
   const quiet = p.private || p.size === 0;
   const met: string[] = [];
   for (const x of quiet ? [] : got.people) {
     if (st.made.some((m) => alike(m, x.name))) continue;
-    const who = meet(r, { ...x, hostile: x.hostile && p.danger >= 2 });
+    // Nobody written here is fighting yet, whatever they mean to do: no passage has shown them, and a foe the story
+    // has not shown must not take turns against the player. The story brings them in, and then they are met.
+    const who = meet(r, { ...x, text: x.hostile && !/\b(hostile|attack|prey|hunt)/i.test(x.text) ? `${x.text} Will attack whoever comes near.`.trim() : x.text, hostile: false });
     if (!who) continue;
     met.push(who.name);
     st.made = [...st.made, who.name].slice(-20);

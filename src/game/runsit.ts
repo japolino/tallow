@@ -6,7 +6,8 @@
  * written while you do. Then the narrator tells it, hands you the page, and your sheets are written out again as they
  * now stand. Nothing here decides anything: every number is the run's.
  */
-import { ATTRIBUTES, MAX_HP, outcomeName, spend, standingWord, xpToNext, type Attribute, type Roll, type Run } from "../engine/run.js";
+import { ATTRIBUTES, MAX_HP, outcomeName, outcomeOf, spend, standingWord, xpToNext, type Attribute, type Roll, type Run } from "../engine/run.js";
+import { hourOf } from "../engine/upkeep.js";
 import { CARDS_OUT, type Table, type Written } from "./table.js";
 import { firstJson } from "./ask.js";
 import { begin, judgeTurn, pagesOf, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
@@ -85,20 +86,45 @@ export function allSheets(d: RunDeps, r: Run, shows: Show[]): { heading: string;
 /** How a run opens, as the page beside your notebook: there is nothing of yours on it yet. */
 const openingNotes = (r: Run): { heading: string; his: string[] } => ({ heading: r.place.name || "How it begins", his: paragraphs(r.opening) });
 
-/** The check, as the narrator says it before the die. */
+/**
+ * The face the die must show for the action to succeed, with everything for and against it already counted in: your
+ * attribute and skill set how high a throw must be, and what helps or hinders moves the throw. 21 when no face does it.
+ * The die is thrown in the roll's own finer measure, so a face is "about": a throw on the very edge can fall either way.
+ */
+export function needOf(roll: Roll): number {
+  const by = roll.modifiers.reduce((n, m) => n + m.by, 0) * 0.01;
+  for (let face = 1; face <= 20; face++) {
+    const total = (face - 0.5) / 20 + by;
+    const a = outcomeOf(total, roll.attribute.thresholds);
+    const s = roll.skill.name ? outcomeOf(total, roll.skill.thresholds) : a;
+    if (a + s >= 2) return face;
+  }
+  return 21;
+}
+
+/** The judge's own two readings of the situation, which its for and against already put in words. */
+const JUDGED = new Set(["how possible it is", "how likely it is to work", "what is used", "the ability used"]);
+
+/** The check, as the narrator says it before the die: what you mean to do, what counts, and what the die must show. */
 export function checkSaid(p: Judging): string[] {
   const x = p.report, roll = x.roll!;
   const lines = [`I take it you mean to ${x.act.replace(/[.!?]+$/, "").replace(/^./, (c) => c.toLowerCase())}.`];
-  if (x.pro.length) lines.push(`For you: ${x.pro.join("; ")}.`);
-  if (x.con.length) lines.push(`Against you: ${x.con.join("; ")}.`);
-  lines.push(`It goes on your ${roll.attribute.name}${roll.skill.name ? `, and on ${roll.skill.name}${roll.skill.fresh ? ", which is new to you" : ""}` : ""}.`);
+  // What the rules themselves count (a foe stronger than you, an ability, a need gone unmet) beside what the judge saw.
+  const counted = roll.modifiers.filter((m) => !JUDGED.has(m.what));
+  const pro = [...x.pro, ...counted.filter((m) => m.by > 0).map((m) => m.what)];
+  const con = [...x.con, ...counted.filter((m) => m.by < 0).map((m) => m.what)];
+  if (pro.length) lines.push(`For you: ${pro.join("; ")}.`);
+  if (con.length) lines.push(`Against you: ${con.join("; ")}.`);
+  const need = needOf(roll);
+  const needs = need > 20 ? "No throw makes a clean success of it; the die says how near you come" : need <= 1 ? "Any throw will do it; the die says how well" : `With all that counted, you need about ${need} on the die`;
+  lines.push(`It goes on your ${roll.attribute.name}${roll.skill.name ? `, and on ${roll.skill.name}${roll.skill.fresh ? ", which is new to you" : ""}` : ""}. ${needs}.`);
   return lines;
 }
 
-/** The die, as the narrator reads it out. */
+/** The die, as the narrator reads it out: the face thrown, the face it took, and what came of it. */
 export function rollSaid(roll: Roll): string {
-  const by = roll.modifiers.reduce((n, m) => n + m.by, 0);
-  return `${faceOf(roll)} on the die${by ? `, and ${by > 0 ? `${by} for you` : `${-by} against you`}` : ""}: ${outcomeName(roll.outcome)}.`;
+  const need = needOf(roll);
+  return `${faceOf(roll)} on the die${need > 1 && need <= 20 ? `, needing about ${need}` : ""}: ${outcomeName(roll.outcome)}.`;
 }
 
 /** Where a level's points go, read from a line: by a model when there is one, else by the attributes it names. */
@@ -162,6 +188,8 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     const shows = inOrder(showsOf(deps, r));
     table.sheets?.(allSheets(deps, r, shows));
     table.show?.(shows);
+    // The room's own clock and the light in its window follow the story's hour.
+    table.clock(hourOf(r));
   };
   // The music under the scene: asked for as each passage is said, and changed only when the answer is to change it.
   let playing: { title: string; since: number } | null = null;
