@@ -84,6 +84,47 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   await page.wait(600);
   await shot("03-told");
 
+  // What happened last lies written out beside the notebook.
+  check("the turn is written out beside the notebook", await page.run<boolean>("room.desk.lastTurn?.writing.mine.includes('I sneak up the stair') && room.desk.lastTurn.writing.his.some((t) => t.includes('more frightened than you are')) && room.desk.lastTurn.writing.his.some((t) => t.includes('on the die'))"), JSON.stringify(await page.run("room.desk.lastTurn?.writing.his.map((t) => t.slice(0, 24))")));
+
+  // A long line: written at one size, a full page is turned and the line goes on, and none of it is lost.
+  // The field the keys go into is the one with the keyboard, inside the room's own shadow tree.
+  const FIELD = "(() => { let a = document.activeElement; while (a?.shadowRoot?.activeElement) a = a.shadowRoot.activeElement; return a; })()";
+  const long = Array.from({ length: 60 }, (_, i) => `Step ${i + 1}: I keep to the wall and count the lamps as I pass under them.`).join(" ");
+  await page.type("I ");
+  await page.wait(900);
+  check("the notebook is open", await page.run<boolean>("room.desk.mode === 'writing'"));
+  check("a short line is one leaf", (await page.run<number>("room.desk.leaves")) === 1);
+  await shot("05-short");
+  await page.run(`(${FIELD}.value = ${JSON.stringify(long)}, ${FIELD}.dispatchEvent(new Event("input")), 1)`);
+  // Letters only: the typing here presses "." and "!" as other keys.
+  await page.type(" And then I stop");
+  await page.wait(900);
+  const wrote = await page.run<{ n: number; leaves: number; end: boolean }>("({ n: room.desk.draft.length, leaves: room.desk.leaves, end: room.desk.draft.endsWith('And then I stop') })");
+  check("all of a long line is on the pad", wrote.n === long.length + " And then I stop".length && wrote.end, `${wrote.n} of ${long.length + 16}`);
+  check("on more than one leaf", wrote.leaves >= 3, String(wrote.leaves));
+  await shot("06-long");
+
+  // A look across at what happened last, and back by writing.
+  await page.key("Tab");
+  await page.wait(1200);
+  check("Tab turns you to what happened last", await page.run<boolean>("room.desk.notesUp && room.desk.mode === 'writing'"));
+  await shot("07-notes");
+  const leaves = await page.run<number>("room.desk.lastTurn.leaves");
+  await page.key("ArrowRight");
+  await page.wait(500);
+  check("its leaves turn", (await page.run<number>("room.desk.lastTurn.leaf")) === Math.min(1, leaves - 1), `${leaves} leaves`);
+  if (leaves > 1) await shot("08-notes-next");
+  await page.type("x");
+  await page.wait(1200);
+  check("writing turns you back to the notebook", await page.run<boolean>("!room.desk.notesUp && room.desk.draft.endsWith('I stopx')"));
+  // Rubbed out again: the leaf comes back, and the page is clean.
+  await page.run(`(${FIELD}.value = "", ${FIELD}.dispatchEvent(new Event("input")), 1)`);
+  await page.wait(700);
+  check("rubbed out, it is one leaf again", await page.run<boolean>("room.desk.leaves === 1 && room.desk.draft === ''"));
+  await page.key("Escape");
+  await page.wait(400);
+
   // Nothing in doubt: no die, the story simply goes on.
   const said = await page.run<number>("window.heard.length");
   await write("I look the quarter over and ask her what she saw.");

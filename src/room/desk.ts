@@ -117,7 +117,16 @@ const THUMB_UP = 0.006;
  * far off to be read there, and anything more makes it stand out white in a room lit by one candle.
  */
 const AWAY = 0.02;
-const MOST = 400;
+/** The most that can be written in one go: about a dozen leaves of the notebook. */
+const MOST = 6000;
+/** How far over the rings a full leaf of a long line is turned (it comes to rest a hair above the cover), and how high it lies there. */
+const TURN = Math.PI - 0.06;
+const TURNED_Y = 0.0125;
+/** What happened last, written out: it lies by the notebook's left side, a little askew, where you can look across to it. */
+const NOTES = pose(BOOK.x - 0.16, 0.0016, BOOK.z + 0.006, 0, BOOK_YAW + 0.07);
+/** How you look at it when you turn from your writing to read it. */
+const NOTES_EYE = NOTES.p.clone().add(V(0.03, 0.4, 0.34));
+const NOTES_LOOK = NOTES.p.clone().add(V(0.008, 0, 0.097));
 
 export class Desk {
   readonly group = new Group();
@@ -188,6 +197,14 @@ export class Desk {
   private shoved = 0;
   /** Pages that have left the pad and are giving up the light they had while you wrote on them. */
   private dimming: Page[] = [];
+  /** The leaf of a long line before the one on the pad, turned back over the rings; and a leaf on its way over, or back. */
+  private turned: Page | null = null;
+  private turning: { page: Page; from: number; to: number; k: number } | null = null;
+  /** What happened last, written out beside the notebook; whether you are turned to it, how far, and a flick as its leaf is turned. */
+  private last: Page | null = null;
+  private notesWant = false;
+  private notesK = 0;
+  private notesFlick = 0;
   private readAt = -1;
   private made = 0;
 
@@ -337,6 +354,60 @@ export class Desk {
   /** True while a page is up in your hands to be read: the room then draws itself as finely as it can (room.ts). */
   get pageUp(): boolean {
     return !!this.held || this.cards.looking;
+  }
+
+  /** True while you are turned from your writing to what happened last: the room draws that finely too (room.ts). */
+  get notesUp(): boolean {
+    return this.notesK > 0.4;
+  }
+
+  /** How many leaves the line on the pad has run to, and what happened last as it is written out beside the notebook. */
+  get leaves(): number {
+    return this.sheet?.leaves ?? 0;
+  }
+
+  get lastTurn(): { writing: PageWriting; leaf: number; leaves: number } | null {
+    return this.last ? { writing: this.last.writing, leaf: this.last.leaf, leaves: this.last.leaves } : null;
+  }
+
+  /**
+   * What happened last, written out for you and laid beside the notebook: your line, and what the narrator told. It
+   * is there to write against: turn to it while you write (Tab, or a touch), and back.
+   */
+  notes(w: { mine?: string; heading?: string; his: string[] }): void {
+    let p = this.last;
+    if (!p) {
+      p = this.last = new Page(++this.made);
+      p.mode = "notes";
+      p.group.position.copy(NOTES.p);
+      p.group.quaternion.copy(NOTES.q);
+      p.glow = 0.05;
+      this.group.add(p.group);
+    }
+    p.writing.mine = w.mine ?? "";
+    p.writing.heading = w.heading;
+    p.writing.his = [...w.his];
+    p.leaf = 0;
+    p.draw();
+    if (this.notesWant) this.tell(p);
+  }
+
+  /** Turn from the notebook to what happened last, or back to the notebook. */
+  private lookNotes(on: boolean): void {
+    this.notesWant = on && !!this.last && this.mode === "writing";
+    if (this.notesWant) this.tell(this.last!);
+  }
+
+  /** Turn to the next leaf of what happened last, or the one before. */
+  private leafNotes(by: number): void {
+    const p = this.last;
+    if (!p) return;
+    const to = Math.max(0, Math.min(p.leaves - 1, p.leaf + by));
+    if (to === p.leaf) return;
+    p.leaf = to;
+    p.draw();
+    this.notesFlick = 1;
+    sound.play("slide", { x: NOTES.p.x, gain: 0.35, rate: 1.25 });
   }
 
   /** True while the game is waiting for a line. */
@@ -863,15 +934,98 @@ export class Desk {
    */
   margin(notes: string[]): void {
     this.marginNotes = notes.slice(0, 4);
-    if (!this.sheet) {
-      this.sheet = this.newPage(null);
-      this.sheet.group.position.copy(SHEET);
-      this.book.add(this.sheet.group);
-    }
+    this.sheet ??= this.padPage();
     this.sheet.writing.margin = [...this.marginNotes];
     this.sheet.draw();
   }
   private marginNotes: string[] = [];
+
+  /** A fresh page on the pad, to be written on. */
+  private padPage(): Page {
+    const page = this.newPage(null);
+    page.mode = "draft";
+    page.group.position.copy(SHEET);
+    this.book.add(page.group);
+    return page;
+  }
+
+  /** A leaf that is on its way over the rings, or back, is where it was going. */
+  private settleTurn(): void {
+    const turn = this.turning;
+    if (!turn) return;
+    this.turning = null;
+    turn.page.group.rotation.x = -turn.to * TURN;
+    turn.page.group.position.y = SHEET.y + turn.to * (TURNED_Y - SHEET.y);
+    turn.page.curl(0);
+  }
+
+  /** The leaf turned back over the rings is done with. */
+  private dropTurned(): void {
+    this.settleTurn();
+    if (!this.turned) return;
+    this.book.remove(this.turned.group);
+    this.turned.dispose();
+    this.turned = null;
+  }
+
+  /**
+   * Your line as it now stands, on the pad. It is written at one size however long it grows: when the page is full
+   * that leaf is turned back over the rings and the line goes on at the top of the next, and rubbing it out far
+   * enough brings the leaf back.
+   */
+  private setDraft(text: string): void {
+    const sheet = this.sheet;
+    if (!sheet) return;
+    const was = sheet.leaf;
+    sheet.writing.mine = text;
+    sheet.leaf = Infinity;
+    sheet.draw();
+    const now = sheet.leaf;
+    if (now === was) return;
+    this.settleTurn();
+    if (now > was) {
+      // The page under it is the one that lay turned (it shows only its back there), or a new one.
+      const next = this.turned ?? this.padPage();
+      next.group.rotation.x = 0;
+      next.group.position.copy(SHEET);
+      next.writing.mine = text;
+      next.leaf = now;
+      next.draw();
+      sheet.leaf = now - 1;
+      sheet.draw();
+      this.sheet = next;
+      this.turned = sheet;
+      this.turning = { page: sheet, from: 0, to: 1, k: 0 };
+    } else {
+      const back = this.turned;
+      if (!back) return;
+      back.writing.mine = text;
+      back.leaf = now;
+      back.draw();
+      this.sheet = back;
+      if (now > 0) {
+        // The leaf before that one lies turned in its place.
+        sheet.writing.mine = text;
+        sheet.leaf = now - 1;
+        sheet.draw();
+        sheet.group.rotation.x = -TURN;
+        sheet.group.position.y = TURNED_Y;
+        this.turned = sheet;
+      } else {
+        this.book.remove(sheet.group);
+        sheet.dispose();
+        this.turned = null;
+      }
+      this.turning = { page: back, from: 1, to: 0, k: 0 };
+    }
+    // The notes of the margin go with the page you are writing on.
+    if (this.marginNotes.length) {
+      for (const p of [this.sheet, this.turned]) if (p) p.writing.margin = p === this.sheet ? [...this.marginNotes] : undefined;
+      this.sheet.draw();
+      this.turned?.draw();
+    }
+    sound.play("slide", { x: BOOK.x, gain: 0.45, rate: 1.3 });
+  }
 
   /** Open the notebook and lean in over it. */
   open(): void {
@@ -882,9 +1036,7 @@ export class Desk {
     void this.cards.unlook();
     this.mode = "writing";
     if (!this.sheet) {
-      this.sheet = this.newPage(null);
-      this.sheet.group.position.copy(SHEET);
-      this.book.add(this.sheet.group);
+      this.sheet = this.padPage();
       this.field.value = "";
     }
     this.focusWant = 1;
@@ -900,6 +1052,7 @@ export class Desk {
   close(): void {
     if (this.mode !== "writing") return;
     this.mode = "idle";
+    this.notesWant = false;
     this.focusWant = 0;
     // The pencil is laid back on the notebook; the hand goes when it is down.
     this.inkWant = false;
@@ -908,27 +1061,32 @@ export class Desk {
   }
 
   private onInput = (): void => {
-    const sheet = this.sheet;
-    if (!sheet || this.mode !== "writing") return;
-    const before = sheet.writing.mine;
-    sheet.writing.mine = this.field.value.replace(/\n/g, " ");
-    sheet.draw();
-    if (sheet.full) {
-      // The page is full: the last thing typed does not go on it.
-      sheet.writing.mine = this.field.value = before;
-      sheet.draw();
-    } else {
-      this.scribble = 1;
-      sound.write(this.pencil.position.x);
-    }
+    if (!this.sheet || this.mode !== "writing") return;
+    // Writing turns you back to the page you write on.
+    this.notesWant = false;
+    this.setDraft(this.field.value.replace(/\n/g, " "));
+    this.scribble = 1;
+    sound.write(this.pencil.position.x);
   };
 
   private onFieldKey = (e: KeyboardEvent): void => {
     e.stopPropagation();
+    const next = e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown";
+    const before = e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp";
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       this.submit();
-    } else if (e.key === "Escape") this.close();
+    } else if (e.key === "Tab" && this.last) {
+      // A look across at what happened last, and back.
+      e.preventDefault();
+      this.lookNotes(!this.notesWant);
+    } else if (this.notesWant && (next || before)) {
+      e.preventDefault();
+      this.leafNotes(next ? 1 : -1);
+    } else if (e.key === "Escape") {
+      if (this.notesWant) this.lookNotes(false);
+      else this.close();
+    }
   };
 
   /** Tear the page off and hold it out. */
@@ -938,6 +1096,9 @@ export class Desk {
     if (!sheet || this.mode !== "writing" || !line || !this.wanted) return;
     const got = this.wanted;
     this.wanted = null;
+    this.notesWant = false;
+    this.dropTurned();
+    sheet.mode = "turn";
     sheet.writing.mine = line;
     sheet.draw();
     this.sheet = null;
@@ -989,8 +1150,9 @@ export class Desk {
   }
 
   /** Where the middle of a thing you can click is, in the room: the notebook, the pile of pages, your sheets, the dice box. */
-  where(what: "book" | "pile" | "sheaf" | "box"): Vector3 {
+  where(what: "book" | "notes" | "pile" | "sheaf" | "box"): Vector3 {
     if (what === "book") return this.book.localToWorld(V(0, 0, PAGE_H / 2));
+    if (what === "notes") return (this.last?.group ?? this.book).localToWorld(V(0, 0, PAGE_H / 2));
     if (what === "sheaf") return V(SHEAF.x + Math.sin(SHEAF_YAW) * PAGE_H * 0.5, 0, SHEAF.z + Math.cos(SHEAF_YAW) * PAGE_H * 0.5);
     return what === "pile" ? V(PILE.x, 0, PILE.z + PAGE_H / 2) : this.h.box.clone().setY(0.02);
   }
@@ -1023,7 +1185,7 @@ export class Desk {
   }
 
   /** What the pointer is over that a click would use. */
-  private over(e: { clientX: number; clientY: number }): "book" | "pile" | "sheaf" | "box" | "card0" | "card1" | null {
+  private over(e: { clientX: number; clientY: number }): "book" | "notes" | "pile" | "sheaf" | "box" | "card0" | "card1" | null {
     if (this.cards.choosing) {
       const near = [0, 1].map((i) => {
         const at = this.cards.laid(i);
@@ -1032,7 +1194,11 @@ export class Desk {
       const i = near[0]! <= near[1]! ? 0 : 1;
       if (near[i]! < 0.09) return i ? "card1" : "card0";
     }
-    if (this.wanted && this.far(e, this.where("book")) < 0.13) return "book";
+    // The notebook, or what happened last beside it: whichever the pointer is nearer.
+    const open = !!this.wanted || this.mode === "writing";
+    const book = open ? this.far(e, this.where("book")) : Infinity;
+    const notes = open && this.last ? this.far(e, this.where("notes")) : Infinity;
+    if (Math.min(book, notes) < 0.13) return notes < book ? "notes" : "book";
     const pile = this.pile.length ? this.far(e, this.where("pile")) : Infinity;
     const sheaf = this.sheaf.length ? this.far(e, this.where("sheaf")) : Infinity;
     if (Math.min(pile, sheaf) < 0.12) return pile <= sheaf ? "pile" : "sheaf";
@@ -1058,7 +1224,7 @@ export class Desk {
     const free = this.mode === "idle" || this.mode === "writing";
     this.cards.sideHover = free ? this.sideCard(e) : -1;
     if (this.cards.sideHover >= 0 || this.cards.looking) return true;
-    return this.mode === "holding" || this.mode === "reading" || this.voice.speaking || this.glanceWant > 0 || (this.mode === "idle" && !!on);
+    return this.mode === "holding" || this.mode === "reading" || this.voice.speaking || this.glanceWant > 0 || (this.mode === "idle" && !!on) || (this.mode === "writing" && on === "notes");
   }
 
   /** A click in the room. Returns true if the desk used it. */
@@ -1118,11 +1284,24 @@ export class Desk {
     }
     const on = this.over(e);
     if (this.mode === "writing") {
-      if (on === "book") this.field.focus({ preventScroll: true });
-      else this.close();
+      if (on === "notes") {
+        // A touch turns you to it; turned to it already, a touch at its right or left turns its leaf.
+        if (this.notesWant && this.last && this.last.leaves > 1) {
+          const r = this.h.host.getBoundingClientRect();
+          this.leafNotes((e.clientX - r.left) / r.width > 0.5 ? 1 : -1);
+        } else this.lookNotes(true);
+        this.field.focus({ preventScroll: true });
+      } else if (on === "book" || this.notesWant) {
+        this.lookNotes(false);
+        this.field.focus({ preventScroll: true });
+      } else this.close();
       return true;
     }
     if (on === "book") this.open();
+    else if (on === "notes") {
+      this.open();
+      this.lookNotes(true);
+    }
     else if (on === "pile") void this.pickUp();
     else if (on === "sheaf") void this.pickUp(undefined, this.sheaf);
     else if (on === "box") this.onDie?.();
@@ -1187,6 +1366,17 @@ export class Desk {
 
     const writing = this.mode === "writing";
     this.focus.k = to(this.focus.k, this.focusWant, 3.4);
+    // A look across at what happened last: the same lean, over the page beside the notebook.
+    if (!writing) this.notesWant = false;
+    this.notesK = to(this.notesK, this.notesWant ? 1 : 0, 4);
+    const nk = ease(this.notesK);
+    this.focus.eye.lerpVectors(WRITE_EYE, NOTES_EYE, nk);
+    this.focus.look.lerpVectors(WRITE_LOOK, NOTES_LOOK, nk);
+    if (this.last) {
+      this.last.glow = 0.05 + this.focus.k * (0.1 + nk * 0.3);
+      this.notesFlick = Math.max(0, this.notesFlick - dt * 5);
+      this.last.curl(still ? 0 : this.notesFlick * 0.35);
+    }
     this.focus.fov = this.h.camera.aspect < 1 ? 48 : 30;
     // The glance at the balance ends by itself, and at once if you take up anything else.
     this.now = t;
@@ -1198,6 +1388,22 @@ export class Desk {
     this.coverK = to(this.coverK, this.focusWant && this.inkK > 0.2 ? 1 : 0, 5);
     this.cover.rotation.x = -ease(this.coverK) * (Math.PI - 0.05);
     if (this.sheet) this.sheet.glow = 0.05 + this.focus.k * 0.3;
+    // A full leaf of a long line goes over the rings, or comes back; one lying turned goes with the cover as it shuts.
+    const turn = this.turning;
+    if (turn) {
+      turn.k = still ? 1 : Math.min(1, turn.k + dt * 4.2);
+      const u = ease(turn.k);
+      const a = turn.from + (turn.to - turn.from) * u;
+      turn.page.group.rotation.x = -a * TURN;
+      // Clear of the page under it for as long as it is moving.
+      turn.page.group.position.y = SHEET.y + (TURNED_Y - SHEET.y) * Math.max(a, 0.4);
+      turn.page.curl(Math.sin(Math.PI * u) * 0.4);
+      if (turn.k >= 1) this.settleTurn();
+    }
+    if (this.turned) {
+      if (this.turned !== this.turning?.page) this.turned.group.rotation.x = Math.max(-TURN, this.cover.rotation.x);
+      this.turned.glow = 0.05 + this.focus.k * 0.2;
+    }
     this.dimming = this.dimming.filter((p) => p !== this.held && (p.glow = to(p.glow, AWAY, 2.5)) > AWAY + 0.001);
 
     // The pencil: lying on the notebook, or in your hand with its point where the next letter goes.
@@ -1282,7 +1488,7 @@ export class Desk {
     this.cards.dispose();
     this.pen.dispose();
     for (const hand of this.thumbs) hand.dispose();
-    for (const page of new Set([this.sheet, this.his, this.held, ...this.pile, ...this.heap, ...this.sheaf])) page?.dispose();
+    for (const page of new Set([this.sheet, this.turned, this.last, this.his, this.held, ...this.pile, ...this.heap, ...this.sheaf])) page?.dispose();
     for (const m of this.mats) m.dispose();
   }
 }

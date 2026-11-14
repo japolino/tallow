@@ -25,6 +25,7 @@ export interface RunSitOptions {
 }
 
 export const RUN_HOW = "Write what you do, or say, in your own words. When it could go wrong, I will call for the die.";
+export const RUN_NOTES = "What happened last is written out beside your notebook. Touch it, or press Tab while you write, to look across at it.";
 export const RUN_DIE = "Take a die from the box when you are ready. Or write again, if I have you wrong.";
 export const RUN_AGAIN = 'Write "new game" to begin again from the start.';
 const NEW_GAME = /^\s*new game[.!]*\s*$/i;
@@ -65,6 +66,9 @@ export function runSheets(r: Run): { heading: string; his: string[] }[] {
     },
   ];
 }
+
+/** How a run opens, as the page beside your notebook: there is nothing of yours on it yet. */
+const openingNotes = (r: Run): { heading: string; his: string[] } => ({ heading: r.place.name || "How it begins", his: paragraphs(r.opening) });
 
 /** The check, as the narrator says it before the die. */
 export function checkSaid(p: Judging): string[] {
@@ -113,7 +117,9 @@ export async function runSit(o: RunSitOptions): Promise<void> {
   if (o.saved) {
     run = o.saved;
     table.sheets?.(runSheets(run));
-    await table.say([`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_AGAIN]);
+    const before = run.beats[run.beats.length - 1];
+    table.notes?.(before ? { mine: before.you, his: paragraphs(before.story) } : openingNotes(run));
+    await table.say([`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
   } else {
     if (o.mute) {
       await table.say([NO_VOICE]);
@@ -123,7 +129,8 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     run = await table.wait("deal", begin(deps, o.card, o.seed));
     table.sheets?.(runSheets(run));
     o.save(run);
-    await table.say([...paragraphs(run.opening), RUN_HOW]);
+    table.notes?.(openingNotes(run));
+    await table.say([...paragraphs(run.opening), RUN_HOW, RUN_NOTES]);
   }
 
   let next: Written | null = null;
@@ -148,6 +155,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       run = await table.wait("deal", begin(deps, o.card, (o.seed + run.turn + 1) >>> 0));
       table.sheets?.(runSheets(run));
       o.save(run);
+      table.notes?.(openingNotes(run));
       await table.say([...paragraphs(run.opening), RUN_HOW]);
       continue;
     }
@@ -204,6 +212,8 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     const x = t.report;
     const aside = x.kind === "action" && x.verdict === "implausible" ? ["That could not work."] : x.kind === "action" && x.verdict === "missing" ? ["You have nothing to do that with."] : [];
     const changes = x.changes.filter((c) => !c.startsWith("("));
+    // The whole of the turn, to write the next against: it lies by the notebook while this is said.
+    table.notes?.({ mine: line, ...(roll ? { heading: cap(x.act).slice(0, 60) } : {}), his: [...(roll ? [rollSaid(roll)] : []), ...aside, ...paragraphs(t.story), ...changes] });
     await table.say([...aside, ...paragraphs(t.story), ...changes]);
     if (roll) await table.page({ heading: cap(x.act).slice(0, 60), his: [rollSaid(roll), ...paragraphs(t.story), ...changes] });
     if (run.sheet.points > 0) await table.say([`You have ${run.sheet.points} points to place among ${ATTRIBUTES.join(", ")}. Write where they go.`]);

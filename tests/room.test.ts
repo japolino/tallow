@@ -11,6 +11,7 @@ import { Governor, QUALITY } from "../src/room/governor.js";
 import { Lightning } from "../src/room/weather.js";
 import { d20Faces, restingTurn } from "../src/room/die.js";
 import { stopOnSheet } from "../src/room/mapsheet.js";
+import { leavesOf, wrapText } from "../src/room/paper.js";
 
 describe("the light is the clock", () => {
   test("every hour gives a usable light", () => {
@@ -284,5 +285,34 @@ describe("a slow machine draws less, in steps", () => {
     }
     expect(QUALITY[0]!.candleShadows).toBe(true);
     expect(QUALITY[QUALITY.length - 1]!.motes).toBe(false);
+  });
+});
+
+describe("writing that runs past a page (room/paper.ts)", () => {
+  const row = (h: number, gap = 0) => ({ h, gap });
+
+  test("rows fill a leaf and go on at the top of the next, none lost", () => {
+    const rows = Array.from({ length: 45 }, () => row(40));
+    const leaves = leavesOf(rows, 756);
+    expect(leaves.map((l) => l.length)).toEqual([18, 18, 9]);
+    expect(leaves.flat()).toHaveLength(45);
+  });
+
+  test("a leaf never begins with the space before a paragraph", () => {
+    // Two rows fill the leaf exactly; the third has a gap, which is left out at the top of the next.
+    const leaves = leavesOf([row(50), row(50), row(50, 30), row(50)], 100);
+    expect(leaves.map((l) => l.length)).toEqual([2, 2]);
+  });
+
+  test("a row taller than a leaf still gets one, and nothing is one leaf", () => {
+    expect(leavesOf([row(500), row(10)], 100).map((l) => l.length)).toEqual([1, 1]);
+    expect(leavesOf([], 100)).toEqual([[]]);
+  });
+
+  test("wrapped text keeps every word, however long", () => {
+    const text = Array.from({ length: 300 }, (_, i) => `word${i}`).join(" ");
+    const lines = wrapText((s) => s.length * 10, text, 300);
+    expect(lines.join(" ")).toBe(text);
+    expect(Math.max(...lines.map((l) => l.length))).toBeLessThanOrEqual(30);
   });
 });

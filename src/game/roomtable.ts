@@ -86,6 +86,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
 
     theatre: (on) => room.theatre?.(on),
     sheets: (pages) => desk.sheets(pages),
+    notes: (w) => desk.notes(w),
 
     clock: (hour) => {
       const h = ((hour % 24) + 24) % 24;

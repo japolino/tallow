@@ -33,6 +33,11 @@ export interface Table {
   theatre?(on: boolean): void;
   /** Your sheets, the stack by your left hand: written out again as they now stand. */
   sheets?(pages: { heading: string; his: string[] }[]): void;
+  /**
+   * What happened last, written out and laid beside your notebook to write against: your line, if there was one, and
+   * what the narrator told. It replaces what lay there before.
+   */
+  notes?(w: { mine?: string; heading?: string; his: string[] }): void;
   /** Pencil notes in the margin of your notebook, in your own hand. */
   margin?(notes: string[]): Promise<void>;
 }

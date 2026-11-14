@@ -1582,7 +1582,7 @@ class Room implements RoomHandle {
     if (struck && !this.reduced) this.jolt = 1;
     else if (this.jolt) this.jolt = this.jolt < 0.004 ? 0 : this.jolt * Math.exp(-dt / 0.2);
     // A page in your hands: the picture is drawn finer and plainer for as long as it is up, so it can be read.
-    const reading = this.desk.pageUp;
+    const reading = this.desk.pageUp || this.desk.notesUp;
     if (this.fine !== (reading && this.fineOk)) {
       this.fine = reading && this.fineOk;
       this.resize();

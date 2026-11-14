@@ -31,6 +31,33 @@ const HIS_FONT = 'Georgia, "Palatino Linotype", "Book Antiqua", serif';
 const PENCIL = "#34353b";
 const INK = "#1d0e08";
 const PAPER = "#e6dcc0";
+/** The one size your own line is written at while you write, however long it grows. */
+const WRITE_SIZE = 34;
+/** The most room your line is given on a page the narrator writes under. */
+const MINE_ROOM = 390;
+/** The sizes a transcript is written at: your line in pencil, the narrator's in ink. */
+const NOTE_MINE = 27;
+const NOTE_HIS = 27;
+/** The foot left bare on a transcript, which is never held up by its corners: room for the number of the leaf. */
+const NOTE_FOOT = 64;
+
+/** Rows cut into leaves no taller than `room`. A row's gap is the space before it, and is left out at the top of a leaf. */
+export function leavesOf<T extends { h: number; gap?: number }>(rows: readonly T[], room: number): T[][] {
+  const leaves: T[][] = [[]];
+  let tall = 0;
+  for (const row of rows) {
+    const leaf = leaves[leaves.length - 1]!;
+    const need = row.h + (leaf.length ? (row.gap ?? 0) : 0);
+    if (leaf.length && tall + need > room) {
+      leaves.push([row]);
+      tall = row.h;
+    } else {
+      leaf.push(row);
+      tall += need;
+    }
+  }
+  return leaves;
+}
 
 /** Break text into lines no wider than `width`, at spaces where it can and inside a word where it must. */
 export function wrapText(measure: (s: string) => number, text: string, width: number): string[] {
@@ -78,8 +105,16 @@ export class Page {
   readonly writing: PageWriting = { mine: "", his: [] };
   /** Where the pencil is: the end of your writing, on the sheet, in metres from the origin (x across, z down the page). */
   readonly caret = { x: -PAGE_W / 2 + (SIDE / PX_W) * PAGE_W, z: (TOP / PX_H) * PAGE_H };
-  /** True when the last thing typed did not fit on the page. */
-  full = false;
+  /**
+   * How the page is laid out. "turn": your line fitted at the top, and the narrator's writing under it. "draft": your
+   * line alone, at one size, on as many leaves as it takes (the page on the pad while you write). "notes": a
+   * transcript at one size, on as many leaves as it takes.
+   */
+  mode: "turn" | "draft" | "notes" = "turn";
+  /** Which leaf is shown (draft and notes); drawing brings it within what there is, so anything large shows the last. */
+  leaf = 0;
+  /** How many leaves the writing took when it was last drawn. */
+  leaves = 1;
   private g: CanvasRenderingContext2D;
   private tex: CanvasTexture;
   private front: MeshStandardMaterial;
@@ -197,21 +232,43 @@ export class Page {
     g.textBaseline = "alphabetic";
     let y = TOP;
     const w = this.writing;
-    this.full = false;
+    if (this.mode === "notes") {
+      this.drawNotes();
+      this.tex.needsUpdate = true;
+      return;
+    }
+    const draft = this.mode === "draft";
+    if (!draft) {
+      this.leaf = 0;
+      this.leaves = 1;
+    }
 
     if (w.mine) {
-      let size = 46, lines: string[] = [];
-      for (size of [46, 40, 35, 30, 26]) {
+      let size = WRITE_SIZE, lines: string[] = [];
+      if (draft) {
+        // While you write: one size, and a leaf for every pageful. The page shows one leaf of it.
         g.font = `${size}px ${MINE_FONT}`;
-        lines = wrapText((s) => g.measureText(s).width, w.mine, width);
-        if (lines.length * size * 1.24 <= 390) break;
+        const all = wrapText((s) => g.measureText(s).width, w.mine, width);
+        const per = Math.max(1, Math.floor((PX_H - TOP - BOTTOM) / (size * 1.24)));
+        this.leaves = Math.max(1, Math.ceil(all.length / per));
+        this.leaf = Math.max(0, Math.min(this.leaves - 1, this.leaf));
+        lines = all.slice(this.leaf * per, (this.leaf + 1) * per);
+      } else {
+        // Under it the narrator will write: your line is fitted into the top of the page, and cut short if it cannot be.
+        for (size of [WRITE_SIZE, 30, 26]) {
+          g.font = `${size}px ${MINE_FONT}`;
+          lines = wrapText((s) => g.measureText(s).width, w.mine, width);
+          if (lines.length * size * 1.24 <= MINE_ROOM) break;
+        }
+        const most = Math.max(1, Math.floor(MINE_ROOM / (size * 1.24)));
+        if (lines.length > most) {
+          lines = lines.slice(0, most);
+          let last = lines[most - 1]!;
+          while (last.length > 1 && g.measureText(`${last} …`).width > width) last = last.slice(0, -1);
+          lines[most - 1] = `${last} …`;
+        }
       }
       const lh = size * 1.24;
-      const most = Math.floor((PX_H - TOP - BOTTOM) / lh);
-      if (lines.length > most) {
-        lines = lines.slice(0, most);
-        this.full = true;
-      }
       g.fillStyle = PENCIL;
       g.globalAlpha = 0.92;
       lines.forEach((line, i) => {
@@ -229,7 +286,18 @@ export class Page {
       this.caret.x = -PAGE_W / 2 + ((SIDE + Math.min(width, g.measureText(last).width + gap) + 6) / PX_W) * PAGE_W;
       this.caret.z = ((y + size * 0.9 + (lines.length - 1) * lh) / PX_H) * PAGE_H;
       y += lines.length * lh + 26;
+      // Past the first leaf, each is numbered at its foot, so you know how far on you are.
+      if (draft && this.leaves > 1) {
+        g.font = `22px ${MINE_FONT}`;
+        g.globalAlpha = 0.6;
+        g.textAlign = "center";
+        g.fillText(String(this.leaf + 1), PX_W / 2, PX_H - 34);
+        g.textAlign = "left";
+        g.globalAlpha = 1;
+      }
     } else {
+      this.leaf = 0;
+      this.leaves = 1;
       this.caret.x = -PAGE_W / 2 + ((SIDE + 6) / PX_W) * PAGE_W;
       this.caret.z = ((TOP + 40) / PX_H) * PAGE_H;
     }
@@ -295,6 +363,73 @@ export class Page {
     }
     if (w.margin?.length) this.drawMargin(w.margin, r);
     this.tex.needsUpdate = true;
+  }
+
+  /**
+   * A transcript: your line in pencil, a stroke under it, then a heading and the narrator's writing in ink, all at one
+   * size, on as many leaves as it takes. One leaf of it is painted, with its number at the foot when there are more.
+   */
+  private drawNotes(): void {
+    const g = this.g;
+    const w = this.writing;
+    const width = PX_W - SIDE * 2;
+    const r = rng(900 + this.seed * 31);
+    type Row = { h: number; gap?: number; text?: string; font?: "mine" | "head" | "his" };
+    const rows: Row[] = [];
+    const measure = (s: string): number => g.measureText(s).width;
+    const head = Math.round(NOTE_HIS * 1.05);
+    const fonts = { mine: `${NOTE_MINE}px ${MINE_FONT}`, head: `bold ${head}px ${HIS_FONT}`, his: `${NOTE_HIS}px ${HIS_FONT}` };
+    if (w.mine) {
+      g.font = fonts.mine;
+      for (const text of wrapText(measure, w.mine, width)) rows.push({ h: NOTE_MINE * 1.24, text, font: "mine" });
+      // The stroke under your line.
+      if (w.his.length || w.heading) rows.push({ h: 26 });
+    }
+    if (w.heading) {
+      g.font = fonts.head;
+      wrapText(measure, w.heading, width).forEach((text, i) => rows.push({ h: head * 1.25, text, font: "head", gap: i === 0 && rows.length > 0 && !!rows[rows.length - 1]!.text ? NOTE_HIS * 0.5 : 0 }));
+    }
+    g.font = fonts.his;
+    w.his.forEach((para, n) => wrapText(measure, para, width).forEach((text, i) => rows.push({ h: NOTE_HIS * 1.3, text, font: "his", gap: i === 0 && (n > 0 || !!w.heading) ? NOTE_HIS * 0.5 : 0 })));
+    const leaves = leavesOf(rows, PX_H - TOP - NOTE_FOOT);
+    this.leaves = leaves.length;
+    this.leaf = Math.max(0, Math.min(this.leaves - 1, this.leaf));
+    let y = TOP;
+    leaves[this.leaf]!.forEach((row, i) => {
+      if (i && row.gap) y += row.gap;
+      if (!row.text) {
+        g.strokeStyle = INK;
+        g.lineWidth = 2.5;
+        g.beginPath();
+        g.moveTo(SIDE, y + 8);
+        g.bezierCurveTo(SIDE + width * 0.3, y + 3, SIDE + width * 0.6, y + 13, SIDE + width * 0.86, y + 7);
+        g.stroke();
+      } else if (row.font === "mine") {
+        g.font = fonts.mine;
+        g.fillStyle = PENCIL;
+        g.globalAlpha = 0.92;
+        g.save();
+        g.translate(SIDE + (r() - 0.5) * 4, y + NOTE_MINE);
+        g.rotate((r() - 0.5) * 0.01);
+        g.fillText(row.text, 0, 0);
+        g.restore();
+        g.globalAlpha = 1;
+      } else {
+        g.font = fonts[row.font ?? "his"];
+        g.fillStyle = INK;
+        g.fillText(row.text, SIDE, y + (row.font === "head" ? head : NOTE_HIS));
+      }
+      y += row.h;
+    });
+    if (this.leaves > 1) {
+      g.font = `22px ${HIS_FONT}`;
+      g.fillStyle = INK;
+      g.globalAlpha = 0.65;
+      g.textAlign = "center";
+      g.fillText(`${this.leaf + 1} of ${this.leaves}`, PX_W / 2, PX_H - 26);
+      g.textAlign = "left";
+      g.globalAlpha = 1;
+    }
   }
 
   /** The margin: small pencil notes up from the foot of the page, the stat in capitals before each, a little askew. */
