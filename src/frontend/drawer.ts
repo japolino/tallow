@@ -13,7 +13,7 @@ import type { SpindleFrontendContext } from "lumiverse-spindle-types";
 import type { Role } from "../game/ask.js";
 import type { ModelsPatch, ReasoningPick } from "../meaning/models.js";
 import type { ConnOption, ModelsState } from "../shared/protocol.js";
-import { ALL_TRACKS, credit } from "../room/music.js";
+import { credit, music } from "../room/music.js";
 import { sound, type Levels } from "../room/sound.js";
 import { SOUND_CREDITS } from "./soundcredits.js";
 
@@ -94,6 +94,7 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
       <div class="vol"><span>Everything</span><input type="range" min="0" max="100" data-vol="master"><output data-out="master"></output></div>
       <div class="vol"><span>Music</span><input type="range" min="0" max="100" data-vol="music"><output data-out="music"></output></div>
       <div class="vol"><span>The room</span><input type="range" min="0" max="100" data-vol="sounds"><output data-out="sounds"></output></div>
+      <div class="hint" data-playing></div>
       <div class="hint">Music streams from incompetech.com; at 0 nothing is fetched.</div>
       <details data-credits><summary>Credits</summary><ul data-creditlist></ul></details></section>`;
   tab.root.appendChild(root);
@@ -118,12 +119,20 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
   const offLevels = sound.onLevels(showLevels);
   showLevels(sound.levels);
 
-  root.querySelector<HTMLElement>("[data-creditlist]")!.innerHTML = [
-    `<li>Music by Kevin MacLeod (<a href="https://incompetech.com" target="_blank" rel="noopener">incompetech.com</a>), licensed under Creative Commons: By Attribution 4.0 (<a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">creativecommons.org/licenses/by/4.0</a>).</li>`,
-    ...ALL_TRACKS.map((t) => `<li>${esc(credit(t))}</li>`),
-    `<li>Recorded sounds from <a href="https://freesound.org" target="_blank" rel="noopener">freesound.org</a> (CC0 unless marked):</li>`,
-    ...SOUND_CREDITS.map((c) => `<li>"${esc(c.name)}" by ${esc(c.user)}${c.by ? ` (${esc(c.by)})` : ""}</li>`),
-  ].join("");
+  // The music is credited piece by piece, as each is played: any of the composer's library may be.
+  const playingEl = root.querySelector<HTMLElement>("[data-playing]")!;
+  const showCredits = (): void => {
+    const { title, heard } = music.now;
+    playingEl.textContent = title ? `Playing: "${title}", Kevin MacLeod.` : "";
+    root.querySelector<HTMLElement>("[data-creditlist]")!.innerHTML = [
+      `<li>Music by Kevin MacLeod (<a href="https://incompetech.com" target="_blank" rel="noopener">incompetech.com</a>), licensed under Creative Commons: By Attribution 4.0 (<a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">creativecommons.org/licenses/by/4.0</a>). Played since you opened the room:</li>`,
+      ...(heard.length ? heard.map((t) => `<li>${esc(credit(t.title))}</li>`) : ["<li>Nothing yet.</li>"]),
+      `<li>Recorded sounds from <a href="https://freesound.org" target="_blank" rel="noopener">freesound.org</a> (CC0 unless marked):</li>`,
+      ...SOUND_CREDITS.map((c) => `<li>"${esc(c.name)}" by ${esc(c.user)}${c.by ? ` (${esc(c.by)})` : ""}</li>`),
+    ].join("");
+  };
+  const offPiece = music.onPiece(showCredits);
+  showCredits();
 
   let savedTimer = 0;
   const saved = (): void => {
@@ -190,6 +199,7 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
   return () => {
     offShown();
     offLevels();
+    offPiece();
     clearTimeout(savedTimer);
     removeStyle();
     tab.destroy();

@@ -2,26 +2,13 @@
 
 ## Music
 
-The music is streamed from incompetech.com while it plays; it is not part of this repository.
+The music is by Kevin MacLeod ([incompetech.com](https://incompetech.com)), licensed under Creative Commons: By Attribution 4.0 (http://creativecommons.org/licenses/by/4.0/). It is streamed from his site while it plays; it is not part of this repository.
 
-- "Teller of the Tales" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Midnight Tale" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Suonatore di Liuto" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Heavy Heart" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Lost Time" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Ghost Story" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Heart of Nowhere" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Plaint" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Relent" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Darkest Child" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Lost Frontier" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Oppressive Gloom" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Gloom Horizon" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Night Vigil" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Gone Beyond" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Lamentation" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "At Rest" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
-- "Dark Times" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
+Any piece in his library may be played: a model picks the pieces for each scene. `src/embedded/pieces.js` lists the library by title and tags only (written by `scripts/pieces.ts` from the site's own listing). The drawer names the piece that is playing and credits every piece played since the room was opened, each in the form the licence asks for:
+
+- "Title" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/
+
+Before a scene has been read, one of these plays: "Teller of the Tales", "Midnight Tale", "Suonatore di Liuto", "Heavy Heart".
 
 ## Sounds
 

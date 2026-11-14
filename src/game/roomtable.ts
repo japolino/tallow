@@ -23,9 +23,8 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
   if (!desk) throw new Error("tallow: the flat room has no table to play at.");
 
   let shownHour: number | null = null;
-  // The music follows the hour: the road's by day, the night's after dark.
+  // Something for a story being told, until the game says what the scene's music is.
   music.attach();
-  music.set("road");
   let clockRun = 0;
   /** The clock slides to a new hour, quicker for a short way than a long one. */
   const slideClock = (to: number): void => {
@@ -89,11 +88,9 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
     sheets: (pages) => desk.sheets(pages),
     notes: (w) => desk.notes(w),
 
-    clock: (hour) => {
-      const h = ((hour % 24) + 24) % 24;
-      music.set(h >= 20.5 || h < 5.5 ? "night" : "road");
-      slideClock(hour);
-    },
+    music: (pieces) => music.play(pieces),
+
+    clock: (hour) => slideClock(hour),
   };
 }
 

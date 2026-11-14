@@ -216,14 +216,14 @@ describe("what the systems' cards are drawn as (room/tablecards.ts)", () => {
   test("each group has a picture, and an unknown group the token", () => {
     expect(kindOfGroup("quest")).toBe("lantern");
     expect(kindOfGroup("Wares")).toBe("purse");
-    expect(kindOfGroup("perk")).toBe("token");
-    expect(kindOfGroup("suggestion")).toBe("companion");
+    expect(kindOfGroup("perk")).toBe("boon");
+    expect(kindOfGroup("suggestion")).toBe("crossroads");
     expect(kindOfGroup("something else")).toBe("token");
     // As the systems name them.
     expect(kindOfGroup("quests")).toBe("lantern");
     expect(kindOfGroup("Old Hesk's wares")).toBe("purse");
-    expect(kindOfGroup("choices")).toBe("companion");
-    expect(kindOfGroup("perks")).toBe("token");
+    expect(kindOfGroup("choices")).toBe("crossroads");
+    expect(kindOfGroup("perks")).toBe("boon");
     expect(kindOfGroup("shadows")).toBe("token");
   });
 });

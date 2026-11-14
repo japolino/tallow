@@ -1,9 +1,9 @@
 /**
- * The faces and backs of the cards, drawn in code (docs/DESIGN.md, 8.1): our own tarot-style set. A picture in an
- * arched window over an engraved sky, a gold-foil frame, a ribbon with the card's title, and, on a card that does
- * something, a panel under the picture with what it does. Every kind of card has its own picture, made of flat shapes
- * in dark ink, each with a warm halo of light round it, the way a print is lit from behind. Nothing is copied from any
- * deck.
+ * The faces and backs of the cards, drawn in code: our own tarot-style set, printed the way a hand-drawn deck is. On
+ * cream stock, in one ink for each family of card: a picture in line and hatching inside a pointed arch, with a disc
+ * of light and fine rays behind it; a plate at the head that says what sort of card it is; the card's name on a banner
+ * across the picture's foot; and, when a card says more, its words under the banner. The picture takes whatever room
+ * the words leave. Nothing is copied from any deck.
  *
  * Everything is drawn on a card 300 by 500 across and down, at twice that many pixels, so that a card held up to the
  * eyes (tablecards.ts, look) is still sharp.
@@ -19,7 +19,8 @@ const SCALE = CARD_PX.w / W;
 
 const GOLD = "#c9a04a";
 const GOLD_DARK = "#7d5f22";
-const INK = "#1b130d";
+/** The ink the picture being drawn is printed in: each card sets its own (INKS). */
+let INK = "#1b130d";
 const PAPER = "#e9dcb8";
 const SERIF = `"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif`;
 /** Your own hand, in pencil (the same as on your pages, paper.ts). */
@@ -593,112 +594,437 @@ function frame(g: G): void {
   flourish(g, W - 24, H - 24, -1, -1, gold);
 }
 
-/** The outline of the picture's window: straight sides, an arched top, a flat foot at `foot`. */
-function windowPath(g: G, foot: number): void {
-  const r = (W - 68) / 2;
+/* ------------------------------------------------- the face ------------------------------------------------- */
+
+/** The card's own stock, the white its pictures are lit with, pencil, and gilt. */
+const STOCK = "#ecdcb6", WHITE = "#fbf6e6", GRAPHITE = "#4b4a52", GILT = "#d2a441";
+/** Each family's ink, and the wash behind its picture. */
+const INKS: Record<CardFamily, [string, string]> = {
+  person: ["#1d3b46", "#c6dcd3"],
+  obstacle: ["#4b2e17", "#ecd09c"],
+  fight: ["#5c1a1c", "#efc4ae"],
+  thing: ["#2c3b1a", "#d9dfaa"],
+  place: ["#2a2358", "#d2ccec"],
+};
+/** Kinds printed in another family's ink than their own, so the cards laid side by side are not all one colour. */
+const INK_AS: Record<string, CardFamily> = { lantern: "obstacle", boon: "person" };
+let WASH = INKS.place[1];
+
+const pen = (g: G, w: number, color = INK): void => {
+  g.strokeStyle = color;
+  g.lineWidth = w;
+  g.lineJoin = "round";
+  g.lineCap = "round";
+};
+/** A shape from path data (as in an SVG): filled, then outlined in the card's ink. */
+function shape(g: G, d: string, fill: string | null = WHITE, w = 2): void {
+  const p = new Path2D(d);
+  if (fill) {
+    g.fillStyle = fill;
+    g.fill(p);
+  }
+  if (w > 0) {
+    pen(g, w);
+    g.stroke(p);
+  }
+}
+/** Shade inside a shape, the way an engraver does: fine strokes all leaning one way. */
+function hatch(g: G, d: string, gap = 4, lean = 0.55, w = 0.75): void {
+  g.save();
+  g.clip(new Path2D(d));
+  pen(g, w);
+  g.globalAlpha = 0.7;
   g.beginPath();
-  g.moveTo(34, foot);
-  g.lineTo(34, 34 + r);
-  g.arc(W / 2, 34 + r, r, Math.PI, 0);
-  g.lineTo(W - 34, foot);
-  g.closePath();
+  for (let x = -320; x < 620; x += gap) {
+    g.moveTo(x, 0);
+    g.lineTo(x + 520 * lean, 520);
+  }
+  g.stroke();
+  g.restore();
+}
+/** A four-pointed sparkle. */
+function spark(g: G, x: number, y: number, r: number, fill = WHITE): void {
+  const k = r * 0.22;
+  shape(g, `M${x},${y - r} Q${x + k},${y - k} ${x + r},${y} Q${x + k},${y + k} ${x},${y + r} Q${x - k},${y + k} ${x - r},${y} Q${x - k},${y - k} ${x},${y - r} Z`, fill, 1.1);
+}
+/** A small orb, outlined. */
+function orb(g: G, x: number, y: number, r: number, fill: string | null = WHITE): void {
+  disc(g, x, y, r);
+  if (fill) {
+    g.fillStyle = fill;
+    g.fill();
+  }
+  pen(g, 1.1);
+  g.stroke();
+}
+/** Two birds far off. */
+function birds(g: G, x: number, y: number): void {
+  shape(g, `M${x},${y} q5,-6 10,0 q5,-6 10,0 M${x + 26},${y - 12} q4,-5 8,0 q4,-5 8,0`, null, 1.3);
+}
+/** Level ground from `y` down. */
+function field(g: G, y: number, fill = STOCK): void {
+  shape(g, `M0,${y} L300,${y} L300,470 L0,470 Z`, fill, 0);
+  shape(g, `M0,${y} L300,${y}`, null, 1.8);
+}
+/** Tufts of grass. */
+function tufts(g: G, at: number[][]): void {
+  for (const [x, y] of at) shape(g, `M${x! - 4},${y} l2,-6 M${x},${y} l0,-8 M${x! + 4},${y} l-2,-6`, null, 1.1);
+}
+/** A coin lying flat. */
+function coin(g: G, x: number, y: number, r: number): void {
+  g.beginPath();
+  g.ellipse(x, y, r, r * 0.38, 0, 0, TAU);
+  g.fillStyle = GILT;
+  g.fill();
+  pen(g, 1.1);
+  g.stroke();
 }
 
-/** The sky in the window: the family's colours, a light behind the picture, the fine lines of an engraving, a few stars. */
-function sky(g: G, family: CardFamily, foot: number, seed: number): void {
-  const [top, low, glow] = SKY[family];
-  const fill = g.createLinearGradient(0, 34, 0, foot);
-  fill.addColorStop(0, top);
-  fill.addColorStop(1, low);
+/**
+ * The pictures of the kinds the game lays out now, drawn in line: ink on the card's stock, white where the light
+ * falls, a little gilt. Each is drawn in a box about 40..260 across and 92..376 down, standing on 376.
+ */
+const DRAWN: Record<string, (g: G) => void> = {
+  /** A choice to make: a signpost where three roads part, and a walker stopped before it. */
+  crossroads(g) {
+    shape(g, "M0,300 C40,262 84,256 122,276 C150,246 214,238 300,286 L300,310 L0,310 Z", WASH, 1.6);
+    hatch(g, "M150,262 C196,244 250,256 300,286 L300,310 L150,310 Z", 5);
+    field(g, 304);
+    // Three roads from your feet: one to each side, one straight on.
+    shape(g, "M118,470 C132,400 143,340 147,304 L153,304 C157,340 168,400 182,470 Z", WHITE, 1.6);
+    shape(g, "M0,372 C56,350 104,326 138,304 L145,304 C118,336 84,378 60,470 L0,470 Z", WHITE, 1.6);
+    shape(g, "M300,372 C244,350 196,326 162,304 L155,304 C182,336 216,378 240,470 L300,470 Z", WHITE, 1.6);
+    shape(g, "M150,318 L150,330 M150,344 L150,360 M150,378 L150,400 M150,422 L150,450", null, 1.2);
+    tufts(g, [[40, 330], [262, 334], [96, 392], [212, 400], [24, 420], [280, 430]]);
+    birds(g, 196, 150);
+    // The post and its three boards.
+    shape(g, "M145,362 L146,146 L154,146 L155,362 Z", WHITE, 2);
+    hatch(g, "M150,146 L154,146 L155,362 L150,362 Z", 3.2);
+    shape(g, "M142,146 L150,132 L158,146 Z", GILT, 1.8);
+    shape(g, "M146,160 L98,160 L80,173 L98,186 L146,186 Z", WHITE, 2);
+    shape(g, "M154,194 L204,194 L222,207 L204,220 L154,220 Z", WHITE, 2);
+    shape(g, "M128,228 L172,228 L172,252 L128,252 Z", WHITE, 2);
+    shape(g, "M104,170 L138,170 M106,177 L132,177 M162,204 L198,204 M164,211 L190,211 M150,246 L150,234 M145,239 L150,233 L155,239", null, 1.2);
+    // The walker, seen from behind: a cloak, a hat, a staff.
+    shape(g, "M84,372 C85,340 92,322 104,316 C116,322 123,340 124,372 Z", INK, 1.2);
+    shape(g, "M88,315 C96,311 112,311 120,315 C112,319 96,319 88,315 Z M97,313 C98,302 110,302 111,313 Z", INK, 1.2);
+    shape(g, "M130,372 L126,296", null, 2.4);
+  },
+  /** A task taken up: a lantern on a staff by a road that winds to a far keep under a star. */
+  lantern(g) {
+    shape(g, "M0,304 C60,280 110,292 160,300 C200,270 240,262 300,284 L300,312 L0,312 Z", WASH, 1.6);
+    hatch(g, "M160,300 C200,270 240,262 300,284 L300,312 L160,312 Z", 5);
+    field(g, 306);
+    // The road, winding off to the keep.
+    shape(g, "M110,470 C150,420 250,392 226,356 C208,330 150,330 186,306 L194,306 C170,330 232,330 252,356 C282,396 210,420 196,470 Z", WHITE, 1.6);
+    // The keep on its hill, small and far, and the star over it.
+    shape(g, "M214,280 L216,236 L212,236 L212,228 L218,228 L218,232 L224,232 L224,228 L230,228 L230,232 L236,232 L236,228 L242,228 L242,236 L238,236 L240,280 Z", WHITE, 1.5);
+    shape(g, "M224,280 L224,266 Q227,260 230,266 L230,280 Z", INK, 0);
+    shape(g, "M227,228 L227,212 L238,216 L227,221", GILT, 1.2);
+    spark(g, 228, 172, 15, GILT);
+    spark(g, 262, 146, 5);
+    spark(g, 196, 138, 4);
+    tufts(g, [[40, 340], [70, 400], [268, 420], [150, 372]]);
+    // The staff with its crook, and the lantern hung from it.
+    shape(g, "M92,376 L92,150 C92,104 148,104 148,146", null, 6.5);
+    pen(g, 2.6, WHITE);
+    g.stroke(new Path2D("M92,373 L92,150 C92,107 146,107 146.5,143"));
+    shape(g, "M148,146 L148,158", null, 1.6);
+    orb(g, 148, 164, 6, null);
+    shape(g, "M124,196 L148,170 L172,196 Z", INK, 1.6);
+    shape(g, "M128,196 L168,196 L164,262 L132,262 Z", WHITE, 2);
+    shape(g, "M148,206 C160,222 158,244 148,250 C138,244 136,222 148,206 Z", GILT, 1.4);
+    shape(g, "M148,224 C153,232 152,242 148,246 C144,242 143,232 148,224 Z", WHITE, 0);
+    shape(g, "M140,196 L141,262 M156,196 L155,262", null, 1.2);
+    shape(g, "M124,262 L172,262 L168,274 L128,274 Z", INK, 1.6);
+    // Its light.
+    pen(g, 1.1);
+    g.beginPath();
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU + 0.2, r0 = 54 + (i % 2) * 6, r1 = r0 + 12 + (i % 2) * 8;
+      g.moveTo(148 + Math.cos(a) * r0, 228 + Math.sin(a) * r0);
+      g.lineTo(148 + Math.cos(a) * r1, 228 + Math.sin(a) * r1);
+    }
+    g.stroke();
+  },
+  /** Something for sale: a merchant's scales under an awning, coin in one pan and goods in the other. */
+  purse(g) {
+    // The awning.
+    let scallops = "M22,92 L278,92 L278,112";
+    for (let i = 0; i < 8; i++) scallops += " q-16,18 -32,0";
+    shape(g, `${scallops} Z`, WHITE, 2);
+    for (let i = 0; i < 8; i += 2) hatch(g, `M${22 + i * 32},92 L${54 + i * 32},92 L${54 + i * 32},126 L${22 + i * 32},126 Z`, 3.4);
+    // The counter and its cloth.
+    shape(g, "M0,340 L300,340 L300,470 L0,470 Z", WASH, 0);
+    shape(g, "M0,340 L300,340", null, 2.2);
+    g.save();
+    g.clip(new Path2D("M0,342 L300,342 L300,470 L0,470 Z"));
+    pen(g, 0.8);
+    g.globalAlpha = 0.6;
+    g.beginPath();
+    for (let x = -200; x < 520; x += 22) {
+      g.moveTo(x, 342);
+      g.lineTo(x + 130, 472);
+      g.moveTo(x, 342);
+      g.lineTo(x - 130, 472);
+    }
+    g.stroke();
+    g.restore();
+    // The scales: the left pan down under its coin.
+    shape(g, "M116,340 L184,340 L174,326 L126,326 Z", INK, 1.6);
+    shape(g, "M145,326 L146,168 L154,168 L155,326 Z", WHITE, 2);
+    hatch(g, "M150,168 L154,168 L155,326 L150,326 Z", 3.2);
+    shape(g, "M62,196 C104,170 196,166 238,176", null, 4.5);
+    orb(g, 150, 162, 8, GILT);
+    shape(g, "M64,196 L38,266 M64,196 L90,266 M236,177 L212,236 M236,177 L260,236", null, 1.2);
+    shape(g, "M30,266 L98,266 C94,290 34,290 30,266 Z", WHITE, 2);
+    shape(g, "M204,236 L268,236 C264,258 208,258 204,236 Z", WHITE, 2);
+    hatch(g, "M64,266 L98,266 C96,280 80,288 64,288 Z", 3.2);
+    hatch(g, "M236,236 L268,236 C266,250 252,256 236,256 Z", 3.2);
+    for (const [x, y] of [[52, 262], [66, 259], [78, 263], [60, 254], [72, 252]]) coin(g, x!, y!, 9);
+    // A stoppered flask in the other pan.
+    shape(g, "M228,236 C222,222 228,212 232,208 L232,200 L240,200 L240,208 C244,212 250,222 244,236 Z", WHITE, 1.5);
+    shape(g, "M230,200 L242,200 L241,194 L231,194 Z", INK, 1);
+    // A tied purse and a stack of coin on the counter.
+    shape(g, "M206,340 C196,318 204,300 220,296 L242,296 C258,300 266,318 256,340 Z", WHITE, 2);
+    hatch(g, "M232,296 L242,296 C258,300 266,318 256,340 L232,340 Z", 3.4);
+    shape(g, "M216,296 C222,288 240,288 246,296 M214,290 L224,296 M248,290 L238,296", null, 1.6);
+    for (const [x, y] of [[52, 336], [52, 331], [52, 326], [84, 336], [84, 331]]) coin(g, x!, y!, 12);
+  },
+  /** A gift taken at a new level: a star in a wreath of laurel, tied with a ribbon. */
+  boon(g) {
+    const cx = 150, cy = 228;
+    // The wreath: two branches of leaves, open at the top.
+    for (const side of [-1, 1]) {
+      pen(g, 1.8);
+      g.beginPath();
+      g.arc(cx, cy, 84, Math.PI / 2 - side * 0.12, Math.PI / 2 - side * 2.66, side > 0);
+      g.stroke();
+      for (let i = 0; i < 9; i++) {
+        const a = Math.PI / 2 - side * (0.3 + i * 0.27);
+        for (const out of [1, -1]) {
+          g.save();
+          g.translate(cx + Math.cos(a) * (84 + out * 9), cy + Math.sin(a) * (84 + out * 9));
+          g.rotate(a - side * (Math.PI / 2 + out * 0.5));
+          g.beginPath();
+          g.ellipse(0, 0, 11, 4.4, 0, 0, TAU);
+          g.fillStyle = out > 0 ? WHITE : WASH;
+          g.fill();
+          pen(g, 1.2);
+          g.stroke();
+          g.restore();
+        }
+      }
+    }
+    // The star: eight points, the four long ones gilt.
+    const star = (r1: number, r0: number, turn: number): string => {
+      let d = "";
+      for (let i = 0; i < 8; i++) {
+        const a = turn + (i / 8) * TAU, r = i % 2 ? r0 : r1;
+        d += `${i ? "L" : "M"}${(cx + Math.cos(a) * r).toFixed(1)},${(cy + Math.sin(a) * r).toFixed(1)} `;
+      }
+      return `${d}Z`;
+    };
+    shape(g, star(40, 13, Math.PI / 4), WHITE, 1.6);
+    shape(g, star(62, 15, 0), GILT, 2);
+    shape(g, `M${cx},${cy - 62} L${cx},${cy + 62} M${cx - 62},${cy} L${cx + 62},${cy}`, null, 0.9);
+    orb(g, cx, cy, 7);
+    for (const [x, y, r] of [[92, 150, 6], [214, 162, 5], [206, 292, 4], [88, 286, 5], [150, 128, 4]]) spark(g, x!, y!, r!);
+    // The ribbon that ties it.
+    shape(g, "M150,312 C128,296 116,318 138,326 Z M150,312 C172,296 184,318 162,326 Z", WHITE, 1.8);
+    shape(g, "M144,320 C136,344 126,356 112,368 L128,366 L132,378 C142,360 148,344 150,326 Z", WHITE, 1.8);
+    shape(g, "M156,320 C164,344 174,356 188,368 L172,366 L168,378 C158,360 152,344 150,326 Z", WHITE, 1.8);
+    hatch(g, "M150,326 C152,344 158,360 168,378 L172,366 L188,368 C174,356 164,344 156,320 Z", 3);
+    shape(g, "M143,311 L157,311 L158,325 L142,325 Z", INK, 1);
+  },
+  /** A fight: two swords crossed behind a round shield. */
+  ambush(g) {
+    const sword = (turn: number): void => {
+      g.save();
+      g.translate(150, 238);
+      g.rotate(turn);
+      shape(g, "M-7,-150 L0,-172 L7,-150 L5.5,44 L-5.5,44 Z", WHITE, 1.8);
+      hatch(g, "M0,-172 L7,-150 L5.5,44 L0,44 Z", 3.2, 0.9);
+      shape(g, "M0,-160 L0,40", null, 0.9);
+      shape(g, "M-30,42 C-18,48 18,48 30,42 L30,52 C18,56 -18,56 -30,52 Z", INK, 1.2);
+      shape(g, "M-4.5,54 L4.5,54 L4,88 L-4,88 Z", WASH, 1.4);
+      shape(g, "M-4.5,62 L4.5,62 M-4.4,70 L4.4,70 M-4.2,78 L4.2,78", null, 1);
+      orb(g, 0, 95, 7.5, GILT);
+      g.restore();
+    };
+    sword(-0.62);
+    sword(0.62);
+    // The shield, quartered, with a gilt boss.
+    orb(g, 150, 238, 62);
+    pen(g, 2.6);
+    disc(g, 150, 238, 62);
+    g.stroke();
+    hatch(g, "M150,238 L150,186 A52,52 0 0 1 202,238 Z", 3.6);
+    hatch(g, "M150,238 L150,290 A52,52 0 0 1 98,238 Z", 3.6);
+    pen(g, 1.4);
+    disc(g, 150, 238, 52);
+    g.stroke();
+    shape(g, "M150,186 L150,290 M98,238 L202,238", null, 1.4);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * TAU + 0.26;
+      disc(g, 150 + Math.cos(a) * 57, 238 + Math.sin(a) * 57, 1.5);
+      g.fillStyle = INK;
+      g.fill();
+    }
+    orb(g, 150, 238, 13, GILT);
+    orb(g, 150, 238, 5);
+    // Where the blades meet, sparks.
+    for (const [x, y, r] of [[150, 108, 9], [128, 96, 4], [174, 100, 5], [150, 84, 3]]) spark(g, x!, y!, r!);
+    shape(g, "M40,376 L96,360 M36,368 L52,360 M204,362 L262,376 M250,362 L266,370", null, 1.4);
+  },
+  /** A group and where you stand with it: a banner with a crown on it, hung from a bar between two lances. */
+  warden(g) {
+    shape(g, "M62,376 L96,96 M238,376 L204,96", null, 3);
+    shape(g, "M96,96 L92,76 L100,76 Z M204,96 L200,76 L208,76 Z", WHITE, 1.4);
+    shape(g, "M150,84 L92,118 M150,84 L208,118", null, 1.2);
+    orb(g, 150, 82, 5, GILT);
+    shape(g, "M78,118 L222,118", null, 5);
+    orb(g, 76, 118, 5.5, GILT);
+    orb(g, 224, 118, 5.5, GILT);
+    // The cloth, swallow-tailed, with its border and the crown.
+    shape(g, "M94,122 L206,122 L206,318 L150,290 L94,318 Z", WHITE, 2.4);
+    hatch(g, "M94,122 L112,122 L112,309 L94,318 Z", 3.4);
+    shape(g, "M102,130 L198,130 L198,304 L150,280 L102,304 Z", null, 0.9);
+    shape(g, "M118,222 L118,186 L134,204 L150,176 L166,204 L182,186 L182,222 Z", GILT, 2);
+    shape(g, "M116,222 L184,222 L184,234 L116,234 Z", WHITE, 1.8);
+    for (const [x, y] of [[118, 184], [150, 173], [182, 184]]) orb(g, x!, y!, 4);
+    for (const x of [130, 150, 170]) orb(g, x, 228, 2.4, INK);
+    spark(g, 150, 258, 9, WASH);
+    shape(g, "M128,150 L172,150 M136,158 L164,158", null, 1.2);
+    // Tassels at its tails.
+    shape(g, "M94,318 L90,344 M94,318 L94,346 M94,318 L98,344 M206,318 L202,344 M206,318 L206,346 M206,318 L210,344", null, 1.4);
+    tufts(g, [[40, 372], [150, 370], [268, 374]]);
+  },
+  /** A place: a keep on its rock, one window lit, a path going up to its door. */
+  keep(g) {
+    // A crescent moon, and cloud.
+    shape(g, "M70,104 A24,24 0 1 0 100,138 A19,19 0 1 1 70,104 Z", WHITE, 1.6);
+    shape(g, "M196,128 q8,-12 20,-4 q10,-10 22,0 q12,-2 12,10 Z", WHITE, 1.3);
+    birds(g, 206, 176);
+    // The rock.
+    shape(g, "M0,404 C30,360 58,318 100,300 L204,300 C246,316 276,352 300,404 L300,470 L0,470 Z", WHITE, 2.2);
+    hatch(g, "M168,300 L204,300 C246,316 276,352 300,404 L300,470 L210,470 C204,410 188,350 168,300 Z", 4.4);
+    shape(g, "M40,404 C50,382 64,372 78,366 M240,372 C250,380 258,392 262,404 M110,330 C120,338 126,350 126,362", null, 1.2);
+    // The path up to the door.
+    shape(g, "M96,470 C120,430 178,420 160,388 C148,366 132,356 142,300 L158,300 C150,350 172,362 184,386 C204,424 150,438 136,470 Z", WASH, 1.5);
+    // The side tower with its cone, then the great tower.
+    shape(g, "M88,300 L90,220 L118,220 L120,300 Z", WHITE, 2);
+    shape(g, "M84,220 L104,184 L124,220 Z", INK, 1.4);
+    shape(g, "M100,246 L100,236 Q104,230 108,236 L108,246 Z", INK, 0);
+    shape(g, "M116,300 L120,150 L180,150 L184,300 Z", WHITE, 2.2);
+    hatch(g, "M152,150 L180,150 L184,300 L152,300 Z", 3.6);
+    shape(g, "M112,150 L112,128 L126,128 L126,140 L140,140 L140,128 L160,128 L160,140 L174,140 L174,128 L188,128 L188,150 Z", WHITE, 2.2);
+    shape(g, "M122,176 L178,176 M120,214 L180,214 M118,256 L182,256", null, 0.9);
+    shape(g, "M140,206 L140,190 Q150,176 160,190 L160,206 Z", GILT, 1.6);
+    shape(g, "M150,180 L150,206 M140,196 L160,196", null, 0.9);
+    shape(g, "M138,300 L138,276 Q150,258 162,276 L162,300 Z", INK, 1.2);
+    shape(g, "M150,128 L150,96", null, 1.8);
+    shape(g, "M150,96 L176,103 L150,112 Z", GILT, 1.4);
+    spark(g, 232, 110, 5);
+    spark(g, 44, 176, 4);
+  },
+  /** A thing learned or found that opens something: a key on its cord. */
+  key(g) {
+    g.save();
+    g.translate(150, 232);
+    g.rotate(-0.3);
+    g.translate(-150, -232);
+    // The cord it hangs by.
+    shape(g, "M150,96 C120,56 76,92 104,128 C118,146 96,170 84,160", null, 1.8);
+    // The bow, a trefoil of three rings.
+    for (const [x, y] of [[150, 112], [130, 144], [170, 144]]) orb(g, x!, y!, 21);
+    orb(g, 150, 134, 13);
+    for (const [x, y] of [[150, 112], [130, 144], [170, 144]]) orb(g, x!, y!, 9, WASH);
+    orb(g, 150, 134, 5, GILT);
+    // The shank with its collars, and the bit with its wards.
+    shape(g, "M143,162 L157,162 L156,348 L144,348 Z", WHITE, 2);
+    hatch(g, "M150,162 L157,162 L156,348 L150,348 Z", 3.2);
+    shape(g, "M138,170 L162,170 L162,180 L138,180 Z", GILT, 1.6);
+    shape(g, "M139,290 L161,290 L161,298 L139,298 Z", GILT, 1.6);
+    shape(g, "M156,302 L196,302 L196,314 L182,314 L182,324 L196,324 L196,348 L176,348 L176,338 L166,338 L166,348 L156,348 Z", WHITE, 2);
+    hatch(g, "M176,302 L196,302 L196,314 L182,314 L182,324 L196,324 L196,348 L176,348 Z", 3.2);
+    g.restore();
+    for (const [x, y, r] of [[226, 132, 8], [246, 168, 4], [74, 276, 6], [58, 244, 3], [214, 330, 5]]) spark(g, x!, y!, r!);
+  },
+};
+Object.assign(PICTURES, DRAWN);
+
+/**
+ * Behind every picture: the family's wash, a white disc of light with fine rays going out from it to the edges of
+ * the window, and a few small orbs in the air.
+ */
+function backdrop(g: G, top: number, foot: number, cx: number, cy: number, r: number, seed: number): void {
+  const fill = g.createLinearGradient(0, top, 0, foot);
+  fill.addColorStop(0, WASH);
+  fill.addColorStop(1, STOCK);
   g.fillStyle = fill;
   g.fillRect(0, 0, W, H);
-  const halo = g.createRadialGradient(W / 2, foot * 0.42, 6, W / 2, foot * 0.42, foot * 0.62);
-  halo.addColorStop(0, `${glow}0.5)`);
-  halo.addColorStop(0.45, `${glow}0.16)`);
-  halo.addColorStop(1, `${glow}0)`);
-  g.fillStyle = halo;
+  pen(g, 0.7);
+  g.globalAlpha = 0.5;
+  g.beginPath();
+  const n = 64;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * TAU + 0.05;
+    const r0 = r + (i % 2 ? 14 : 6), r1 = i % 4 === 1 ? r + 46 : 460;
+    g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+  }
+  g.stroke();
+  g.globalAlpha = 1;
+  orb(g, cx, cy, r);
+  pen(g, 0.7);
+  disc(g, cx, cy, Math.max(1, r - 5));
+  g.stroke();
+  const rnd = rng(seed);
+  for (let i = 0; i < 6; i++) {
+    const x = 40 + rnd() * 220, y = top + 22 + rnd() * Math.max(10, cy - top - 10), s = 1.8 + rnd() * 3.4;
+    if (Math.hypot(x - cx, y - cy) > r + 12) orb(g, x, y, s);
+  }
+}
+
+/** The card's stock: old paper, a little lighter in the middle. */
+function stock(g: G): void {
+  g.fillStyle = STOCK;
   g.fillRect(0, 0, W, H);
-  // The lines of the engraving, closer together toward the foot, where it is darker.
-  g.strokeStyle = "rgba(10,6,2,0.13)";
-  g.lineWidth = 0.7;
-  for (let y = 38; y < foot; y += 2.6 + (1 - y / foot) * 2.4) {
+  const light = g.createRadialGradient(W / 2, H * 0.45, 30, W / 2, H / 2, H * 0.7);
+  light.addColorStop(0, "rgba(255,250,232,0.5)");
+  light.addColorStop(1, "rgba(255,250,232,0)");
+  g.fillStyle = light;
+  g.fillRect(0, 0, W, H);
+}
+
+const rounded = (x: number, y: number, w: number, h: number, r: number): string =>
+  `M${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} L${x + r},${y + h} Q${x},${y + h} ${x},${y + h - r} L${x},${y + r} Q${x},${y} ${x + r},${y} Z`;
+
+/** The printed border: a heavy line, a hair line inside it, and a small fan of strokes in each corner. */
+function border(g: G): void {
+  shape(g, rounded(8, 8, W - 16, H - 16, 9), null, 2.4);
+  shape(g, rounded(13, 13, W - 26, H - 26, 6), null, 0.8);
+  for (const [x, y, sx, sy] of [[19, 19, 1, 1], [W - 19, 19, -1, 1], [19, H - 19, 1, -1], [W - 19, H - 19, -1, -1]]) {
+    g.save();
+    g.translate(x!, y!);
+    g.scale(sx!, sy!);
+    pen(g, 0.9);
     g.beginPath();
-    g.moveTo(30, y);
-    g.lineTo(W - 30, y);
+    for (let i = 0; i <= 4; i++) {
+      const a = (i / 4) * (Math.PI / 2);
+      g.moveTo(Math.cos(a) * 5, Math.sin(a) * 5);
+      g.lineTo(Math.cos(a) * (i % 2 ? 11 : 16), Math.sin(a) * (i % 2 ? 11 : 16));
+    }
     g.stroke();
-  }
-  const r = rng(seed);
-  g.fillStyle = "rgba(255,245,215,0.7)";
-  for (let i = 0; i < 16; i++) {
-    const x = 44 + r() * (W - 88), y = 44 + r() * foot * 0.38;
-    disc(g, x, y, 0.5 + r() * 0.9);
-    g.fill();
+    orb(g, 1.5, 1.5, 2.2, GILT);
+    g.restore();
   }
 }
 
-/** A ribbon across the card with words on it: folded back at both ends, gold-edged, with its shadow under it. */
-function ribbon(g: G, y: number, words: string, big = 26): void {
-  const h = 44;
-  g.save();
-  g.shadowColor = "rgba(0,0,0,0.55)";
-  g.shadowBlur = 8;
-  g.shadowOffsetY = 3;
-  g.fillStyle = "#6e4f1c";
-  for (const side of [-1, 1]) {
-    const x0 = W / 2 + side * (W / 2 - 18), x1 = W / 2 + side * (W / 2 - 46);
-    path(g, [[x0, y + 6], [x1, y], [x1, y + h], [x0, y + h + 6], [x0 + side * -10, y + h / 2 + 3]]);
-    g.fill();
-  }
-  const band = g.createLinearGradient(0, y - 6, 0, y + h);
-  band.addColorStop(0, "#f4ead0");
-  band.addColorStop(0.5, PAPER);
-  band.addColorStop(1, "#cdbb8e");
-  g.fillStyle = band;
-  g.fillRect(42, y - 6, W - 84, h + 4);
-  g.restore();
-  // The folds where the ends turn back.
-  g.fillStyle = "#4a3410";
-  for (const side of [-1, 1]) {
-    const x1 = W / 2 + side * (W / 2 - 46);
-    path(g, [[x1, y - 6], [x1, y], [x1 + side * 4, y - 2]]);
-    g.fill();
-  }
-  g.strokeStyle = GOLD_DARK;
-  g.lineWidth = 1.4;
-  g.strokeRect(42, y - 6, W - 84, h + 4);
-  g.strokeStyle = "rgba(125,95,34,0.5)";
-  g.lineWidth = 0.8;
-  g.strokeRect(46, y - 2, W - 92, h - 4);
-  g.fillStyle = INK;
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  const text = words.toUpperCase();
-  const spaced = "letterSpacing" in g;
-  let size = big;
-  for (; size > 11; size--) {
-    g.font = `${size}px ${SERIF}`;
-    if (spaced) (g as G & { letterSpacing: string }).letterSpacing = `${(size * 0.08).toFixed(1)}px`;
-    if (g.measureText(text).width < W - 104) break;
-  }
-  g.fillText(text, W / 2, y + h / 2 - 3);
-  if (spaced) (g as G & { letterSpacing: string }).letterSpacing = "0px";
-}
-
-/** A name on a dark plate edged in gold, over the foot of the picture. */
-function plate(g: G, name: string, y: number): void {
-  g.font = `italic 24px ${SERIF}`;
-  const shown = name.length > 24 ? `${name.slice(0, 23)}…` : name;
-  const nw = Math.min(W - 76, g.measureText(shown).width + 34);
-  g.fillStyle = "rgba(18,11,5,0.86)";
-  g.fillRect(W / 2 - nw / 2, y, nw, 34);
-  g.strokeStyle = GOLD;
-  g.lineWidth = 1.4;
-  g.strokeRect(W / 2 - nw / 2 + 0.5, y + 0.5, nw - 1, 33);
-  g.fillStyle = "#f3e2b0";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  g.fillText(shown, W / 2, y + 18, W - 92);
-}
+const spacing = (g: G, px: number): void => {
+  if ("letterSpacing" in g) (g as G & { letterSpacing: string }).letterSpacing = `${px}px`;
+};
 
 /** Break words into lines no wider than `width` in the current font. */
 function wrap(g: G, text: string, width: number): string[] {
@@ -715,133 +1041,194 @@ function wrap(g: G, text: string, width: number): string[] {
   return lines;
 }
 
-/**
- * The panel under the picture of a card that does something: its kind in red, and what it does, as large as fits.
- * With a line, what touching the card writes for you is pencilled across the foot of the panel, under a rule.
- */
-function panel(g: G, top: number, title: string, text: string, line?: string): void {
-  const x = 36, w = W - 72, foot = H - 34;
-  const fill = g.createLinearGradient(0, top, 0, foot);
-  fill.addColorStop(0, "#efe4c8");
-  fill.addColorStop(1, "#dccca2");
-  g.fillStyle = fill;
-  g.fillRect(x, top, w, foot - top);
-  g.strokeStyle = GOLD_DARK;
-  g.lineWidth = 1.2;
-  g.strokeRect(x + 0.5, top + 0.5, w - 1, foot - top - 1);
-  g.strokeStyle = "rgba(125,95,34,0.45)";
-  g.lineWidth = 0.7;
-  g.strokeRect(x + 4, top + 4, w - 8, foot - top - 8);
-  g.textAlign = "center";
-  g.textBaseline = "alphabetic";
-  g.fillStyle = "#7a1e14";
-  g.font = `bold 10px ${SERIF}`;
-  if ("letterSpacing" in g) (g as G & { letterSpacing: string }).letterSpacing = "1.5px";
-  g.fillText(title.toUpperCase(), W / 2, top + 17);
-  if ("letterSpacing" in g) (g as G & { letterSpacing: string }).letterSpacing = "0px";
-  g.strokeStyle = "rgba(122,30,20,0.45)";
-  g.lineWidth = 0.8;
-  g.beginPath();
-  g.moveTo(W / 2 - 40, top + 22);
-  g.lineTo(W / 2 + 40, top + 22);
-  g.stroke();
-  // The pencilled line takes the panel's last two rows of handwriting.
-  const said = line ? 34 : 0;
-  const room = foot - top - 34 - said;
-  let size = 16, lines: string[] = [];
-  for (size = 16; size > 7; size -= 0.5) {
-    g.font = `${size}px ${SERIF}`;
-    lines = wrap(g, text, w - 18);
-    if (lines.length * size * 1.22 <= room) break;
+/** Lines cut to `most`, the last ending in an ellipsis that still fits `width`. */
+function cut(g: G, lines: string[], most: number, width: number): string[] {
+  if (lines.length <= most) return lines;
+  const kept = lines.slice(0, most);
+  let last = kept[most - 1]!;
+  while (last && g.measureText(`${last}…`).width > width) last = last.slice(0, -1).trimEnd();
+  kept[most - 1] = `${last}…`;
+  return kept;
+}
+
+interface Fit {
+  font: string;
+  size: number;
+  lines: string[];
+  h: number;
+  space: number;
+}
+
+/** The name, as large as lets it sit in the banner: one line when it is short, up to three when it is a sentence. */
+function fitName(g: G, words: string, width: number): Fit {
+  const caps = words.length <= 22;
+  const shown = caps ? words.toUpperCase() : words;
+  let fit: Fit = { font: "", size: 11, lines: [shown], h: 0, space: 0 };
+  for (const size of [22, 20, 18, 16.5, 15, 14, 13, 12, 11]) {
+    const font = `${caps ? "" : "italic "}${size}px ${SERIF}`, space = caps ? size * 0.07 : 0;
+    g.font = font;
+    spacing(g, space);
+    const lines = wrap(g, shown, width);
+    fit = { font, size, lines, h: 0, space };
+    if (lines.length <= (size >= 18 ? 1 : size >= 14 ? 2 : 3)) break;
   }
+  g.font = fit.font;
+  fit.lines = cut(g, fit.lines, 3, width);
+  spacing(g, 0);
+  fit.h = fit.lines.length * fit.size * 1.16 + 15;
+  return fit;
+}
+
+/** Text set in a block no taller than `room`: smaller until it fits, and cut short only when nothing else will do. */
+function fitBlock(g: G, text: string, width: number, room: number, sizes: number[], face: string, lead: number, pad: number): Fit {
+  let fit: Fit = { font: "", size: sizes[0]!, lines: [], h: 0, space: 0 };
+  for (const size of sizes) {
+    const font = `${size}px ${face}`;
+    g.font = font;
+    const lines = wrap(g, text, width);
+    fit = { font, size, lines, h: lines.length * size * lead + pad, space: 0 };
+    if (fit.h <= room) break;
+  }
+  if (fit.h > room) {
+    g.font = fit.font;
+    fit.lines = cut(g, fit.lines, Math.max(1, Math.floor((room - pad) / (fit.size * lead))), width);
+    fit.h = fit.lines.length * fit.size * lead + pad;
+  }
+  return fit;
+}
+
+/** The banner across the foot of the picture, swallow-tailed, with the name on it. */
+function banner(g: G, mid: number, fit: Fit): void {
+  const y = mid - fit.h / 2, h = fit.h, x0 = 15, x1 = W - 15;
+  const d = `M${x0},${y} L${x1},${y} L${x1 - 9},${y + h / 2} L${x1},${y + h} L${x0},${y + h} L${x0 + 9},${y + h / 2} Z`;
+  g.save();
+  g.shadowColor = "rgba(40,24,8,0.35)";
+  g.shadowBlur = 5;
+  g.shadowOffsetY = 2;
+  shape(g, d, WHITE, 0);
+  g.restore();
+  shape(g, d, null, 2);
+  shape(g, `M${x0 + 14},${y + 3.5} L${x1 - 14},${y + 3.5} M${x0 + 14},${y + h - 3.5} L${x1 - 14},${y + h - 3.5}`, null, 0.7);
   g.fillStyle = INK;
-  const lh = size * 1.22;
-  const y0 = top + 28 + (room - lines.length * lh) / 2 + size;
-  lines.forEach((l, i) => g.fillText(l, W / 2, y0 + i * lh));
-  if (line) {
-    const rule = foot - said - 2;
-    g.strokeStyle = "rgba(52,53,59,0.45)";
-    g.lineWidth = 0.7;
-    g.beginPath();
-    g.moveTo(x + 14, rule);
-    g.lineTo(x + w - 14, rule);
-    g.stroke();
-    g.fillStyle = "#34353b";
-    let s = 12;
-    let rows: string[] = [];
-    for (; s > 7; s -= 0.5) {
-      g.font = `${s}px ${HAND}`;
-      rows = wrap(g, line, w - 16);
-      if (rows.length <= 2) break;
-    }
-    rows = rows.slice(0, 2);
-    const mid = rule + said / 2, rh = s * 1.15;
-    rows.forEach((r, i) => g.fillText(r, W / 2, mid - ((rows.length - 1) * rh) / 2 + s * 0.35 + i * rh));
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = fit.font;
+  spacing(g, fit.space);
+  const lh = fit.size * 1.16;
+  fit.lines.forEach((l, i) => g.fillText(l, W / 2 + fit.space / 2, mid - ((fit.lines.length - 1) * lh) / 2 + i * lh + fit.size * 0.06, x1 - x0 - 40));
+  spacing(g, 0);
+}
+
+/** The small plate at the head of the card that says what sort of card it is. */
+function plate(g: G, label: string): void {
+  g.font = `bold 9.5px ${SERIF}`;
+  spacing(g, 1.5);
+  const text = label.toUpperCase();
+  const w = Math.min(190, g.measureText(text).width + 30);
+  const x0 = W / 2 - w / 2, x1 = W / 2 + w / 2;
+  shape(g, `M${x0 + 8},21 L${x1 - 8},21 L${x1},31 L${x1 - 8},41 L${x0 + 8},41 L${x0},31 Z`, WHITE, 1.6);
+  g.fillStyle = INK;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, W / 2 + 0.75, 31.5, w - 22);
+  spacing(g, 0);
+  if (x0 - 34 > 24) {
+    shape(g, `M${x0 - 6},31 L${x0 - 26},31 M${x1 + 6},31 L${x1 + 26},31`, null, 0.8);
+    orb(g, x0 - 30, 31, 1.8, GILT);
+    orb(g, x1 + 30, 31, 1.8, GILT);
   }
 }
 
-/** Old paper's grain over everything, so the flat colours look printed and worn, and the edges a little darker. */
+/** Grain over everything, so the print looks worn, and the edges a little darker. */
 function wear(g: G, seed: number): void {
   const r = rng(seed);
-  for (let i = 0; i < 420; i++) {
-    g.fillStyle = `rgba(${r() < 0.5 ? "255,240,200" : "20,10,0"},${0.02 + r() * 0.05})`;
+  for (let i = 0; i < 380; i++) {
+    g.fillStyle = `rgba(${r() < 0.5 ? "255,248,225" : "60,36,10"},${0.02 + r() * 0.045})`;
     g.fillRect(r() * W, r() * H, 0.6 + r() * 2, 0.6 + r() * 2);
   }
-  const edge = g.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.68);
-  edge.addColorStop(0, "rgba(0,0,0,0)");
-  edge.addColorStop(1, "rgba(30,15,0,0.32)");
+  const edge = g.createRadialGradient(W / 2, H / 2, H * 0.36, W / 2, H / 2, H * 0.72);
+  edge.addColorStop(0, "rgba(60,36,10,0)");
+  edge.addColorStop(1, "rgba(60,36,10,0.2)");
   g.fillStyle = edge;
   g.fillRect(0, 0, W, H);
 }
 
+const plain = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
 /**
- * The face of a card: picture, frame, the ribbon with its title, and a name over it if it has one. A card with
- * words (what it does) has a smaller picture, its name on the ribbon, and the words in a panel under it; `line`, what
- * touching it writes for you, is pencilled at the foot of that panel.
+ * The face of a card, laid out as a tarot card is: the picture fills the card inside its arch, and the card's name is
+ * on a banner across the picture's foot. A card that says more has what it says set under the banner, in a block only
+ * as tall as its words, and the picture has the rest. `title` (what sort of card it is) is on a small plate at the
+ * head; `line`, what touching the card writes for you, is pencilled at the foot unless it only repeats the name.
+ * Nothing is ever drawn wider than the place made for it.
  */
 export function cardFace(kindId: string, name?: string, text?: string, title?: string, line?: string): Canvas {
   const [c, g] = mk(CARD_PX.w, CARD_PX.h);
   g.scale(SCALE, SCALE);
   const k = cardKind(kindId);
-  const told = !!text || !!line;
-  const foot = told ? 286 : 392;
-  g.fillStyle = "#120c08";
-  g.fillRect(0, 0, W, H);
+  [INK, WASH] = INKS[INK_AS[k.id] ?? k.family];
+  const tidy = (s?: string): string => (s ?? "").replace(/\s+/g, " ").trim();
+  const words = tidy(name) || tidy(title) || k.title;
+  const label = tidy(name) ? tidy(title) : "";
+  const body = tidy(text);
+  const said = tidy(line) && plain(tidy(line)) !== plain(words) ? tidy(line) : "";
+
+  // What is written decides how much of the card the picture gets.
+  const top = 48, floor = H - 24;
+  const named = fitName(g, words, W - 76);
+  const hint = said ? fitBlock(g, said, W - 76, 36, [11, 10, 9.5], HAND, 1.18, 10) : null;
+  const under = hint?.h ?? 0;
+  const room = floor - under - named.h / 2 - 4 - (top + 176);
+  const block = body ? fitBlock(g, body, W - 64, Math.max(40, room), [14, 13.5, 13, 12.5, 12, 11.5, 11, 10.5, 10, 9.5, 9], SERIF, 1.25, 20) : null;
+  const foot = floor - under - (block?.h ?? 0) - (block || hint ? 4 : 0) - named.h / 2;
+
+  stock(g);
+  // The picture, sized to its window and standing on the banner.
+  const stand = foot - named.h / 2 + 5;
+  const s = Math.max(0.5, Math.min(1.22, (stand - (top + 16)) / 284));
   g.save();
-  windowPath(g, foot);
-  g.clip();
-  sky(g, k.family, foot, k.id.length * 31 + 7);
-  // The picture, made smaller to fit above the words when there are words. Every shape in it has a halo of light.
-  g.save();
-  if (told) {
-    g.translate(W / 2, 30);
-    g.scale(0.74, 0.74);
-    g.translate(-W / 2, -30);
-  }
-  g.shadowColor = "rgba(255,214,140,0.42)";
-  g.shadowBlur = 14 * SCALE;
+  g.clip(new Path2D(`M26,${foot} L26,120 C26,78 84,54 150,48 C216,54 274,78 274,120 L274,${foot} Z`));
+  backdrop(g, top, foot, W / 2, stand - 162 * s, 76 * s, k.id.length * 31 + words.length);
+  g.translate(W / 2, stand);
+  g.scale(s, s);
+  g.translate(-W / 2, -376);
   (PICTURES[k.id] ?? PICTURES.token!)(g, rng(k.id.length * 97));
   g.restore();
-  // A shadow inside the window's edge, so the picture sits back in it.
-  const inner = g.createRadialGradient(W / 2, foot * 0.45, foot * 0.3, W / 2, foot * 0.5, foot * 0.75);
-  inner.addColorStop(0, "rgba(0,0,0,0)");
-  inner.addColorStop(1, "rgba(0,0,0,0.45)");
-  g.fillStyle = inner;
-  g.fillRect(0, 0, W, H);
-  g.restore();
-  g.strokeStyle = goldLeaf(g);
-  g.lineWidth = 2.2;
-  windowPath(g, foot);
-  g.stroke();
-  frame(g);
-  if (told) {
-    ribbon(g, foot - 10, name ?? title ?? k.title, 22);
-    panel(g, foot + 44, name ? `${title ?? k.title}` : "", text ?? "", line);
-  } else {
-    ribbon(g, 404, title ?? k.title);
-    if (name) plate(g, name, 344);
+  shape(g, `M26,${foot} L26,120 C26,78 84,54 150,48 C216,54 274,78 274,120 L274,${foot}`, null, 2.2);
+  shape(g, `M30,${foot} L30,121 C30,82 86,58 150,52 C214,58 270,82 270,121 L270,${foot}`, null, 0.7);
+  border(g);
+  if (label) plate(g, label);
+  else spark(g, W / 2, 31, 7, GILT);
+  banner(g, foot, named);
+
+  const y = foot + named.h / 2 + 4;
+  if (block) {
+    // A small rule with a lozenge, then the words.
+    shape(g, `M${W / 2 - 46},${y + 7} L${W / 2 - 8},${y + 7} M${W / 2 + 8},${y + 7} L${W / 2 + 46},${y + 7}`, null, 0.8);
+    shape(g, `M${W / 2},${y + 3} L${W / 2 + 4},${y + 7} L${W / 2},${y + 11} L${W / 2 - 4},${y + 7} Z`, GILT, 1);
+    g.fillStyle = INK;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.font = block.font;
+    const lh = block.size * 1.25;
+    block.lines.forEach((l, i) => g.fillText(l, W / 2, y + 16 + block.size + i * lh, W - 60));
   }
-  wear(g, kindId.length * 13 + (name?.length ?? 0));
+  if (hint) {
+    pen(g, 0.7, GRAPHITE);
+    g.setLineDash([2, 3]);
+    g.beginPath();
+    g.moveTo(40, floor - hint.h + 2);
+    g.lineTo(W - 40, floor - hint.h + 2);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = GRAPHITE;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    g.font = hint.font;
+    const lh = hint.size * 1.18;
+    hint.lines.forEach((l, i) => g.fillText(l, W / 2, floor - hint.h + 6 + hint.size + i * lh, W - 70));
+  }
+  wear(g, kindId.length * 13 + words.length);
   return c;
 }
 

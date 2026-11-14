@@ -148,6 +148,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     const r = room;
     // For a page that hosts the extension and wants to look at the room (preview/host.ts).
     window.dispatchEvent(new CustomEvent("tallow:room", { detail: r }));
+    window.dispatchEvent(new CustomEvent("tallow:music", { detail: music }));
     await r.ready;
     if (mine !== sitting || !r.desk) return;
     const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24) });

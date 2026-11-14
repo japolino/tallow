@@ -9,8 +9,9 @@
 import { ATTRIBUTES, MAX_HP, outcomeName, spend, standingWord, xpToNext, type Attribute, type Roll, type Run } from "../engine/run.js";
 import { CARDS_OUT, type Table, type Written } from "./table.js";
 import { firstJson } from "./ask.js";
-import { begin, judgeTurn, pagesOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
+import { begin, judgeTurn, pagesOf, sceneOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
 import type { Show } from "./system.js";
+import { pickMusic } from "./music.js";
 
 export interface RunSitOptions {
   table: Table;
@@ -162,11 +163,29 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     table.sheets?.(allSheets(deps, r, shows));
     table.show?.(shows);
   };
+  // The music under the scene: asked for as each passage is said, and changed only when the answer is to change it.
+  let playing: { title: string; since: number } | null = null;
+  const heard: string[] = [];
+  let scoring = 0;
+  const score = (r: Run, passage: string): void => {
+    if (!table.music || o.mute) return;
+    const mine = ++scoring;
+    void pickMusic(deps, r, passage, playing ? { title: playing.title, turns: Math.max(0, r.turn - playing.since) } : null, heard.slice(-10), sceneOf(deps, r))
+      .then((got) => {
+        // A later passage has been asked about since: this answer is for a scene already left.
+        if (!got || mine !== scoring) return;
+        playing = { title: got.pieces[0]!.title, since: r.turn };
+        heard.push(...got.pieces.slice(0, 2).map((p) => p.title));
+        table.music!(got.pieces.map((p) => ({ title: p.title, file: p.file })));
+      })
+      .catch(() => undefined);
+  };
   let run: Run;
   if (o.saved) {
     run = o.saved;
     lay(run);
     const before = run.beats[run.beats.length - 1];
+    score(run, before?.story ?? run.opening);
     table.notes?.(before ? { mine: before.you, his: paragraphs(before.story) } : openingNotes(run));
     await table.say([`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
   } else {
@@ -179,6 +198,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     lay(run);
     o.save(run);
     table.notes?.(openingNotes(run));
+    score(run, run.opening);
     await table.say([...paragraphs(run.opening), RUN_HOW, RUN_NOTES]);
   }
 
@@ -205,6 +225,8 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       lay(run);
       o.save(run);
       table.notes?.(openingNotes(run));
+      playing = null;
+      score(run, run.opening);
       await table.say([...paragraphs(run.opening), RUN_HOW]);
       continue;
     }
@@ -261,6 +283,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       await table.say(["I lost the thread there, and have nothing for what you wrote. Write on, and it will be taken up."]);
       continue;
     }
+    score(run, first);
     await table.say([...aside, ...paragraphs(first)]);
     let t: Awaited<typeof telling>;
     try {

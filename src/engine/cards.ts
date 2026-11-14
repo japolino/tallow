@@ -49,6 +49,9 @@ export const CARD_KINDS: readonly CardKind[] = [
   K("token", "The Token", "thing", "a carved wooden token on a thong"),
   K("lantern", "The Lantern", "thing", "a shuttered lantern with a thin blade of light"),
   K("purse", "The Purse", "thing", "a drawstring purse spilling three coins"),
+  // What the run lays on your side.
+  K("crossroads", "The Crossroads", "place", "a signpost where three roads part, a walker stopped before it"),
+  K("boon", "The Boon", "thing", "a star in a wreath of laurel, tied with a ribbon"),
 ];
 
 const BY_ID = new Map(CARD_KINDS.map((k) => [k.id, k]));

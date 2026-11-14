@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import { SOUND_CREDITS } from "../src/frontend/soundcredits.js";
-import { ALL_TRACKS, credit, musicVolume, nextTrack, TRACKS, trackUrl, type Mood } from "../src/room/music.js";
+import { musicVolume } from "../src/room/music.js";
 import { bedMix, LEVELS, loopable, normalLevels, Sound } from "../src/room/sound.js";
 import { SOUND_FILES } from "../src/room/soundfiles.js";
 
@@ -56,28 +56,6 @@ describe("a seamless loop", () => {
   test("too short to fade is left as it is", () => {
     const src = new Float32Array(3);
     expect(loopable([src], 100)[0]).toBe(src);
-  });
-});
-
-describe("the music", () => {
-  test("every mood has pieces, none in two moods", () => {
-    const all = Object.values(TRACKS).flat();
-    expect(new Set(all).size).toBe(all.length);
-    expect(ALL_TRACKS.length).toBe(18);
-    for (const m of Object.keys(TRACKS) as Mood[]) expect(TRACKS[m].length).toBeGreaterThan(1);
-  });
-  test("streamed from incompetech, named as the licence asks", () => {
-    expect(trackUrl("Teller of the Tales")).toBe("https://incompetech.com/music/royalty-free/mp3-royaltyfree/Teller%20of%20the%20Tales.mp3");
-    expect(credit("Plaint")).toBe('"Plaint" Kevin MacLeod (incompetech.com). Licensed under Creative Commons: By Attribution 4.0 License http://creativecommons.org/licenses/by/4.0/');
-  });
-  test("the next piece is not one played lately", () => {
-    for (let i = 0; i < 20; i++) {
-      const t = nextTrack("place", ["Lost Time", "Plaint"]);
-      expect(TRACKS.place).toContain(t);
-      expect(["Lost Time", "Plaint"]).not.toContain(t);
-    }
-    // With only two pieces, the one just played is not played again.
-    expect(nextTrack("end", ["At Rest"], () => 0)).toBe("Dark Times");
   });
 });
 

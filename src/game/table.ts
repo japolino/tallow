@@ -53,4 +53,6 @@ export interface Table {
    * send or change; nothing in the game waits on these things.
    */
   show?(shows: Show[]): void;
+  /** The music for the scene as it now is: these pieces, the best first, until others are given. */
+  music?(pieces: { title: string; file: string }[]): void;
 }

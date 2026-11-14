@@ -90,15 +90,15 @@ export const SIDE_MOST = 4;
 
 /**
  * The kind of card a group of the game's cards is drawn as (engine/cards.ts): its picture and the colour of its back.
- * A quest is the lantern, a ware the purse, a perk the token, a thing to do the fellow traveller looking down the
- * road; a group this does not know is the token.
+ * A quest is the lantern, a ware the merchant's scales, a perk the boon, a thing to do the crossroads; a group this
+ * does not know is the token.
  */
 export function kindOfGroup(group: string): string {
   const g = group.toLowerCase();
   if (/quest|task|job|errand|deed|bounty|mission/.test(g)) return "lantern";
   if (/ware|good|shop|sale|sell|buy|trade|market|stock|price/.test(g)) return "purse";
-  if (/perk|gift|boon|talent|trait|feat|blessing/.test(g)) return "token";
-  if (/suggest|idea|^do\b|choice|option|hint|move|lead/.test(g)) return "companion";
+  if (/perk|gift|boon|talent|trait|feat|blessing/.test(g)) return "boon";
+  if (/suggest|idea|^do\b|choice|option|hint|move|lead/.test(g)) return "crossroads";
   if (/foe|fight|enemy|threat|danger/.test(g)) return "ambush";
   if (/faction|guild|house|clan|order/.test(g)) return "warden";
   if (/place|road|way|travel/.test(g)) return "keep";

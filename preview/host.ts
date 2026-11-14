@@ -61,6 +61,10 @@ function pretendRun(m: Extract<ToBackend, { type: "ask" }>): string | null {
   if (m.role === "teller") return `You go about it as you wrote, and the stair gives you what it can. ${CARD.name} watches without a word, pole held loosely, ready to move either way.
 
 When it is done, the thing under the lamp has shown itself: a boy with a hooked knife, more frightened than you are. "She sent me," he says, and does not say who.`;
+  if (sys.includes("music editor"))
+    return last.includes("THE PIECES")
+      ? JSON.stringify({ order: [2, 1, 3], none: false })
+      : JSON.stringify({ scene: "A wet stair at dusk, and someone watching.", change: last.includes("PLAYING NOW: nothing yet"), feels: ["Mysterious", "Dark"], genres: ["Soundtrack"], instruments: ["harp", "strings"], pace: "slow", words: "wary dusk street" });
   if (sys.includes("referee")) {
     const line = (/THE PLAYER WROTE:\s*"""([\s\S]*?)"""/.exec(last)?.[1] ?? "").toLowerCase();
     if (/^\s*\(?(ooc|how|what) /.test(line)) return JSON.stringify({ kind: "ooc" });
@@ -185,6 +189,7 @@ const ctx = {
 
 window.addEventListener("tallow:room", (e) => Object.assign(window, { room: (e as CustomEvent).detail }));
 window.addEventListener("tallow:director", (e) => Object.assign(window, { director: (e as CustomEvent).detail }));
+window.addEventListener("tallow:music", (e) => Object.assign(window, { music: (e as CustomEvent).detail }));
 const bundle = "/dist/frontend.js";
 const mod = (await import(/* the built file, served as it is */ bundle)) as { setup(ctx: unknown): () => void };
 mod.setup(ctx);
