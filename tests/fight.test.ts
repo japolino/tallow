@@ -86,6 +86,12 @@ describe("the other side's own move", () => {
     expect(chooseMove(r, st, line(), null)).toBeNull();
   });
 
+  test("the other side holds when the line was read as one it would hold for", () => {
+    const r = start();
+    expect(chooseMove(r, freshFight(r), line({ outcome: -1 }), { flee: false, over: false, press: false })).toBeNull();
+    expect(chooseMove(r, freshFight(r), line({ outcome: -1 }), { flee: false, over: false, press: true })?.actor).toBe("Goblin");
+  });
+
   test("a failed or empty attempt always gives the foe its turn; a clean escape never does", () => {
     const r = start();
     const st = freshFight(r);

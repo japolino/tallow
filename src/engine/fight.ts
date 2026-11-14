@@ -238,6 +238,8 @@ export interface Line {
 export interface Reading {
   flee: boolean;
   over: boolean;
+  /** Whether the other side would take its own turn after this line; when not read, it does. */
+  press?: boolean;
 }
 
 /** One name from a bag that gives each a turn before anyone has a second; the bag is refilled, shuffled, when empty. */
@@ -282,12 +284,13 @@ export function gearStops(r: Run): string | null {
 
 /**
  * Whether the other side takes its own turn this time, and who. Never when the player only wrote what happens around
- * them, or wrote the fight as left behind, or got clean away; never by anyone beaten, dead, gone or calmed. A line that
+ * them, or wrote the fight as left behind, or got clean away, or wrote a line the other side would hold for; never by anyone beaten, dead, gone or calmed. A line that
  * fails or does nothing to the fight gives the other side its chance; one that goes narrowly well gives it half a
  * chance; one that goes clearly well gives half a chance to someone other than the one it was done to.
  */
 export function chooseMove(r: Run, st: FightState, t: Line, read: Reading | null): Move | null {
-  if (t.kind !== "action" || !read || read.over) return null;
+  // The other side holds when the line gives it reason to (the player yields, or is being heard out): a reader says so.
+  if (t.kind !== "action" || !read || read.over || read.press === false) return null;
   const foes = foesOf(r);
   const c = st.contest;
   const others = c ? opposing(r, c).filter((p) => !foes.includes(p)) : [];
