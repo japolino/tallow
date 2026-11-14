@@ -64,9 +64,9 @@ const BRIDGE_ARCH = 0.042;
 const FORK = [V(-0.075, 0.0012, -0.555), V(0.075, 0.0012, -0.555)];
 /** Where the rival's card lies: on the narrator's side, by its left hand as you see it, between its die tray and the map. */
 const RIVAL = V(-0.325, 0.0012, -0.543);
-/** Your side: a short row in front of the map, between the counters and the pile of pages. */
-const SIDE = V(0.005, 0.0012, 0.31);
-const SIDE_STEP = 0.028;
+/** Your side: a short row in front of the map, between your sheets and the pile of pages; four fit between them with most of each face showing. */
+const SIDE = V(-0.062, 0.0012, 0.31);
+const SIDE_STEP = 0.055;
 /** How far in front of your eyes a card is held up to be read (nearer than your drawn hands, 0.42), and how much of the view's height it fills. */
 const EYE_D = 0.3;
 const EYE_FILL = 0.8;
@@ -81,6 +81,29 @@ export interface CardSpec {
   title?: string;
   /** What is written on it under the picture: what it is and what it does. */
   text?: string;
+  /** What touching it writes for you in the notebook, pencilled at its foot. */
+  line?: string;
+}
+
+/** The most cards that lie on your side at once (the rest are written in your sheets: game/runsit.ts). */
+export const SIDE_MOST = 4;
+
+/**
+ * The kind of card a group of the game's cards is drawn as (engine/cards.ts): its picture and the colour of its back.
+ * A quest is the lantern, a ware the purse, a perk the token, a thing to do the fellow traveller looking down the
+ * road; a group this does not know is the token.
+ */
+export function kindOfGroup(group: string): string {
+  const g = group.toLowerCase();
+  if (/quest|task|job|errand|deed|bounty|mission/.test(g)) return "lantern";
+  if (/ware|good|shop|sale|sell|buy|trade|market|stock|price/.test(g)) return "purse";
+  if (/perk|gift|boon|talent|trait|feat|blessing/.test(g)) return "token";
+  if (/suggest|idea|^do\b|choice|option|hint|move|lead/.test(g)) return "companion";
+  if (/foe|fight|enemy|threat|danger/.test(g)) return "ambush";
+  if (/faction|guild|house|clan|order/.test(g)) return "warden";
+  if (/place|road|way|travel/.test(g)) return "keep";
+  if (/key|clue|secret/.test(g)) return "key";
+  return "token";
 }
 
 /**
@@ -131,8 +154,9 @@ class Card {
   faceUp = false;
   private textures: CanvasTexture[] = [];
   private mats: Material[] = [];
+  private faceMat: MeshStandardMaterial;
 
-  constructor(readonly spec: CardSpec, edge: Material) {
+  constructor(public spec: CardSpec, edge: Material) {
     this.family = cardKind(spec.kind).family;
     const tex = (c: HTMLCanvasElement | OffscreenCanvas): CanvasTexture => {
       const t = new CanvasTexture(c as HTMLCanvasElement);
@@ -141,7 +165,7 @@ class Card {
       this.textures.push(t);
       return t;
     };
-    const face = tex(cardFace(spec.kind, spec.name, spec.text, spec.title));
+    const face = tex(cardFace(spec.kind, spec.name, spec.text, spec.title, spec.line));
     const back = tex(cardBack(this.family));
     // A card gives back a little of its own light, so it can be made out in a dark room.
     const m = (t: CanvasTexture): MeshStandardMaterial => {
@@ -149,10 +173,25 @@ class Card {
       this.mats.push(mat);
       return mat;
     };
+    this.faceMat = m(face);
     // The faces of a box: +x, -x, +y (the face), -y (the back), +z, -z.
-    this.mesh = new Mesh(new BoxGeometry(CARD_W, CARD_T, CARD_H), [edge, edge, m(face), m(back), edge, edge]);
+    this.mesh = new Mesh(new BoxGeometry(CARD_W, CARD_T, CARD_H), [edge, edge, this.faceMat, m(back), edge, edge]);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
+  }
+
+  /** What is written on it has changed: its face is drawn again (its kind, and so its back, stays). */
+  redraw(spec: CardSpec): void {
+    this.spec = { ...spec, kind: this.spec.kind };
+    const old = this.faceMat.map as CanvasTexture;
+    const t = new CanvasTexture(cardFace(this.spec.kind, spec.name, spec.text, spec.title, spec.line) as HTMLCanvasElement);
+    t.colorSpace = SRGBColorSpace;
+    t.anisotropy = 4;
+    this.faceMat.map = t;
+    this.faceMat.emissiveMap = t;
+    this.faceMat.needsUpdate = true;
+    this.textures.splice(this.textures.indexOf(old), 1, t);
+    old.dispose();
   }
 
   set glow(k: number) {
@@ -567,6 +606,8 @@ export class TableCards {
     // Far across the table, the narrator's hand lets go over your side and the card slides the rest of the way.
     const handTo: Pose = rival ? to : { p: V(to.p.x * 0.6, 0.0012, -0.08), q: UP(to.q.y) };
     await this.h.tracks.run([
+      // A hand that is busy with something else finishes that first.
+      { dur: 0, until: () => !n.busy?.(arm), patience: 6 },
       { dur: 0.12, tick: () => n.reach(arm, this.deckTop()), until: () => n.reached(arm) > 0.8 && n.fingertips(arm).distanceTo(this.deckTop()) < 0.06, patience: 1.4 },
       { dur: 0.14, begin: () => n.close?.(arm, "pinch") },
       { dur: 0, begin: () => (card.mesh.visible = true) },
@@ -590,6 +631,7 @@ export class TableCards {
     const arm = 1;
     const reachAt: Pose = { p: V(card.mesh.position.x * 0.6, 0.0012, -0.08), q: card.mesh.quaternion.clone() };
     await this.h.tracks.run([
+      { dur: 0, until: () => !n.busy?.(arm), patience: 6 },
       // It is drawn back across the table to where the narrator can reach it.
       this.fly(card.mesh, () => reachAt, 0.5, 0.004),
       ...this.carry(card.mesh, arm, () => ({ p: this.deckTop(), q: DOWN(this.deck.rotation.y) }), 0.55, 0.06),
@@ -613,6 +655,51 @@ export class TableCards {
           }),
       },
     ]);
+  }
+
+  /**
+   * The cards on your side as they now should be: those no longer wanted go back to the narrator, those whose words
+   * have changed are written again where they lie, and new ones are dealt, one after another, at the end of the row.
+   * Asked again while it is still dealing, it goes on to the newest wish when the card in hand is down.
+   */
+  sync(want: CardSpec[]): Promise<void> {
+    this.wanted = want.slice(0, SIDE_MOST);
+    if (!this.syncing) this.syncing = this.syncLoop().finally(() => (this.syncing = null));
+    return this.syncing;
+  }
+  private wanted: CardSpec[] | null = null;
+  private syncing: Promise<void> | null = null;
+
+  private async syncLoop(): Promise<void> {
+    while (this.wanted) {
+      const want = this.wanted;
+      this.wanted = null;
+      for (const c of [...this.side]) if (!want.some((w) => w.id === c.spec.id)) await this.take(c.spec.id);
+      for (const w of want) {
+        const c = this.side.find((x) => x.spec.id === w.id);
+        if (!c) continue;
+        if (c.spec.name !== w.name || c.spec.title !== w.title || c.spec.text !== w.text || c.spec.line !== w.line) c.redraw(w);
+      }
+      for (const w of want) {
+        if (this.wanted) break;
+        if (!this.side.some((x) => x.spec.id === w.id)) await this.give(w);
+      }
+    }
+  }
+
+  /** The cards on your side, for checks: id and what touching it writes. */
+  get sideCards(): { id: string; name?: string; text?: string; line?: string }[] {
+    return this.side.map((c) => ({ id: c.spec.id, name: c.spec.name, text: c.spec.text, line: c.spec.line }));
+  }
+
+  /** What touching the card held up to your eyes writes for you, if anything. */
+  get lookingLine(): string | undefined {
+    return this.eyed?.spec.line;
+  }
+
+  /** Where the card held up to your eyes is, in the room. */
+  eyedAt(): Vector3 | null {
+    return this.eyed ? this.eyed.mesh.getWorldPosition(new Vector3()) : null;
   }
 
   /** The rival's dark seals: one more is pressed onto its card, up to `n`. */

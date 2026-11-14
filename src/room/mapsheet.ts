@@ -16,6 +16,12 @@ export interface MapStop {
   v: number;
   /** The last stop, where the adventure comes to a head. */
   climax?: boolean;
+  /** Known but never been to: drawn in a broken ring and a fainter hand. Unset is been to. */
+  unseen?: boolean;
+  /** How dangerous it is said to be: a small dagger in red ink for each, up to three. */
+  danger?: number;
+  /** A few words written small under its name. */
+  note?: string;
 }
 
 export interface MapSheet {
@@ -26,6 +32,62 @@ export interface MapSheet {
   paths: [string, string][];
   /** Places the narrator has inked on since: a clue pointed there (engine/clues.ts). Written down the margin in a fresh hand. */
   inked?: string[];
+  /** The places of a run (game/system.ts, Show "map"): the stops are not numbered, as there is no road to follow. */
+  unnumbered?: boolean;
+}
+
+/**
+ * Where the known places of a run go on the sheet (0..1 across and down), in the order they became known. Each is
+ * set on a grid near the first place before it that a way joins it to (or the place before it, if none does), so a
+ * place keeps its spot as more become known, and the same places always come out the same. Up to twenty fit a grid of
+ * five by four; more make a larger grid, and then everything moves once. Places past thirty are left off.
+ */
+export function layoutPlaces(places: readonly { id: string }[], ways: readonly [string, string][]): Map<string, { u: number; v: number }> {
+  const cols = places.length > 20 ? 6 : 5, rows = places.length > 20 ? 5 : 4;
+  const taken = new Map<string, [number, number]>();
+  const used = new Set<string>();
+  const out = new Map<string, { u: number; v: number }>();
+  const hash = (s: string): number => {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+    return h >>> 0;
+  };
+  let last: [number, number] | null = null;
+  for (const p of places) {
+    if (taken.has(p.id)) continue;
+    let cell: [number, number] | null = null;
+    if (!last) cell = [Math.floor(cols / 2), Math.floor(rows / 2)];
+    else {
+      const joined = ways.filter(([a, b]) => a === p.id || b === p.id).map(([a, b]) => (a === p.id ? b : a));
+      const anchor = places.map((q) => q.id).find((id) => joined.includes(id) && taken.has(id));
+      const [ac, ar] = anchor ? taken.get(anchor)! : last;
+      const h = hash(p.id);
+      let best = Infinity;
+      for (let c = 0; c < cols; c++)
+        for (let r = 0; r < rows; r++) {
+          if (used.has(`${c},${r}`)) continue;
+          const d = Math.max(Math.abs(c - ac), Math.abs(r - ar));
+          // Nearest first; among the nearest, the least crowded; then by the place's own number, so it is always the same.
+          let crowd = 0;
+          for (const [tc, tr] of taken.values()) if (Math.max(Math.abs(tc - c), Math.abs(tr - r)) === 1) crowd++;
+          const score = d * 100 + crowd * 10 + ((h >>> ((c * rows + r) % 24)) & 7);
+          if (score < best) {
+            best = score;
+            cell = [c, r];
+          }
+        }
+    }
+    if (!cell) continue;
+    taken.set(p.id, cell);
+    used.add(`${cell[0]},${cell[1]}`);
+    last = cell;
+    // Not quite on a grid: a little off it, the same way every time.
+    const h = hash(`${p.id}#`);
+    const jx = ((h & 255) / 255 - 0.5) * 0.3, jy = (((h >>> 8) & 255) / 255 - 0.5) * 0.24;
+    // Kept off the sea down the right-hand side, and clear of the title.
+    out.set(p.id, { u: 0.03 + ((cell[0] + 0.5 + jx) / cols) * 0.76, v: 0.06 + ((cell[1] + 0.5 + jy) / rows) * 0.9 });
+  }
+  return out;
 }
 
 export const MAP_PX = { w: 2048, h: 1380 };
@@ -198,32 +260,92 @@ export function drawMapSheet(sheet: MapSheet): Canvas {
   g.setLineDash([]);
 
   // The stops: an inked ring, and a name under it. The last stop is marked heavier.
+  const FAINT = "rgba(38,24,14,.5)";
   sheet.stops.forEach((s, i) => {
     const x = X(s.u), y = Y(s.v);
-    g.fillStyle = "rgba(226,202,156,.92)";
-    g.strokeStyle = INK;
+    const ink = s.unseen ? FAINT : INK;
+    g.fillStyle = s.unseen ? "rgba(226,202,156,.55)" : "rgba(226,202,156,.92)";
+    g.strokeStyle = ink;
     g.lineWidth = s.climax ? 6 : 4;
+    if (s.unseen) g.setLineDash([9, 8]);
     g.beginPath();
     g.arc(x, y, s.climax ? 31 : 25, 0, Math.PI * 2);
     g.fill();
     g.stroke();
+    g.setLineDash([]);
     if (s.climax) {
       g.lineWidth = 2;
       g.beginPath();
       g.arc(x, y, 40, 0, Math.PI * 2);
       g.stroke();
     }
-    g.fillStyle = s.climax ? "rgba(120,20,14,.9)" : INK;
-    g.font = `italic 600 ${s.climax ? 32 : 27}px ${SERIF}`;
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillText(String(i + 1), x, y + 2);
-    g.font = `italic 600 38px ${SERIF}`;
+    if (!sheet.unnumbered) {
+      g.fillStyle = s.climax ? "rgba(120,20,14,.9)" : INK;
+      g.font = `italic 600 ${s.climax ? 32 : 27}px ${SERIF}`;
+      g.fillText(String(i + 1), x, y + 2);
+    } else if (!s.unseen) {
+      // Been there: a dot of ink in the ring.
+      g.fillStyle = INK;
+      g.beginPath();
+      g.arc(x, y, 7, 0, Math.PI * 2);
+      g.fill();
+    }
+    // Danger: small daggers in red ink, to the right of the ring.
+    for (let d = 0; d < Math.min(3, Math.max(0, Math.round(s.danger ?? 0))); d++) {
+      const dx = x + 40 + d * 22, dy = y - 4;
+      g.strokeStyle = "rgba(120,20,14,.9)";
+      g.lineWidth = 4;
+      g.beginPath();
+      g.moveTo(dx, dy - 20);
+      g.lineTo(dx, dy + 16);
+      g.moveTo(dx - 9, dy + 6);
+      g.lineTo(dx + 9, dy + 6);
+      g.stroke();
+    }
+    // The name, as large as fits the room a place has (two lines for a long one), and a note under it.
+    let size = 38;
+    let rows = [s.name];
+    const most = sheet.unnumbered ? 330 : 1e9;
+    for (; size >= 26; size -= 2) {
+      g.font = `italic 600 ${size}px ${SERIF}`;
+      if (g.measureText(s.name).width <= most) break;
+    }
+    if (g.measureText(s.name).width > most) {
+      const words = s.name.split(/\s+/);
+      let cut = 1, bestW = Infinity;
+      for (let k = 1; k < words.length; k++) {
+        const w = Math.max(g.measureText(words.slice(0, k).join(" ")).width, g.measureText(words.slice(k).join(" ")).width);
+        if (w < bestW) {
+          bestW = w;
+          cut = k;
+        }
+      }
+      if (words.length > 1) rows = [words.slice(0, cut).join(" "), words.slice(cut).join(" ")];
+    }
     g.lineWidth = 9;
-    g.strokeStyle = "rgba(226,202,156,.85)";
-    g.strokeText(s.name, x, y + 64);
-    g.fillStyle = INK;
-    g.fillText(s.name, x, y + 64);
+    rows.forEach((row, k) => {
+      const ry = y + 64 + k * size * 1.05;
+      g.strokeStyle = "rgba(226,202,156,.85)";
+      g.strokeText(row, x, ry);
+      g.fillStyle = ink;
+      g.fillText(row, x, ry);
+    });
+    if (s.note) {
+      g.font = `italic 26px ${SERIF}`;
+      let note = s.note;
+      if (g.measureText(note).width > 340) {
+        while (note.length > 1 && g.measureText(`${note}…`).width > 340) note = note.slice(0, -1);
+        note = `${note.trimEnd()}…`;
+      }
+      const ny = y + 64 + rows.length * size * 1.05 + 4;
+      g.lineWidth = 7;
+      g.strokeStyle = "rgba(226,202,156,.85)";
+      g.strokeText(note, x, ny);
+      g.fillStyle = FAINT;
+      g.fillText(note, x, ny);
+    }
   });
 
   // The title, top left, with a rule under it.

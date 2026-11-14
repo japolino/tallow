@@ -62,7 +62,8 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   check("a sheet is written from the card", await until(`localStorage.getItem(${JSON.stringify(KEY)})`, 40000));
   check("for the name on the page, with the game's attributes", (await run<string>("run.sheet.name + ' ' + run.sheet.attributes.dexterity + ' ' + run.sheet.skills.length")) === "Ash 6 8", String(await run("run.sheet.name + ' ' + run.sheet.attributes.dexterity + ' ' + run.sheet.skills.length")));
   check("the opening is said, and how to play", await until(`${heard("Lamplighters' Stair")} && ${heard("Write what you do")}`, 30000));
-  check("your sheets lie by your hand", await until("room.desk.sheaf.length === 3", 10000), String(await page.run("room.desk.sheaf.length")));
+  // Your own three, and each system's pages after them.
+  check("your sheets lie by your hand", await until("room.desk.sheaf.length >= 3", 10000), String(await page.run("room.desk.sheaf.length")));
   check("you are asked to write", await until(ASKED, 40000));
   await page.wait(600);
   await shot("01-opened");
@@ -87,9 +88,125 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   // What happened last lies written out beside the notebook.
   check("the turn is written out beside the notebook", await page.run<boolean>("room.desk.lastTurn?.writing.mine.includes('I sneak up the stair') && room.desk.lastTurn.writing.his.some((t) => t.includes('more frightened than you are')) && room.desk.lastTurn.writing.his.some((t) => t.includes('on the die'))"), JSON.stringify(await page.run("room.desk.lastTurn?.writing.his.map((t) => t.slice(0, 24))")));
 
-  // A long line: written at one size, a full page is turned and the line goes on, and none of it is lost.
   // The field the keys go into is the one with the keyboard, inside the room's own shadow tree.
   const FIELD = "(() => { let a = document.activeElement; while (a?.shadowRoot?.activeElement) a = a.shadowRoot.activeElement; return a; })()";
+  /** Rub out what is on the pad and shut the notebook. */
+  const rubOut = async (): Promise<void> => {
+    await page.run(`(${FIELD}.value = "", ${FIELD}.dispatchEvent(new Event("input")), 1)`);
+    await page.wait(300);
+    await page.key("Escape");
+    await page.wait(500);
+  };
+  /**
+   * Touch something of the desk's with the mouse (desk.ts, screenOf). The view follows the pointer a little, so the
+   * pointer is brought over it, the view let settle, and brought over it again before the click.
+   */
+  const touch = async (what: string): Promise<boolean> => {
+    let at: { x: number; y: number } | null = null;
+    for (let i = 0; i < 4; i++) {
+      at = await page.run<{ x: number; y: number } | null>(`room.desk.screenOf(${JSON.stringify(what)})`);
+      if (!at) return false;
+      await page.mouse("move", at.x, at.y);
+      await page.wait(500);
+    }
+    await page.mouse("down", at!.x, at!.y);
+    await page.mouse("up", at!.x, at!.y);
+    return true;
+  };
+
+  // What the systems put on the table, driven straight from here so every kind and every change is seen whatever the
+  // run has come to: a map of known places, cards on your side, meters in the reckoning's frame and counters on its slip.
+  // The next real turn lays out what the systems themselves show instead.
+  const FIRST = [
+    {
+      kind: "map",
+      title: "The Lamplighters' Quarter",
+      places: [
+        { id: "stair", name: "The Lamplighters' Stair", seen: true },
+        { id: "mill", name: "The Old Mill", seen: false, danger: 2, note: "smoke by night" },
+        { id: "market", name: "Night Market", seen: true },
+        { id: "chapel", name: "Drowned Chapel", seen: false, danger: 1 },
+        { id: "gate", name: "River Gate", seen: true },
+      ],
+      ways: [["stair", "mill"], ["stair", "market"], ["market", "chapel"], ["market", "gate"]],
+      at: "stair",
+    },
+    { kind: "card", id: "q1", group: "quest", title: "The Boy's Errand", text: "Find out who sent the boy with the hooked knife, and why.", line: "I ask the boy who sent him." },
+    { kind: "card", id: "w1", group: "wares", title: "Lamp Oil", text: "A flask of good oil, enough for a night. Three coins.", line: "I buy the lamp oil." },
+    { kind: "card", id: "p1", group: "perk", title: "Night Eyes", text: "You see in the dark as well as others do at dusk." },
+    { kind: "bar", id: "b1", group: "needs", name: "Hunger", value: 3, max: 10, good: "down" },
+    { kind: "bar", id: "b2", group: "fight", name: "The boy's nerve", value: 6, max: 8, good: "none", note: "wavering" },
+    { kind: "tokens", id: "t1", name: "Saves from death", count: 2, max: 3 },
+  ];
+  const SECOND = [
+    {
+      ...FIRST[0],
+      places: [...(FIRST[0] as { places: { id: string; seen: boolean }[] }).places.map((p) => (p.id === "mill" ? { ...p, seen: true } : p)), { id: "well", name: "The Sunken Well by the Ferry Steps", seen: false, note: "the boy ran this way" }],
+      ways: [...(FIRST[0] as { ways: string[][] }).ways, ["gate", "well"]],
+      at: "market",
+    },
+    { ...FIRST[1], text: "The boy says a woman in grey sent him. Find her before she finds you." },
+    FIRST[3],
+    { kind: "card", id: "s1", group: "suggestion", title: "Follow the smoke", text: "Smoke rises from the mill though nobody works there now.", line: "I follow the smoke toward the Old Mill." },
+    { kind: "card", id: "x1", group: "wares", title: "Rope", text: "Thirty feet of hemp rope. Two coins." },
+    { kind: "card", id: "x2", group: "wares", title: "Hooded Lantern", text: "A lantern that can be shut to a sliver. Five coins." },
+    { kind: "card", id: "x3", group: "wares", title: "Chalk", text: "A stick of white chalk. One coin." },
+    { ...FIRST[4], value: 5 },
+    { kind: "bar", id: "b4", group: "fight", name: "Grey woman's guard", value: 14, max: 20, good: "down" },
+    { kind: "bar", id: "b3", group: "needs", name: "Fatigue", value: 2, max: 6, good: "down" },
+    { ...FIRST[6], count: 1 },
+  ];
+  const sideIds = "room.desk.cards.sideCards.map((c) => c.id).join(' ')";
+  const piece = "[...room.pieces.values()].find((p) => p.kind === 'player')";
+
+  await page.run(`(room.show(${JSON.stringify(FIRST)}), 1)`);
+  check("the map is unrolled with your piece where you are", await until(`room.mapMesh.visible && room.mapMesh.scale.z > 0.99 && ${piece}.mesh.visible && ${piece}.at === 'stair'`, 10000));
+  check("the cards are dealt to your side", await until(`${sideIds} === 'quest:q1 wares:w1 perk:p1'`, 20000), String(await page.run(sideIds)));
+  const tally = "JSON.stringify(room.desk.tally.state)";
+  check("the meters stand in the frame, the counters lie on their slip", await until(`(() => { const s = room.desk.tally.state; return s.up && s.rows.map((r) => r.name + ' ' + r.k + '/' + r.n).join(', ') === 'Hunger 3/10, The boy\\'s nerve 6/8' && s.slips.length === 1 && s.slips[0].stones === 2; })()`, 15000), String(await page.run(tally)));
+  await page.wait(1500);
+  await shot("09-shown");
+
+  // The reckoning, leaned over to be read.
+  check("touching the reckoning leans you over it", (await touch("tally")) && (await until("room.desk.glance.k > 0.95", 5000)));
+  await page.wait(500);
+  await shot("10-reckoning");
+  await page.mouse("down", 640, 300);
+  await page.mouse("up", 640, 300);
+  check("and touching the table again sits you back", await until("room.desk.glance.k < 0.05", 5000));
+
+  // Touching a place writes a line that goes there; nothing is sent.
+  const turnBefore = await run<number>("run.turn");
+  check("touching a place on the map writes the line that goes there", (await touch("place:mill")) && (await until("room.desk.mode === 'writing' && room.desk.draft === 'I go to the Old Mill.'", 5000)), String(await page.run("room.desk.draft")));
+  await page.wait(900);
+  await shot("11-place-written");
+  check("and does not send it", (await run<number>("run.turn")) === turnBefore && (await page.run<boolean>("room.desk.inviting")));
+  await rubOut();
+
+  // A card is picked up to be read; touching it again writes its line.
+  check("touching a card picks it up to read", (await touch("card:0")) && (await until("room.desk.cards.lookingAt === 0", 5000)));
+  await page.wait(600);
+  await shot("12-card-held");
+  check("touching it again writes the line pencilled on it", (await touch("held")) && (await until("room.desk.mode === 'writing' && room.desk.draft === 'I ask the boy who sent him.'", 5000)), String(await page.run("room.desk.draft")));
+  await rubOut();
+
+  // A second list: what is the same stays, the rest is added, changed and taken away.
+  await page.run(`(room.show(${JSON.stringify(SECOND)}), 1)`);
+  check("a card no longer shown goes back, a changed one is written again, new ones are dealt, four at most", await until(`${sideIds} === 'quest:q1 perk:p1 suggestion:s1 wares:x1'`, 30000), String(await page.run(sideIds)));
+  check("the changed card has its new words", await page.run<boolean>("room.desk.cards.sideCards[0].text.startsWith('The boy says')"));
+  check("the meters change, grouped as they come", await until(`room.desk.tally.state.rows.map((r) => r.name + ' ' + r.k + '/' + r.n).join(', ') === "Hunger 5/10, Fatigue 2/6, Grey woman's guard 7/10"`, 5000), String(await page.run(tally)));
+  check("a stone is taken back", await until("room.desk.tally.state.slips[0]?.stones === 1", 15000), String(await page.run(tally)));
+  check("your piece walks to where you are now", await until(`${piece}.at === 'market' && !${piece}.move`, 10000));
+  check("the new place is on the map", await page.run<boolean>("room.stops.has('well') && room.desk.places.some((p) => p.line === 'I look around Night Market.')"));
+  await page.wait(1500);
+  await shot("13-changed");
+  // And the writing view, with all of it out.
+  await page.type("I ");
+  await page.wait(1200);
+  await shot("14-writing-with-shows");
+  await rubOut();
+
+  // A long line: written at one size, a full page is turned and the line goes on, and none of it is lost.
   const long = Array.from({ length: 60 }, (_, i) => `Step ${i + 1}: I keep to the wall and count the lamps as I pass under them.`).join(" ");
   await page.type("I ");
   await page.wait(900);
@@ -130,6 +247,11 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   await write("I look the quarter over and ask her what she saw.");
   check("a line with nothing in doubt is told without a die", await until(`(() => { const run = JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})).run; return run.turn === 2; })()`, 40000));
   check("and no check was called for", !(await page.run<boolean>(`window.heard.slice(${said}).some((t) => t.includes("I take it you mean"))`)));
+  // The turn laid out what the systems themselves show: everything laid out from here that they do not show is taken away.
+  const gone = `(() => { const s = room.desk.tally.state; return !room.desk.cards.sideCards.some((c) => /^(quest:q1|perk:p1|suggestion:s1|wares:x)/.test(c.id)) && !s.rows.some((r) => /Hunger|Fatigue|Grey woman/.test(r.name)) && !s.slips.some((x) => x.name === 'Saves from death') && !room.stops.has('well'); })()`;
+  check("what the systems no longer show is taken away, and what they show is laid out", await until(gone, 30000), `${await page.run(sideIds)} | ${await page.run(tally)} | ${await page.run("[...room.stops.keys()].join(' ')")}`);
+  await page.wait(2500);
+  await shot("18-systems-own");
 
   // Left and come back to: the run is taken up.
   await until(ASKED, 40000);
@@ -140,7 +262,7 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   // It is said at once, perhaps before this script is listening: what is being said is read too.
   check("the run is taken up where it was left", await until(`${heard("We were in the middle of things, at The Lamplighters' Stair")} || (room.desk.voice.live?.textContent ?? "").includes("We were in the middle of things, at The Lamplighters' Stair")`, 30000));
   check("a turn further on than it began", (await run<number>("run.turn")) === 2);
-  check("with its sheets", await until("room.desk.sheaf.length === 3", 10000));
+  check("with its sheets", await until("room.desk.sheaf.length >= 3", 10000), String(await page.run("room.desk.sheaf.length")));
 
   // Begun again by its command.
   await write("new game");
@@ -148,6 +270,30 @@ await withPage({ port: Number(process.env.TALLOW_PORT ?? 4187), width: W, height
   await until(ASKED, 40000);
   await page.wait(600);
   await shot("04-again");
+
+  // On a phone held upright: everything shown is still on the table and in the picture, and the notebook still clear.
+  await page.size(390, 844);
+  await page.wait(1200);
+  await page.run(`(room.show(${JSON.stringify(SECOND)}), 1)`);
+  check("on a phone, the cards are dealt", await until(`room.desk.cards.sideCards.length === 4`, 30000), String(await page.run(sideIds)));
+  await until("room.desk.tally.state.slips[0]?.stones === 1 && room.mapMesh.scale.z > 0.99", 15000);
+  const inView = async (what: string): Promise<boolean> => {
+    // In the page's own pixels: an emulated phone lays the page out wider than the picture it gives.
+    const at = await page.run<{ x: number; y: number; w: number; h: number } | null>(`(() => { const p = room.desk.screenOf(${JSON.stringify(what)}); return p && { ...p, w: innerWidth, h: innerHeight }; })()`);
+    return !!at && at.x > 0 && at.x < at.w && at.y > 0 && at.y < at.h;
+  };
+  const seen: string[] = [];
+  for (const what of ["tally", "card:0", "card:3", "place:well", "place:stair", "book", "pile", "sheaf"]) if (!(await inView(what))) seen.push(`${what} at ${JSON.stringify(await page.run(`room.desk.screenOf(${JSON.stringify(what)})`))}`);
+  check("on a phone, the reckoning, the cards, the places and your things are all in the picture", seen.length === 0, seen.join(", "));
+  await page.wait(1200);
+  await shot("15-phone");
+  check("on a phone, touching a place writes its line", (await touch("place:gate")) && (await until("room.desk.mode === 'writing' && room.desk.draft === 'I go to River Gate.'", 5000)), String(await page.run("room.desk.draft")));
+  await page.wait(1200);
+  await shot("16-phone-writing");
+  await rubOut();
+  check("on a phone, the reckoning can be leaned over", (await touch("tally")) && (await until("room.desk.glance.k > 0.95", 5000)));
+  await page.wait(500);
+  await shot("17-phone-reckoning");
   const problems = page.problems.filter((p) => !/GPU stall|GL Driver|WebGL|no model in the pretend host|fell back/.test(p));
   check("no errors in the page", problems.length === 0, problems.slice(0, 4).join(" | "));
 });

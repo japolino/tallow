@@ -2,6 +2,13 @@
  * The table as the game sees it: what the narrator and the player can do across it. The room plays it with its own
  * things (roomtable.ts); nothing here decides anything.
  */
+import type { Show } from "./system.js";
+
+/**
+ * The most cards a table lays out on your side at once (room/tablecards.ts, SIDE_MOST); the rest are written in your
+ * sheets instead (runsit.ts).
+ */
+export const CARDS_OUT = 4;
 
 /** What the narrator is seen doing while a model is asked: reading your page, thinking it over, or shuffling the deck. */
 export type Beat = "read" | "tell" | "deal";
@@ -40,4 +47,10 @@ export interface Table {
   notes?(w: { mine?: string; heading?: string; his: string[] }): void;
   /** Pencil notes in the margin of your notebook, in your own hand. */
   margin?(notes: string[]): Promise<void>;
+  /**
+   * What the run's systems put on the table, the whole list every time it changes: the table keeps what is the same,
+   * and adds, changes and takes away the rest. Touching a place or a card only ever writes a line for the player to
+   * send or change; nothing in the game waits on these things.
+   */
+  show?(shows: Show[]): void;
 }

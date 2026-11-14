@@ -9,10 +9,14 @@
  * the page back; you hold it up to read, and setting it down adds it to the
  * pile by your right hand, which you can pick up again and leaf through.
  *
- * What the narrator says is its voice (voice.ts). What you carry and how a
- * check stands are counters and a balance (counters.ts). The keys really go
- * into a text field nobody sees, so phones, dictation and screen readers
- * work as they do anywhere else.
+ * What the narrator says is its voice (voice.ts). What the game's systems
+ * put on the table (show) lies on your side: cards in a row between your
+ * sheets and the pile (tablecards.ts), and at the left the reckoning, beads
+ * on wires for a meter and stones on a slip for counters (tally.ts). A run's
+ * map is the room's (room.ts). Touching a place on it, or the line pencilled
+ * on a card, writes that line in the notebook for you to send or change; it
+ * never sends it. The keys really go into a text field nobody sees, so
+ * phones, dictation and screen readers work as they do anywhere else.
  */
 import { sound } from "./sound.js";
 import { BoxGeometry, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Material, type Object3D, type PerspectiveCamera, type Scene } from "three";
@@ -23,9 +27,17 @@ import { LuckTray } from "./luck.js";
 import { Roster } from "./roster.js";
 import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
 import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
-import { TableCards } from "./tablecards.js";
+import { kindOfGroup, SIDE_MOST, TableCards } from "./tablecards.js";
+import { Reckoning } from "./tally.js";
 import { ease, Held, Tracks, type Reacher, type Step } from "./track.js";
 import { Voice } from "./voice.js";
+import type { Show } from "../game/system.js";
+
+/** The line touching a place on a run's map writes: going there, or, for where you are, looking about it. */
+export function placeLine(name: string, here: boolean): string {
+  const n = name.trim().replace(/^the\s/i, "the ");
+  return here ? `I look around ${n}.` : `I go to ${n}.`;
+}
 
 /** The narrator's hands as the desk uses them: reaching, and (where the hands can) closing on a thing and letting go. */
 export type Hands = Reacher & {
@@ -150,6 +162,10 @@ export class Desk {
   readonly glance = { eye: V(-0.3, 0.34, 0.58), look: V(-0.64, 0.12, -0.2), fov: 32, k: 0 };
   /** The cards: the road dealt on the map, a fork laid out, and what is dealt to your side. */
   readonly cards: TableCards;
+  /** The reckoning at the left of the table: meters as beads on wires, counters as stones on slips (tally.ts). */
+  readonly tally: Reckoning;
+  /** The places on a run's map that a touch writes a line for, while it is out (room.ts sets them). */
+  places: { id: string; line: string }[] = [];
   private glanceFov = 32;
   /** Called when you reach for the dice box (set by the game while a throw is wanted). */
   onDie: (() => void) | null = null;
@@ -229,6 +245,10 @@ export class Desk {
     this.counters = new Counters(h.narrator, this.tracks, h.reduced);
     this.voice = new Voice(h.host, h.reduced);
     this.group.add(this.counters.group);
+    // The balance and its piles are of the earlier game; the reckoning stands where the balance stood.
+    this.counters.group.visible = false;
+    this.tally = new Reckoning(h.narrator, this.tracks, h.reduced);
+    this.group.add(this.tally.group);
     this.dread = new DreadBowl(h.narrator, this.tracks, h.reduced);
     this.group.add(this.dread.group);
     this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
@@ -390,6 +410,43 @@ export class Desk {
     p.leaf = 0;
     p.draw();
     if (this.notesWant) this.tell(p);
+  }
+
+  /**
+   * What the game's systems put on your side, the whole list every time (the map is the room's): cards dealt to the
+   * row between your sheets and the pile, the first five of them; meters in the reckoning's frame, grouped as they
+   * come, the first four; counters on its slips, the first three. What is the same stays as it lies.
+   */
+  show(shows: Show[]): void {
+    const word = (g: string): string => (g ? g[0]!.toUpperCase() + g.slice(1) : "");
+    const cards = shows.flatMap((s) => (s.kind === "card" ? [s] : []));
+    void this.cards.sync(cards.slice(0, SIDE_MOST).map((c) => ({ id: `${c.group}:${c.id}`, kind: kindOfGroup(c.group), name: c.title, title: word(c.group), text: c.text, ...(c.line ? { line: c.line } : {}) })));
+    const bars = shows.flatMap((s) => (s.kind === "bar" ? [s] : []));
+    const groups = [...new Set(bars.map((b) => b.group))];
+    this.tally.meters([...bars].sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group)));
+    this.tally.kept(shows.flatMap((s) => (s.kind === "tokens" ? [s] : [])));
+  }
+
+  /**
+   * Write a line in the notebook for the player, as if they had written it, ready to send or change: the notebook is
+   * opened if it can be, and what was on the pad already is kept, the line going after it. It is never sent from here.
+   * When the narrator is not waiting for a line, it waits on the pad until the notebook is next opened.
+   */
+  writeIn(text: string): void {
+    const line = text.replace(/\s+/g, " ").trim();
+    if (!line) return;
+    if (this.mode === "idle" && this.wanted) this.open();
+    this.sheet ??= this.padPage();
+    const before = this.field.value.replace(/\s+$/, "");
+    this.field.value = (before ? `${before} ${line}` : line).slice(0, MOST);
+    this.notesWant = false;
+    this.setDraft(this.field.value.replace(/\n/g, " "));
+    this.scribble = 1;
+    sound.write(this.pencil.position.x);
+    if (this.mode === "writing") {
+      this.field.focus({ preventScroll: true });
+      this.field.setSelectionRange(this.field.value.length, this.field.value.length);
+    }
   }
 
   /** Turn from the notebook to what happened last, or back to the notebook. */
@@ -1184,6 +1241,49 @@ export class Desk {
     return best;
   }
 
+  /** Which place on a run's map the pointer is over, or -1. */
+  private placeAt(e: { clientX: number; clientY: number }): number {
+    let best = -1, near = 0.035;
+    this.places.forEach((p, i) => {
+      const at = this.h.stops?.get(p.id);
+      const d = at ? this.far(e, at) : Infinity;
+      if (d < near) {
+        near = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  /** Whether the pointer is over the reckoning: its frame, or a slip of counters. */
+  private onTally(e: { clientX: number; clientY: number }): boolean {
+    return this.tally.spots().some((at) => this.far(e, at) < 0.06);
+  }
+
+  /** Lean over the reckoning to read it, for a few seconds or until you touch the table again. */
+  private lookTally(): void {
+    const v = this.tally.view();
+    this.lookAt(v.eye, v.look, 30, Promise.resolve(), 6);
+  }
+
+  /**
+   * Where on the screen something of yours is drawn, for scripted checks: "place:<id>" on a run's map, "card:<i>" on
+   * your side, "held" for a card held up to read, "tally" for the reckoning, or the notebook and the rest (where).
+   */
+  screenOf(what: string): { x: number; y: number } | null {
+    let at: Vector3 | null | undefined = null;
+    if (what.startsWith("place:")) at = this.h.stops?.get(what.slice(6));
+    else if (what.startsWith("card:")) at = this.cards.sideAt()[Number(what.slice(5))];
+    else if (what === "held") at = this.cards.eyedAt();
+    else if (what === "tally") at = this.tally.spots()[0];
+    else if (["book", "notes", "pile", "sheaf", "box"].includes(what)) at = this.where(what as "book");
+    if (!at) return null;
+    const r = this.h.host.getBoundingClientRect();
+    const p = at.clone().project(this.h.camera);
+    if (p.z > 1) return null;
+    return { x: r.left + ((p.x + 1) / 2) * r.width, y: r.top + ((1 - p.y) / 2) * r.height };
+  }
+
   /** What the pointer is over that a click would use. */
   private over(e: { clientX: number; clientY: number }): "book" | "notes" | "pile" | "sheaf" | "box" | "card0" | "card1" | null {
     if (this.cards.choosing) {
@@ -1224,6 +1324,8 @@ export class Desk {
     const free = this.mode === "idle" || this.mode === "writing";
     this.cards.sideHover = free ? this.sideCard(e) : -1;
     if (this.cards.sideHover >= 0 || this.cards.looking) return true;
+    // A place on a run's map writes a line that goes there; the reckoning can be leaned over and read.
+    if (this.mode === "idle" && (this.placeAt(e) >= 0 || this.onTally(e))) return true;
     return this.mode === "holding" || this.mode === "reading" || this.voice.speaking || this.glanceWant > 0 || (this.mode === "idle" && !!on) || (this.mode === "writing" && on === "notes");
   }
 
@@ -1243,8 +1345,16 @@ export class Desk {
       this.cards.choosing?.(pick === "card0" ? 0 : 1);
       return true;
     }
-    // A card held up to your eyes: touching another card on your side shows that one instead; anywhere else puts it back.
+    // A card held up to your eyes: touching it again writes the line pencilled on it, if it has one; touching another
+    // card on your side shows that one instead; anywhere else puts it back.
     if (this.cards.looking) {
+      const line = this.cards.lookingLine;
+      const held = this.cards.eyedAt();
+      if (line && held && this.far(e, held) < 0.3) {
+        void this.cards.unlook();
+        this.writeIn(line);
+        return true;
+      }
       const i = this.sideCard(e);
       void (i >= 0 && i !== this.cards.lookingAt ? this.cards.look(i) : this.cards.unlook());
       return true;
@@ -1267,6 +1377,17 @@ export class Desk {
     if (this.glanceWant) {
       this.lookBack();
       return true;
+    }
+    if (this.mode === "idle") {
+      if (this.onTally(e)) {
+        this.lookTally();
+        return true;
+      }
+      const place = this.placeAt(e);
+      if (place >= 0) {
+        this.writeIn(this.places[place]!.line);
+        return true;
+      }
     }
     if (this.mode === "busy") return true;
     if (this.mode === "holding") {
@@ -1316,7 +1437,12 @@ export class Desk {
     const looking = this.cards.lookingAt;
     if (looking >= 0 && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.cards.look(Math.max(0, looking - 1));
     else if (looking >= 0 && (e.key === "ArrowRight" || e.key === "ArrowDown")) void this.cards.look(looking + 1);
-    else if (looking >= 0 && (go || e.key === "Escape")) void this.cards.unlook();
+    else if (looking >= 0 && e.key === "Enter" && this.cards.lookingLine) {
+      // Enter on a card held up writes the line pencilled on it.
+      const line = this.cards.lookingLine;
+      void this.cards.unlook();
+      this.writeIn(line);
+    } else if (looking >= 0 && (go || e.key === "Escape")) void this.cards.unlook();
     else if (go && this.voice.hurry()) used = true;
     else if (this.mode === "holding" && (go || e.key === "Escape")) void this.setDown();
     else if (this.mode === "reading" && (e.key === "ArrowLeft" || e.key === "ArrowUp")) void this.leaf(-1);
@@ -1362,6 +1488,8 @@ export class Desk {
     this.luck.update(t);
     this.dice.update(t);
     this.counters.update(dt);
+    this.tally.place(this.h.camera.aspect < 1);
+    this.tally.update(dt);
     this.voice.update(t, dt);
 
     const writing = this.mode === "writing";
@@ -1481,6 +1609,7 @@ export class Desk {
     this.read.remove();
     this.voice.dispose();
     this.counters.dispose();
+    this.tally.dispose();
     this.dread.dispose();
     this.luck.dispose();
     this.dice.dispose();

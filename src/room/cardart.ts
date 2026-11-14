@@ -22,6 +22,8 @@ const GOLD_DARK = "#7d5f22";
 const INK = "#1b130d";
 const PAPER = "#e9dcb8";
 const SERIF = `"Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif`;
+/** Your own hand, in pencil (the same as on your pages, paper.ts). */
+const HAND = '"Segoe Print", "Ink Free", "Bradley Hand", "Comic Sans MS", cursive';
 const TAU = Math.PI * 2;
 
 /** Each family's sky: its top, its foot, and the light that glows behind the picture. The second is the colour of its back. */
@@ -713,8 +715,11 @@ function wrap(g: G, text: string, width: number): string[] {
   return lines;
 }
 
-/** The panel under the picture of a card that does something: its kind in red, and what it does, as large as fits. */
-function panel(g: G, top: number, title: string, text: string): void {
+/**
+ * The panel under the picture of a card that does something: its kind in red, and what it does, as large as fits.
+ * With a line, what touching the card writes for you is pencilled across the foot of the panel, under a rule.
+ */
+function panel(g: G, top: number, title: string, text: string, line?: string): void {
   const x = 36, w = W - 72, foot = H - 34;
   const fill = g.createLinearGradient(0, top, 0, foot);
   fill.addColorStop(0, "#efe4c8");
@@ -740,7 +745,9 @@ function panel(g: G, top: number, title: string, text: string): void {
   g.moveTo(W / 2 - 40, top + 22);
   g.lineTo(W / 2 + 40, top + 22);
   g.stroke();
-  const room = foot - top - 34;
+  // The pencilled line takes the panel's last two rows of handwriting.
+  const said = line ? 34 : 0;
+  const room = foot - top - 34 - said;
   let size = 16, lines: string[] = [];
   for (size = 16; size > 7; size -= 0.5) {
     g.font = `${size}px ${SERIF}`;
@@ -751,6 +758,26 @@ function panel(g: G, top: number, title: string, text: string): void {
   const lh = size * 1.22;
   const y0 = top + 28 + (room - lines.length * lh) / 2 + size;
   lines.forEach((l, i) => g.fillText(l, W / 2, y0 + i * lh));
+  if (line) {
+    const rule = foot - said - 2;
+    g.strokeStyle = "rgba(52,53,59,0.45)";
+    g.lineWidth = 0.7;
+    g.beginPath();
+    g.moveTo(x + 14, rule);
+    g.lineTo(x + w - 14, rule);
+    g.stroke();
+    g.fillStyle = "#34353b";
+    let s = 12;
+    let rows: string[] = [];
+    for (; s > 7; s -= 0.5) {
+      g.font = `${s}px ${HAND}`;
+      rows = wrap(g, line, w - 16);
+      if (rows.length <= 2) break;
+    }
+    rows = rows.slice(0, 2);
+    const mid = rule + said / 2, rh = s * 1.15;
+    rows.forEach((r, i) => g.fillText(r, W / 2, mid - ((rows.length - 1) * rh) / 2 + s * 0.35 + i * rh));
+  }
 }
 
 /** Old paper's grain over everything, so the flat colours look printed and worn, and the edges a little darker. */
@@ -769,13 +796,14 @@ function wear(g: G, seed: number): void {
 
 /**
  * The face of a card: picture, frame, the ribbon with its title, and a name over it if it has one. A card with
- * words (what it does) has a smaller picture, its name on the ribbon, and the words in a panel under it.
+ * words (what it does) has a smaller picture, its name on the ribbon, and the words in a panel under it; `line`, what
+ * touching it writes for you, is pencilled at the foot of that panel.
  */
-export function cardFace(kindId: string, name?: string, text?: string, title?: string): Canvas {
+export function cardFace(kindId: string, name?: string, text?: string, title?: string, line?: string): Canvas {
   const [c, g] = mk(CARD_PX.w, CARD_PX.h);
   g.scale(SCALE, SCALE);
   const k = cardKind(kindId);
-  const told = !!text;
+  const told = !!text || !!line;
   const foot = told ? 286 : 392;
   g.fillStyle = "#120c08";
   g.fillRect(0, 0, W, H);
@@ -808,7 +836,7 @@ export function cardFace(kindId: string, name?: string, text?: string, title?: s
   frame(g);
   if (told) {
     ribbon(g, foot - 10, name ?? title ?? k.title, 22);
-    panel(g, foot + 44, name ? `${title ?? k.title}` : "", text!);
+    panel(g, foot + 44, name ? `${title ?? k.title}` : "", text ?? "", line);
   } else {
     ribbon(g, 404, title ?? k.title);
     if (name) plate(g, name, 344);

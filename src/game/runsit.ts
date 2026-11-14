@@ -7,9 +7,10 @@
  * now stand. Nothing here decides anything: every number is the run's.
  */
 import { ATTRIBUTES, MAX_HP, outcomeName, spend, standingWord, xpToNext, type Attribute, type Roll, type Run } from "../engine/run.js";
-import type { Table, Written } from "./table.js";
+import { CARDS_OUT, type Table, type Written } from "./table.js";
 import { firstJson } from "./ask.js";
-import { begin, judgeTurn, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
+import { begin, judgeTurn, pagesOf, showsOf, tellTurn, type Card, type Judging, type RunDeps } from "./runturn.js";
+import type { Show } from "./system.js";
 
 export interface RunSitOptions {
   table: Table;
@@ -67,6 +68,19 @@ export function runSheets(r: Run): { heading: string; his: string[] }[] {
   ];
 }
 
+/**
+ * All your sheets: the character's own (runSheets), each system's pages, and, last, the cards the systems show that
+ * are more than the table lays out (table.ts, CARDS_OUT), so nothing shown is lost.
+ */
+export function allSheets(d: RunDeps, r: Run, shows: Show[]): { heading: string; his: string[] }[] {
+  const over = shows.flatMap((s) => (s.kind === "card" ? [s] : [])).slice(CARDS_OUT);
+  return [
+    ...runSheets(r),
+    ...pagesOf(d, r),
+    ...(over.length ? [{ heading: "Not on the table", his: over.map((c) => `${c.title}${c.group ? ` (${c.group})` : ""}: ${c.text}`) }] : []),
+  ];
+}
+
 /** How a run opens, as the page beside your notebook: there is nothing of yours on it yet. */
 const openingNotes = (r: Run): { heading: string; his: string[] } => ({ heading: r.place.name || "How it begins", his: paragraphs(r.opening) });
 
@@ -110,13 +124,48 @@ async function placePoints(d: RunDeps, r: Run, line: string): Promise<string[]> 
   return told;
 }
 
+/** Which cards most want the little room there is: a choice that is open now, then what suits the moment, then reminders. */
+const CARD_RANK: [RegExp, number, number][] = [
+  [/perk|knack/i, 0, 3],
+  [/fight|foe|contest/i, 1, 3],
+  [/choice|suggest/i, 2, 3],
+  [/ware|shop|merchant|goods/i, 3, 3],
+  [/quest/i, 4, 2],
+];
+/**
+ * What the systems show, with the cards in the order the table should lay them: the first few of each kind, the most
+ * pressing kinds first, and whatever is over after them (it goes to the sheets). Everything else is left as it came.
+ */
+export function inOrder(shows: Show[]): Show[] {
+  const rank = (g: string): [number, number] => {
+    const hit = CARD_RANK.find(([re]) => re.test(g));
+    return hit ? [hit[1], hit[2]] : [CARD_RANK.length, 2];
+  };
+  const cards = shows.flatMap((s) => (s.kind === "card" ? [s] : []));
+  const seen = new Map<string, number>();
+  const first: typeof cards = [], rest: typeof cards = [];
+  for (const card of cards) {
+    const n = seen.get(card.group) ?? 0;
+    seen.set(card.group, n + 1);
+    (n < rank(card.group)[1] ? first : rest).push(card);
+  }
+  first.sort((a, b) => rank(a.group)[0] - rank(b.group)[0]);
+  return [...shows.filter((s) => s.kind !== "card"), ...first, ...rest];
+}
+
 export async function runSit(o: RunSitOptions): Promise<void> {
   const { table, deps } = o;
   table.theatre?.(true);
+  /** The run as the table shows it, written out again whenever it changes: your sheets, and what the systems put out. */
+  const lay = (r: Run): void => {
+    const shows = inOrder(showsOf(deps, r));
+    table.sheets?.(allSheets(deps, r, shows));
+    table.show?.(shows);
+  };
   let run: Run;
   if (o.saved) {
     run = o.saved;
-    table.sheets?.(runSheets(run));
+    lay(run);
     const before = run.beats[run.beats.length - 1];
     table.notes?.(before ? { mine: before.you, his: paragraphs(before.story) } : openingNotes(run));
     await table.say([`We were in the middle of things${run.place.name ? `, at ${run.place.name}` : ""}.`, RUN_HOW, RUN_NOTES, RUN_AGAIN]);
@@ -127,7 +176,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
     }
     await table.say([`${o.card.name ? `You sit down as ${o.card.name}` : "You sit down"}. Give me a moment to set the table.`]);
     run = await table.wait("deal", begin(deps, o.card, o.seed));
-    table.sheets?.(runSheets(run));
+    lay(run);
     o.save(run);
     table.notes?.(openingNotes(run));
     await table.say([...paragraphs(run.opening), RUN_HOW, RUN_NOTES]);
@@ -153,7 +202,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       }
       await table.say(["Then we begin again. Give me a moment to set the table."]);
       run = await table.wait("deal", begin(deps, o.card, (o.seed + run.turn + 1) >>> 0));
-      table.sheets?.(runSheets(run));
+      lay(run);
       o.save(run);
       table.notes?.(openingNotes(run));
       await table.say([...paragraphs(run.opening), RUN_HOW]);
@@ -165,7 +214,7 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       const told = await table.wait("read", placePoints(deps, run, line));
       if (told.length) {
         void table.aside();
-        table.sheets?.(runSheets(run));
+        lay(run);
         o.save(run);
         await table.say(told);
         if (run.sheet.points > 0) await table.say([`${run.sheet.points} still to place.`]);
@@ -189,7 +238,9 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       continue;
     }
     // The story is written while the check is said and the die thrown; it is thrown away if you write again instead.
-    const telling = tellTurn(deps, p, { words: WORDS });
+    let early: (passage: string) => void = () => undefined;
+    const passage = new Promise<string>((given) => (early = given));
+    const telling = tellTurn(deps, p, { words: WORDS, onStory: (s) => early(s) });
     telling.catch(() => undefined);
     const roll = p.report.roll;
     if (roll) {
@@ -199,22 +250,35 @@ export async function runSit(o: RunSitOptions): Promise<void> {
       await table.throwDie(faceOf(roll));
       await table.say([rollSaid(roll)]);
     } else void table.aside();
-    let t: Awaited<typeof telling>;
+    // The passage is said as soon as it is told; the rest of the turn (what changed, and what the world does next) is
+    // written down meanwhile and said after it.
+    const y = p.report;
+    const aside = y.kind === "action" && y.verdict === "implausible" ? ["That could not work."] : y.kind === "action" && y.verdict === "missing" ? ["You have nothing to do that with."] : [];
+    let first: string;
     try {
-      t = await table.wait("tell", telling);
+      first = await table.wait("tell", Promise.race([passage, telling.then((t) => t.story)]));
     } catch {
       await table.say(["I lost the thread there, and have nothing for what you wrote. Write on, and it will be taken up."]);
       continue;
     }
+    await table.say([...aside, ...paragraphs(first)]);
+    let t: Awaited<typeof telling>;
+    try {
+      t = await table.wait("tell", telling);
+    } catch {
+      await table.say(["I lost the thread after that, and what it changed is not written down. Write on, and it will be taken up."]);
+      continue;
+    }
     run = t.run;
     o.save(run);
-    table.sheets?.(runSheets(run));
+    lay(run);
     const x = t.report;
-    const aside = x.kind === "action" && x.verdict === "implausible" ? ["That could not work."] : x.kind === "action" && x.verdict === "missing" ? ["You have nothing to do that with."] : [];
     const changes = x.changes.filter((c) => !c.startsWith("("));
-    // The whole of the turn, to write the next against: it lies by the notebook while this is said.
+    // What was told after the passage: the world's own move, a quest's close, coming round after a fall.
+    const after = t.story.startsWith(first) ? t.story.slice(first.length).trim() : "";
+    // The whole of the turn, to write the next against: it lies by the notebook from now on.
     table.notes?.({ mine: line, ...(roll ? { heading: cap(x.act).slice(0, 60) } : {}), his: [...(roll ? [rollSaid(roll)] : []), ...aside, ...paragraphs(t.story), ...changes] });
-    await table.say([...aside, ...paragraphs(t.story), ...changes]);
+    if (after || changes.length) await table.say([...paragraphs(after), ...changes]);
     if (roll) await table.page({ heading: cap(x.act).slice(0, 60), his: [rollSaid(roll), ...paragraphs(t.story), ...changes] });
     if (run.sheet.points > 0) await table.say([`You have ${run.sheet.points} points to place among ${ATTRIBUTES.join(", ")}. Write where they go.`]);
   }

@@ -33,6 +33,79 @@ export interface Load {
 const V = (x: number, y: number, z: number) => new Vector3(x, y, z);
 
 /**
+ * The narrator's hand goes to a thing, takes it, carries it somewhere and lets go. Several things go together,
+ * keeping their places beside each other. `appear`: they come out of its sleeve. `vanish`: they go into it. The
+ * counters here and the stones of the reckoning (tally.ts) are both moved this way.
+ */
+export function carrySteps(n: Reacher, tracks: Tracks, arm: number, things: Object3D[], from: () => Vector3, to: () => Vector3, o: { appear?: boolean; vanish?: boolean; lift?: number } = {}): Step[] {
+  const a = V(0, 0, 0), b = V(0, 0, 0), at = V(0, 0, 0);
+  const offs: Vector3[] = [];
+  // How far the first of them was from the fingers when it was taken: drawn in as it goes.
+  const slack = V(0, 0, 0);
+  let last = 0;
+  const lead = things[0]!;
+  const world = (obj: Object3D) => obj.getWorldPosition(V(0, 0, 0));
+  const place = (obj: Object3D, w: Vector3) => obj.position.copy(obj.parent ? obj.parent.worldToLocal(w.clone()) : w);
+  return [
+    {
+      dur: 0.25,
+      begin: () => {
+        a.copy(from());
+        n.watch(world(lead), 2.4, tracks.now);
+      },
+      tick: () => n.reach(arm, o.appear ? a : a.clone().add(V(0, 0.012, 0))),
+      until: () => n.reached(arm) > 0.9 && n.fingertips(arm).distanceTo(a) < 0.035,
+      patience: 1.5,
+    },
+    {
+      dur: 0.3,
+      begin: () => {
+        b.copy(to());
+        const lw = world(lead);
+        offs.length = 0;
+        things.forEach((t) => offs.push(world(t).sub(lw)));
+      },
+    },
+    {
+      dur: 0.95,
+      begin: () => {
+        b.copy(to());
+        // Out of the sleeve they are in the fingers from the first; on the table they are taken where they lie.
+        if (o.appear) slack.set(0, 0, 0);
+        else slack.copy(world(lead)).sub(n.fingertips(arm)).sub(V(0, -0.012, 0));
+        last = tracks.now;
+      },
+      tick: (u) => {
+        const e = ease(u);
+        at.lerpVectors(a, b, e);
+        at.y += Math.sin(Math.PI * u) * (o.lift ?? 0.07);
+        n.reach(arm, at, true);
+        slack.multiplyScalar(Math.exp(-Math.max(0, tracks.now - last) * 9));
+        last = tracks.now;
+        // Held under the fingertips, and never through the table.
+        const tips = n.fingertips(arm);
+        things.forEach((t, i) => {
+          const w = tips.clone().add(offs[i]!).add(V(0, -0.012, 0)).add(slack);
+          if (!o.appear && !o.vanish) w.y = Math.max(w.y, 0.002);
+          place(t, w);
+          t.visible = o.appear ? u > 0.22 : o.vanish ? u < 0.8 : true;
+        });
+      },
+      until: () => n.fingertips(arm).distanceTo(b) < 0.006,
+      patience: 0.9,
+    },
+    {
+      dur: 0.12,
+      begin: () => {
+        n.reach(arm, null);
+        if (o.vanish) sound.play("swish", { x: b.x, gain: 0.7 });
+        else things.forEach((_, i) => sound.play("token", { x: b.x, delay: i * 0.045, gain: 0.8 - i * 0.08 }));
+      },
+    },
+  ];
+}
+
+/**
  * How far the beam is drawn tipped for a lean, as a share of its full tilt (-1 to 1). A chance a little off even
  * is drawn larger than it is, or it could not be seen at all. The side that sinks and the order of chances never
  * change: a better chance always tips the beam further your way.
@@ -216,76 +289,8 @@ export class Counters {
     ]);
   }
 
-  /**
-   * The narrator's hand goes to a thing, takes it, carries it somewhere and lets go. Several things go together,
-   * keeping their places beside each other. `appear`: they come out of its sleeve. `vanish`: they go into it.
-   */
   private carry(arm: number, things: Object3D[], from: () => Vector3, to: () => Vector3, o: { appear?: boolean; vanish?: boolean; lift?: number } = {}): Step[] {
-    const n = this.narrator;
-    const a = V(0, 0, 0), b = V(0, 0, 0), at = V(0, 0, 0);
-    const offs: Vector3[] = [];
-    // How far the first of them was from the fingers when it was taken: drawn in as it goes.
-    const slack = V(0, 0, 0);
-    let last = 0;
-    const lead = things[0]!;
-    const world = (obj: Object3D) => obj.getWorldPosition(V(0, 0, 0));
-    const place = (obj: Object3D, w: Vector3) => obj.position.copy(obj.parent ? obj.parent.worldToLocal(w.clone()) : w);
-    return [
-      {
-        dur: 0.25,
-        begin: () => {
-          a.copy(from());
-          n.watch(lead.position, 2.4, this.tracks.now);
-        },
-        tick: () => n.reach(arm, o.appear ? a : a.clone().add(V(0, 0.012, 0))),
-        until: () => n.reached(arm) > 0.9 && n.fingertips(arm).distanceTo(a) < 0.035,
-        patience: 1.5,
-      },
-      {
-        dur: 0.3,
-        begin: () => {
-          b.copy(to());
-          const lw = world(lead);
-          things.forEach((t) => offs.push(world(t).sub(lw)));
-        },
-      },
-      {
-        dur: 0.95,
-        begin: () => {
-          b.copy(to());
-          // Out of the sleeve they are in the fingers from the first; on the table they are taken where they lie.
-          if (o.appear) slack.set(0, 0, 0);
-          else slack.copy(world(lead)).sub(n.fingertips(arm)).sub(V(0, -0.012, 0));
-          last = this.tracks.now;
-        },
-        tick: (u) => {
-          const e = ease(u);
-          at.lerpVectors(a, b, e);
-          at.y += Math.sin(Math.PI * u) * (o.lift ?? 0.07);
-          n.reach(arm, at, true);
-          slack.multiplyScalar(Math.exp(-Math.max(0, this.tracks.now - last) * 9));
-          last = this.tracks.now;
-          // Held under the fingertips, and never through the table.
-          const tips = n.fingertips(arm);
-          things.forEach((t, i) => {
-            const w = tips.clone().add(offs[i]!).add(V(0, -0.012, 0)).add(slack);
-            if (!o.appear && !o.vanish) w.y = Math.max(w.y, 0.002);
-            place(t, w);
-            t.visible = o.appear ? u > 0.22 : o.vanish ? u < 0.8 : true;
-          });
-        },
-        until: () => n.fingertips(arm).distanceTo(b) < 0.006,
-        patience: 0.9,
-      },
-      {
-        dur: 0.12,
-        begin: () => {
-          n.reach(arm, null);
-          if (o.vanish) sound.play("swish", { x: b.x, gain: 0.7 });
-          else things.forEach((_, i) => sound.play("token", { x: b.x, delay: i * 0.045, gain: 0.8 - i * 0.08 }));
-        },
-      },
-    ];
+    return carrySteps(this.narrator, this.tracks, arm, things, from, to, o);
   }
 
   /* --------------------------------- the scale -------------------------------- */

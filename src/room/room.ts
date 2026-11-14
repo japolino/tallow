@@ -59,11 +59,12 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { Candle, candleKit } from "./candles.js";
 import { candleBurn, daylight, WEATHERS, wrapHour, type Air, type LightState, type Weather } from "./daylight.js";
 import { Governor, QUALITY } from "./governor.js";
-import { Desk } from "./desk.js";
+import { Desk, placeLine } from "./desk.js";
 import { Die, DIE_REST } from "./die.js";
 import { PlayerHand } from "./hand.js";
 import { mountFlatRoom } from "./flat.js";
-import { drawMapSheet, MAP_PX, stopOnSheet, type MapSheet } from "./mapsheet.js";
+import { drawMapSheet, layoutPlaces, MAP_PX, stopOnSheet, type MapSheet } from "./mapsheet.js";
+import type { Show } from "../game/system.js";
 import { Narrator, type Gesture } from "./narrator.js";
 
 export type { Gesture };
@@ -138,6 +139,12 @@ export interface RoomHandle {
   setMap?(map: MapSheet): void;
   /** Theatre of the mind (free form, engine/free.ts): the map sheet and the pieces put away, or set out again. Absent on the flat room. */
   theatre?(on: boolean): void;
+  /**
+   * What the game's systems put on the table (game/system.ts, Show), the whole list every time; what is the same is
+   * left as it lies. A map of known places is unrolled on the sheet with your piece where you are (and rolled up again
+   * when there is none); cards, meters and counters go on your side (desk.ts, show). Absent on the flat room.
+   */
+  show?(shows: Show[]): void;
   /** The narrator inks a place onto the map, down its margin (engine/clues.ts). Absent on the flat room. */
   inkPlace?(name: string): void;
   /** Notches in the burning candle, one at the height each of these hours will fall (docs/MOONSHOT.md, 5.3). Absent on the flat room. */
@@ -1343,7 +1350,8 @@ class Room implements RoomHandle {
     mat.map = this.tex(drawMapSheet(map));
     mat.needsUpdate = true;
     old?.dispose();
-    // The same Map the desk reads, changed in place.
+    // The same Map the desk reads, changed in place: stops no longer on the sheet are gone from it.
+    for (const id of [...this.stops.keys()]) if (!map.stops.some((s) => s.id === id)) this.stops.delete(id);
     for (const s of map.stops) {
       const q = stopOnSheet(s.u, s.v);
       this.stops.set(s.id, V((q.u - 0.5) * MAP_W, MAP_Y, MAP_Z + (q.v - 0.5) * MAP_H));
@@ -1351,8 +1359,97 @@ class Room implements RoomHandle {
   }
 
   theatre(on: boolean): void {
+    this.mapRun++;
+    this.mapOut = false;
+    this.mapKey = "";
+    this.desk.places = [];
+    this.unroll(1);
     this.mapMesh.visible = !on;
     for (const p of this.pieces.values()) p.mesh.visible = !on;
+  }
+
+  /* ---------------------------------- what the systems show --------------------------------- */
+
+  /** Whether a run's map is out on the table, what it was drawn from, and which unrolling or rolling up is the latest. */
+  private mapOut = false;
+  private mapKey = "";
+  private mapRun = 0;
+
+  show(shows: Show[]): void {
+    const map = shows.find((s): s is Extract<Show, { kind: "map" }> => s.kind === "map");
+    this.runMap(map ?? null);
+    this.desk.show(shows.filter((s) => s.kind !== "map"));
+  }
+
+  /** Your own piece, which stands where you are on a run's map. */
+  private you(): [string, Piece] | null {
+    return [...this.pieces.entries()].find(([, p]) => p.kind === "player") ?? null;
+  }
+
+  /** How far the sheet is unrolled from its far edge toward you: 0 rolled up, 1 lying flat. */
+  private unroll(k: number): void {
+    const s = Math.max(0.002, k);
+    this.mapMesh.scale.z = s;
+    this.mapMesh.position.z = MAP_Z - (MAP_H / 2) * (1 - s);
+  }
+
+  /**
+   * A run's map: the known places laid out on the sheet (mapsheet.ts, layoutPlaces), drawn again only when they
+   * change. The first time it is unrolled toward you and your piece set on it; after that your piece walks when you
+   * are somewhere else. Touching a place writes a line that goes there (desk.ts, places).
+   */
+  private runMap(m: Extract<Show, { kind: "map" }> | null): void {
+    const you = this.you();
+    if (!m || !m.places.length) {
+      this.desk.places = [];
+      if (!this.mapOut) return;
+      this.mapOut = false;
+      this.mapKey = "";
+      const run = ++this.mapRun;
+      if (you) you[1].mesh.visible = false;
+      const from = this.mapMesh.scale.z;
+      sound.play("unroll", { x: 0, gain: 0.45, rate: 1.15 });
+      void this.desk.tracks.run([{ dur: 0.8, tick: (u) => run === this.mapRun && this.unroll(from * (1 - ease(u))) }]).then(() => {
+        if (run !== this.mapRun) return;
+        this.mapMesh.visible = false;
+        this.unroll(1);
+      });
+      return;
+    }
+    const layout = layoutPlaces(m.places, m.ways);
+    const key = JSON.stringify([m.title, m.places, m.ways]);
+    if (key !== this.mapKey) {
+      this.mapKey = key;
+      let seed = 7;
+      for (let i = 0; i < m.title.length; i++) seed = (Math.imul(seed, 31) + m.title.charCodeAt(i)) >>> 0;
+      this.setMap({
+        title: m.title,
+        seed,
+        stops: m.places.filter((p) => layout.has(p.id)).map((p) => ({ id: p.id, name: p.name, ...layout.get(p.id)!, unseen: !p.seen, danger: p.danger, note: p.note })),
+        paths: m.ways.filter(([a, b]) => layout.has(a) && layout.has(b)),
+        unnumbered: true,
+      });
+    }
+    this.desk.places = m.places.filter((p) => layout.has(p.id)).map((p) => ({ id: p.id, line: placeLine(p.name, p.id === m.at) }));
+    if (!you) return;
+    const [id, piece] = you;
+    if (!this.mapOut) {
+      this.mapOut = true;
+      const run = ++this.mapRun;
+      piece.at = m.at;
+      piece.mesh.visible = false;
+      this.settlePieces();
+      this.mapMesh.visible = true;
+      const from = Math.min(this.mapMesh.scale.z, 0.002);
+      this.unroll(from);
+      sound.play("unroll", { x: 0, gain: 0.6 });
+      void this.desk.tracks.run([{ dur: 1.1, tick: (u) => run === this.mapRun && this.unroll(from + (1 - from) * ease(u)) }]).then(() => {
+        if (run === this.mapRun) piece.mesh.visible = this.stops.has(piece.at);
+      });
+    } else if (piece.at !== m.at) {
+      piece.mesh.visible = this.stops.has(m.at);
+      void this.movePiece(id, m.at);
+    }
   }
 
   notch(hours: readonly number[]): void {

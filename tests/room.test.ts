@@ -10,7 +10,9 @@ import { BURNT_OUT, candleBurn, CANDLES_LIT, clockLabel, daylight, phaseOf, SUNR
 import { Governor, QUALITY } from "../src/room/governor.js";
 import { Lightning } from "../src/room/weather.js";
 import { d20Faces, restingTurn } from "../src/room/die.js";
-import { stopOnSheet } from "../src/room/mapsheet.js";
+import { layoutPlaces, stopOnSheet } from "../src/room/mapsheet.js";
+import { beadsFor } from "../src/room/tally.js";
+import { kindOfGroup } from "../src/room/tablecards.js";
 import { leavesOf, wrapText } from "../src/room/paper.js";
 
 describe("the light is the clock", () => {
@@ -156,6 +158,73 @@ describe("the map sheet", () => {
     }
     expect(stopOnSheet(0.2, 0.5).u).toBeLessThan(stopOnSheet(0.8, 0.5).u);
     expect(stopOnSheet(0.5, 0.2).v).toBeLessThan(stopOnSheet(0.5, 0.8).v);
+  });
+
+  const places = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i}` }));
+  const chain = (n: number): [string, string][] => Array.from({ length: n - 1 }, (_, i) => [`p${i}`, `p${i + 1}`]);
+
+  test("a run's places each get a spot of their own, inside the sheet and off the sea", () => {
+    for (const n of [1, 5, 12, 20, 26]) {
+      const at = layoutPlaces(places(n), chain(n));
+      expect(at.size).toBe(n);
+      const spots = [...at.values()];
+      for (const p of spots) {
+        expect(p.u).toBeGreaterThanOrEqual(0);
+        expect(p.u).toBeLessThan(0.8);
+        expect(p.v).toBeGreaterThan(0.05);
+        expect(p.v).toBeLessThan(0.97);
+      }
+      // No two closer than a cell's width.
+      for (let i = 0; i < spots.length; i++)
+        for (let j = i + 1; j < spots.length; j++) expect(Math.hypot(spots[i]!.u - spots[j]!.u, (spots[i]!.v - spots[j]!.v) * 0.7)).toBeGreaterThan(0.06);
+    }
+  });
+
+  test("a place keeps its spot as more become known, and the same places always come out the same", () => {
+    const few = layoutPlaces(places(6), chain(6));
+    const more = layoutPlaces(places(12), chain(12));
+    for (const [id, p] of few) expect(more.get(id)).toEqual(p);
+    expect(layoutPlaces(places(12), chain(12))).toEqual(more);
+  });
+
+  test("a place is set near the place a way joins it to", () => {
+    const at = layoutPlaces(places(8), [["p0", "p1"], ["p0", "p2"], ["p2", "p7"], ["p3", "p4"]]);
+    const d = (a: string, b: string) => Math.hypot(at.get(a)!.u - at.get(b)!.u, at.get(a)!.v - at.get(b)!.v);
+    expect(d("p2", "p7")).toBeLessThan(0.3);
+  });
+});
+
+describe("the reckoning (room/tally.ts)", () => {
+  test("a meter up to ten is shown bead for bead", () => {
+    expect(beadsFor(3, 10)).toEqual({ n: 10, k: 3 });
+    expect(beadsFor(6, 8)).toEqual({ n: 8, k: 6 });
+    expect(beadsFor(0, 4)).toEqual({ n: 4, k: 0 });
+    expect(beadsFor(9, 4)).toEqual({ n: 4, k: 4 });
+    expect(beadsFor(-2, 4)).toEqual({ n: 4, k: 0 });
+  });
+
+  test("a larger one in tenths, never empty while there is any and never full while some is missing", () => {
+    expect(beadsFor(14, 20)).toEqual({ n: 10, k: 7 });
+    expect(beadsFor(1, 100)).toEqual({ n: 10, k: 1 });
+    expect(beadsFor(99, 100)).toEqual({ n: 10, k: 9 });
+    expect(beadsFor(100, 100)).toEqual({ n: 10, k: 10 });
+    expect(beadsFor(0, 100)).toEqual({ n: 10, k: 0 });
+  });
+});
+
+describe("what the systems' cards are drawn as (room/tablecards.ts)", () => {
+  test("each group has a picture, and an unknown group the token", () => {
+    expect(kindOfGroup("quest")).toBe("lantern");
+    expect(kindOfGroup("Wares")).toBe("purse");
+    expect(kindOfGroup("perk")).toBe("token");
+    expect(kindOfGroup("suggestion")).toBe("companion");
+    expect(kindOfGroup("something else")).toBe("token");
+    // As the systems name them.
+    expect(kindOfGroup("quests")).toBe("lantern");
+    expect(kindOfGroup("Old Hesk's wares")).toBe("purse");
+    expect(kindOfGroup("choices")).toBe("companion");
+    expect(kindOfGroup("perks")).toBe("token");
+    expect(kindOfGroup("shadows")).toBe("token");
   });
 });
 

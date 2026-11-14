@@ -98,6 +98,15 @@ export interface Run {
   minutes: number;
   turn: number;
   downs: number;
+  /** What each further system of the game keeps (game/systems), under its own name; see stateOf. */
+  sys?: Record<string, unknown>;
+}
+
+/** A system's own state in a run, made the first time it is asked for (a run begun before the system existed has none). */
+export function stateOf<T>(r: Run, name: string, make: () => T): T {
+  const sys = (r.sys ??= {});
+  if (sys[name] === undefined || sys[name] === null) sys[name] = make();
+  return sys[name] as T;
 }
 
 export const MAX_HP = 100;
@@ -250,11 +259,12 @@ export interface Roll {
 
 /**
  * One roll for one judged action. The same roll is read twice, once against the attribute and once against the skill,
- * and the outcome is the middle of the two readings (a coin settles a half step).
+ * and the outcome is the middle of the two readings (a coin settles a half step). `more` are the changes the game's
+ * further systems make to the roll.
  */
-export function resolve(r: Run, j: Judged): Roll {
+export function resolve(r: Run, j: Judged, more: readonly Modifier[] = []): Roll {
   const raw = rawRoll(r);
-  const modifiers = [...judgedModifiers(j.scores), ...ruleModifiers(r, j)];
+  const modifiers = [...judgedModifiers(j.scores), ...ruleModifiers(r, j), ...more.filter((m) => m.by !== 0)];
   const total = Math.round((raw + modifiers.reduce((n, m) => n + m.by, 0) * 0.01) * 100) / 100;
   const attrLevel = r.sheet.attributes[j.attribute] ?? 2;
   const at = thresholds(attrLevel, false);

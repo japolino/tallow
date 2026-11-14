@@ -33,6 +33,8 @@ function deps(f: Fake): RunDeps & { asked: { role: Role; messages: Message[] }[]
   const text = (v: Record<string, unknown> | string | undefined): string => (typeof v === "string" ? v : JSON.stringify(v ?? {}));
   return {
     asked,
+    // The turn alone: the game's further systems have tests of their own (tests/systems.test.ts, and one each).
+    systems: [],
     ask: async (messages, role) => {
       asked.push({ role, messages });
       const sys = messages[0]!.content;
@@ -128,6 +130,19 @@ describe("a turn", () => {
     expect(t.report.roll).not.toBeNull();
     const u = await turn(deps({ judge: { ...JUDGE, verdict: "trivial" }, back: {}, decide: () => ({ verdict: choice("challenge", 0.4) }) }), start(), "I look.");
     expect(u.report.verdict).toBe("trivial");
+  });
+  test("a line in which their own character attempts nothing is followed as written, though the judge called it impossible", async () => {
+    // "A merchant pulls up his cart" is the player writing the world, not their character conjuring a merchant.
+    const d = deps({ judge: { ...JUDGE, verdict: "implausible", act: "summon a travelling merchant" }, back: {}, decide: () => ({ verdict: choice("none") }) });
+    const t = await turn(d, start(), "A travelling merchant pulls his cart up beside me.");
+    expect(t.report.kind).toBe("story");
+    expect(t.report.verdict).toBeNull();
+    expect(t.report.roll).toBeNull();
+    expect(d.asked.find((x) => x.role === "teller")!.messages.at(-1)!.content).toContain("Take all of it as true");
+    // A second look that is not sure leaves the judge's reading alone.
+    const u = await turn(deps({ judge: { ...JUDGE, verdict: "implausible" }, back: {}, decide: () => ({ verdict: choice("none", 0.4) }) }), start(), "I fly.");
+    expect(u.report.kind).toBe("action");
+    expect(u.report.verdict).toBe("implausible");
   });
   test("a thing the player did not name is dropped when the second look says it does not fit", async () => {
     const r = start();

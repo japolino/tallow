@@ -5,6 +5,7 @@
  *
  * With --lines the messages in the file are played in order (one a line, or blocks split by a line of ---) and the
  * whole game is written to --out; without it you type. Typed commands: /sheet, /scene, /spend <attribute>, /quit.
+ * --only places,quests plays with those systems alone (game/systems/index.ts); --only none with the bare turn.
  *
  * The card file is { world, who, hero, card, messages: [{ you, name, text }] } (scripts/table-replay.ts reads the same).
  * Real cards are private: keep them, saves and transcripts in .artifacts (ignored), never in the repo.
@@ -12,9 +13,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import type { DecisionAnswer, DecisionQuestion } from "lumiverse-spindle-types";
-import { ATTRIBUTES, sceneText, sheetText, spend, type Attribute, type Run } from "../src/engine/run.js";
+import { ATTRIBUTES, sheetText, spend, type Attribute, type Run } from "../src/engine/run.js";
 import type { Message, Role } from "../src/game/ask.js";
-import { begin, reportText, turn, type Card } from "../src/game/runturn.js";
+import { begin, pagesOf, reportText, sceneOf, showsOf, turn, type Card } from "../src/game/runturn.js";
+import { systemsNamed } from "../src/game/systems/index.js";
 
 const env = process.env;
 const arg = (k: string): string | undefined => {
@@ -56,7 +58,20 @@ const decide = async (_what: string, state: unknown, questions: Record<string, D
     return null;
   }
 };
-const deps = { ask, ...(env.DECISION_URL ? { decide } : {}), log: (m: string) => out(`_(${m})_`) };
+const only = arg("only");
+const deps = { ask, ...(env.DECISION_URL ? { decide } : {}), log: (m: string) => out(`_(${m})_`), ...(only !== undefined ? { systems: systemsNamed(only.split(",").map((x) => x.trim())) } : {}) };
+/** The sheet, the scene and what every system keeps, as text. */
+const whole = (r: Run): string => [sheetText(r), sceneOf(deps, r), ...pagesOf(deps, r).map((p) => `${p.heading.toUpperCase()}\n${p.his.join("\n")}`), tableText(r)].filter(Boolean).join("\n\n");
+/** What the systems put on the table, as lines: the map, the cards, the meters and the counters. */
+function tableText(r: Run): string {
+  const lines = showsOf(deps, r).map((s) => {
+    if (s.kind === "map") return `map "${s.title}": ${s.places.map((p) => `${p.id === s.at ? "*" : ""}${p.name}${p.seen ? "" : " (unvisited)"}`).join(", ")}; ways ${s.ways.length}`;
+    if (s.kind === "card") return `card [${s.group}] ${s.title}: ${s.text}${s.line ? ` -> writes "${s.line}"` : ""}`;
+    if (s.kind === "bar") return `bar [${s.group}] ${s.name} ${s.value}/${s.max}${s.note ? ` (${s.note})` : ""}`;
+    return `tokens ${s.name} ${s.count}${s.max !== undefined ? `/${s.max}` : ""}`;
+  });
+  return lines.length ? `ON THE TABLE\n${lines.join("\n")}` : "";
+}
 
 interface Line { you: boolean; name: string; text: string }
 const file = JSON.parse(readFileSync(arg("card")!, "utf8")) as { world: string; who: string; hero: string; card: string; messages?: Line[] };
@@ -80,7 +95,7 @@ if (loadFile && existsSync(loadFile)) {
   out();
   if (saveFile) writeFileSync(saveFile, JSON.stringify(run));
 }
-out(block(`${sheetText(run)}\n\n${sceneText(run)}`));
+out(block(whole(run)));
 out();
 
 async function play(line: string): Promise<void> {
@@ -91,7 +106,7 @@ async function play(line: string): Promise<void> {
     run = t.run;
     out(t.story);
     out();
-    out(block(reportText(t.report) || "Nothing changed."));
+    out(block([reportText(t.report) || "Nothing changed.", tableText(run)].filter(Boolean).join("\n\n")));
     out(`_${((Date.now() - s) / 1000).toFixed(1)} s: judged in ${(t.report.ms.judge / 1000).toFixed(1)}${t.report.second ? `, second look ${t.report.second}` : ""}; told in ${(t.report.ms.tell / 1000).toFixed(1)}; read back in ${(t.report.ms.read / 1000).toFixed(1)}._\n`);
     if (saveFile) writeFileSync(saveFile, JSON.stringify(run));
   } catch (e) {
@@ -121,8 +136,8 @@ if (linesFile) {
   for await (const raw of rl) {
     const line = raw.trim();
     if (line === "/quit") break;
-    if (line === "/sheet") console.log(sheetText(run));
-    else if (line === "/scene") console.log(sceneText(run));
+    if (line === "/sheet") console.log(whole(run));
+    else if (line === "/scene") console.log(sceneOf(deps, run));
     else if (line.startsWith("/spend")) {
       const a = line.split(/\s+/)[1]?.toLowerCase() as Attribute;
       console.log(spend(run.sheet, a) ? `${a} is now ${run.sheet.attributes[a]}. ${run.sheet.points} left.` : `Nothing spent. You have ${run.sheet.points} point(s); attributes are ${ATTRIBUTES.join(", ")}.`);
@@ -134,5 +149,5 @@ if (linesFile) {
 }
 
 out(`---\n\n## The sheet at the end\n`);
-out(block(`${sheetText(run)}\n\n${sceneText(run)}\n\nTurn ${run.turn}. ${Math.round(run.minutes / 60)} hours have passed. Brought down ${run.downs} time(s).`));
+out(block(`${whole(run)}\n\nTurn ${run.turn}. ${Math.round(run.minutes / 60)} hours have passed. Brought down ${run.downs} time(s).`));
 out(`\n_Model calls: ${Object.entries(calls).map(([k, v]) => `${k} ${v.n} (${(v.ms / v.n / 1000).toFixed(1)} s each)`).join(", ")}._`);
