@@ -10,7 +10,7 @@
  * imported (docs/DESIGN.md, 10).
  */
 import type { SpindleFrontendContext } from "lumiverse-spindle-types";
-import type { Role } from "../game/prompts.js";
+import type { Role } from "../game/ask.js";
 import type { ModelsPatch, ReasoningPick } from "../meaning/models.js";
 import type { ConnOption, ModelsState } from "../shared/protocol.js";
 import { ALL_TRACKS, credit } from "../room/music.js";

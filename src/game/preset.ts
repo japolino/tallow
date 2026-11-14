@@ -14,7 +14,7 @@
  * Pure: the host's calls (reading the preset, filling its macros) are made in src/backend.ts.
  */
 import type { PromptBlockDTO, PromptBlockSnapshotDTO } from "lumiverse-spindle-types";
-import { firstJson, type Message } from "./prompts.js";
+import { firstJson, type Message } from "./ask.js";
 
 /** Where a kept block goes: before the story so far, or after it (a preset's post-history and in-history blocks). */
 export type Where = "before" | "after";

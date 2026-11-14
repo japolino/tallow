@@ -17,13 +17,9 @@
 import { sound } from "./sound.js";
 import { BoxGeometry, CylinderGeometry, Euler, Group, Mesh, MeshStandardMaterial, Quaternion, TorusGeometry, Vector3, type Material, type Object3D, type PerspectiveCamera, type Scene } from "three";
 import { Counters } from "./counters.js";
-import { WayBlocks } from "./ways.js";
 import { DreadBowl } from "./dread.js";
-import { Board } from "./board.js";
-import { BattleMat } from "./battlemat.js";
 import { HandDice } from "./handdice.js";
 import { LuckTray } from "./luck.js";
-import { AgainstSlips } from "./against.js";
 import { Roster } from "./roster.js";
 import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
 import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
@@ -126,20 +122,12 @@ const MOST = 400;
 export class Desk {
   readonly group = new Group();
   readonly counters: Counters;
-  /** The four ways past a place, as blocks standing in front of the narrator (ways.ts). */
-  readonly ways: WayBlocks;
   /** The narrator's bowl of dread, a black stone for every try that went wrong (dread.ts). */
   readonly dread: DreadBowl;
-  /** The leather the narrator unrolls for a contest, and its dials (board.ts). */
-  readonly board: Board;
-  /** The leather the narrator unrolls for a fight, with its squares, pieces and chalk (battlemat.ts). */
-  readonly mat: BattleMat;
   /** The narrator's own die, in its tray (luck.ts). */
   readonly luck: LuckTray;
   /** Your hand of dice, lying on the map to be spent (handdice.ts). */
   readonly dice: HandDice;
-  /** The narrator's slips against you (against.ts). */
-  readonly against: AgainstSlips;
   /** The paper of who you may be, your personas with a box each (roster.ts). */
   readonly roster: Roster;
   readonly voice: Voice;
@@ -224,20 +212,12 @@ export class Desk {
     this.counters = new Counters(h.narrator, this.tracks, h.reduced);
     this.voice = new Voice(h.host, h.reduced);
     this.group.add(this.counters.group);
-    this.ways = new WayBlocks(h.narrator, this.tracks, h.reduced);
-    this.group.add(this.ways.group);
     this.dread = new DreadBowl(h.narrator, this.tracks, h.reduced);
     this.group.add(this.dread.group);
-    this.board = new Board(h.narrator, this.tracks, h.reduced);
-    this.group.add(this.board.group);
-    this.mat = new BattleMat(h.narrator, this.tracks, h.reduced);
-    this.group.add(this.mat.group);
     this.luck = new LuckTray(h.narrator, this.tracks, h.reduced);
     this.group.add(this.luck.group);
     this.dice = new HandDice(this.tracks, h.reduced);
     this.group.add(this.dice.group);
-    this.against = new AgainstSlips(h.narrator, this.tracks, h.reduced);
-    this.group.add(this.against.group);
     this.roster = new Roster(h.narrator, this.tracks, h.reduced, h.camera);
     this.group.add(this.roster.group);
     this.cards = new TableCards({
@@ -1295,13 +1275,9 @@ export class Desk {
     this.read.remove();
     this.voice.dispose();
     this.counters.dispose();
-    this.ways.dispose();
     this.dread.dispose();
-    this.board.dispose();
-    this.mat.dispose();
     this.luck.dispose();
     this.dice.dispose();
-    this.against.dispose();
     this.roster.dispose();
     this.cards.dispose();
     this.pen.dispose();

@@ -9,17 +9,11 @@
     "typecheck": "tsc --noEmit",
     "verify": "bun run test && bun run typecheck",
     "preview": "bun run scripts/preview.ts",
-    "moment": "bun run scripts/moment.ts",
-    "adventure": "bun run scripts/adventure.ts",
-    "battle": "bun run scripts/battle.ts",
-    "shots": "bun run scripts/shots.ts",
-    "media": "bun run scripts/media.ts",
-    "pointer": "bun run scripts/pointer.ts",
-    "table": "bun run scripts/table.ts",
     "build": "bun run scripts/build.ts",
     "embed": "bun run scripts/embed.ts",
-    "live": "bun run scripts/live.ts",
-    "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (props, narrator_cloak, narrator_arm, narrator_hood, pieces), then bun run embed. docs/ART.md has the style and the judge."
+    "models": "echo Run each script in models/ with: blender --background --python models/NAME.py (props, narrator_cloak, narrator_arm, narrator_hood, pieces), then bun run embed. docs/ART.md has the style and the judge.",
+    "room": "bun run build && bun run scripts/run-sit.ts",
+    "play": "bun --env-file=.env.local scripts/run-play.ts"
   },
   "dependencies": {
     "three": "0.171.0"

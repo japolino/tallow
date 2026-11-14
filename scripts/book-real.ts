@@ -19,7 +19,7 @@ import { CHAT_HERO } from "../src/engine/chatbook.js";
 import { chapterKeeper } from "../src/game/chapters.js";
 import { chatBook } from "../src/game/chatbook.js";
 import type { PresetSnapshot } from "../src/game/preset.js";
-import type { Message, Role } from "../src/game/prompts.js";
+import type { Message, Role } from "../src/game/ask.js";
 
 const env = process.env;
 const arg = (k: string): string | undefined => {

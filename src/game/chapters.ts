@@ -7,11 +7,10 @@
  * goes to the same place as every other model answer that was not taken (`fellBack`). Its material is not lost: the
  * story's mark is only moved on when a chapter is kept, so the next one is written from it too.
  */
-import type { Trip } from "../engine/adventure.js";
-import { chapterMaterial, chapterWorth, emptyBook, established, establishedSaid, markOf, pictureId, readBook, withChapter, withMark, withoutMark, withPicture, type Book, type BookChapter, type BookPicture, type ChapterAt, type ChapterDraft, type ChapterMark } from "../engine/chapter.js";
+import { emptyBook, established, establishedSaid, pictureId, readBook, withChapter, withMark, withoutMark, withPicture, type Book, type BookChapter, type BookPicture, type ChapterAt, type ChapterDraft, type ChapterMark } from "../engine/chapter.js";
 import { DEFAULT_CONTENT, playable, VEIL_SAID, type ContentSettings } from "../engine/content.js";
 import { writeChapter } from "./chapterwriter.js";
-import type { Ask } from "./prompts.js";
+import type { Ask } from "./ask.js";
 import type { Keeper } from "./voice.js";
 
 /** The room's side of the book (room/book.ts): the narrator seen writing in it, and the book on its shelf as it now stands. */
@@ -72,8 +71,6 @@ export interface ChapterJob {
 export interface Chapters {
   /** The narrator said these lines aloud: a chapter is written knowing what was said, so it does not say it again. */
   heard(lines: readonly string[]): void;
-  /** A chapter is due: at a rest, at the end of a story, when you stop for the night. Written in the background. */
-  due(trip: Trip, at: ChapterAt, hero: { name: string; who?: string }): void;
   /** The story now being told (its key), or null between stories. */
   story(key: string | null): void;
   /** What the book has established, for the tellings of the story now being told; "" when nothing. */
@@ -87,9 +84,6 @@ export interface Chapters {
   /** Settles when every chapter asked for so far is written or given up, and its picture drawn or given up. */
   settled(): Promise<void>;
 }
-
-/** A story's key in the book: the same as the voice's (frontend.ts). */
-export const storyKey = (t: Trip): string => `${t.adv.id}|${t.seed}`;
 
 /** The narrator's lines kept for a chapter to know what was said: the last this many. */
 const HEARD_MAX = 40;
@@ -175,44 +169,6 @@ export function chapterKeeper(o: ChapterKeeperOptions): Chapters {
     pictures.push(work);
   };
 
-  const write = async (t: Trip, at: ChapterAt, who: { name: string; who?: string }): Promise<void> => {
-    const name = who.name || "the traveller";
-    const key = storyKey(t);
-    const book = await bookFor(name);
-    const since = book.marks[key];
-    const m = chapterMaterial(t, at, { hero: { name, ...(who.who ? { who: who.who } : {}) }, since: since ?? null, told: heardSince(since?.told), established: established(book, key) });
-    const mark = markOf(t, heardCount);
-    if (!chapterWorth(m)) {
-      await change(name, (b) => withMark(b, key, mark), false);
-      return;
-    }
-    let done: () => void = () => {};
-    const writing = new Promise<void>((ok) => (done = ok));
-    if (name === hero) o.shelf?.writing(writing);
-    try {
-      const voice = o.voice ? await o.voice.now().catch(() => null) : null;
-      const draft = await writeChapter(o.ask, m, content(), voice, (why) => fell("chapter", why), o.ms);
-      if (!draft) return;
-      const c: Omit<BookChapter, "n"> = {
-        id: `c${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`,
-        story: key,
-        storyTitle: t.adv.title,
-        at,
-        title: draft.title,
-        text: draft.text,
-        facts: draft.facts,
-        ...(draft.picture ? { scene: draft.picture } : {}),
-        hour: t.sheet.hour,
-        written: Date.now(),
-      };
-      const kept = await change(name, (b) => (at === "end" ? withoutMark(withChapter(b, c, mark), key) : withChapter(b, c, mark)));
-      const shelved = kept.chapters.find((x) => x.id === c.id);
-      if (shelved) picture(name, shelved);
-    } finally {
-      done();
-    }
-  };
-
   const writeJob = async (j: ChapterJob): Promise<BookChapter | null> => {
     const book = await bookFor(j.hero);
     let done: () => void = () => {};
@@ -252,12 +208,6 @@ export function chapterKeeper(o: ChapterKeeperOptions): Chapters {
         heardCount++;
       }
       if (heard.length > HEARD_MAX) heard.splice(0, heard.length - HEARD_MAX);
-    },
-    due(t, at, who) {
-      hero = who.name || "the traveller";
-      // The story as it is now: play goes on (and changes the trip) while the chapter waits its turn and is written.
-      const now = JSON.parse(JSON.stringify(t)) as Trip;
-      queue = queue.then(() => write(now, at, who)).catch((e) => fell("chapter", e));
     },
     dueWith(job) {
       const work = queue.then(() => writeJob(job));

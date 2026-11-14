@@ -4,28 +4,14 @@
  * Inlay Illustrator over the shared RPC pool (a fake pool here, as the sibling project Gambit tests its own).
  */
 import { describe, expect, test } from "bun:test";
-import { COURIER, RESCUE } from "../src/content/adventures.js";
-import { STOCK_SCENES } from "../src/content/scenes.js";
-import { startTrip, type Trip } from "../src/engine/adventure.js";
-import { bookFile, chapterMaterial, chapterWorth, checkChapter, emptyBook, established, establishedSaid, markOf, pictureId, readBook, withChapter, withMark, withoutMark, withPicture, type Book, type BookChapter } from "../src/engine/chapter.js";
+import { bookFile, chapterWorth, checkChapter, emptyBook, established, establishedSaid, pictureId, readBook, withChapter, withMark, withoutMark, withPicture, type Book, type BookChapter } from "../src/engine/chapter.js";
 import { DEFAULT_CONTENT } from "../src/engine/content.js";
-import { START } from "../src/engine/hero.js";
-import type { Sheet } from "../src/engine/moment.js";
-import { sceneAdventure, startHand } from "../src/engine/hand.js";
 import { allowedChapter, chapterMessages, materialSaid, parseChapter, writeChapter } from "../src/game/chapterwriter.js";
 import { chapterKeeper, CLOTHED } from "../src/game/chapters.js";
-import type { Ask, Message } from "../src/game/prompts.js";
+import type { Ask, Message } from "../src/game/ask.js";
 import { bookPathOk, createBooks } from "../src/backend/book.js";
 import { createPictures } from "../src/backend/pictures.js";
 import { layBook, openingPage, roman, wrapLines } from "../src/room/bookpages.js";
-
-const SHEET: Sheet = { stats: { brawn: 1, grace: 2, charm: 3, guile: 2, wits: 1, sense: 1 }, ...START, hour: 19 };
-const begun = (): Trip => startHand(startTrip(sceneAdventure(STOCK_SCENES, { seed: "book", who: "a courier", startHour: 19 }), SHEET, "book"));
-/** The story after its first scene, got through, resting before the second. */
-const afterFirst = (): Trip => {
-  const t = begun();
-  return { ...t, deeds: ["talked Orla round"], hand: { ...t.hand!, scene: 1, opened: false } };
-};
 const HERO = { name: "Wren", who: "a courier with a sealed letter" };
 
 const ANSWER = [
@@ -40,61 +26,6 @@ const ANSWER = [
   "- The toll yard is asking after the courier.",
   "PICTURE: A broad tired woman sits alone in a lamplit boat shed at night, turning a coin in her fingers, the river dark beyond the open door.",
 ].join("\n");
-
-describe("what a chapter is written from", () => {
-  test("at a rest: the scene got through, its person, the player's deeds and the narrator's lines", () => {
-    const m = chapterMaterial(afterFirst(), "rest", { hero: HERO, told: ["The ferry pulls away into the fog."], more: ["Orla's brother works the toll yard."] });
-    expect(m.happened.length).toBe(1);
-    expect(m.happened[0]).toContain("The Night Ferry");
-    expect(m.happened[0]).toContain("the player got through");
-    expect(m.people.map((p) => p.name)).toEqual(["Orla"]);
-    expect(m.people[0]!.wants).toContain("keep the coin");
-    expect(m.deeds).toEqual(["talked Orla round"]);
-    expect(m.told).toEqual(["The ferry pulls away into the fog."]);
-    // More material goes in through `more`, and reaches the model as it is.
-    expect(m.more).toEqual(["Orla's brother works the toll yard."]);
-    expect(materialSaid(m)).toContain("MORE:\n- Orla's brother works the toll yard.");
-    expect(m.hero).toEqual({ name: "Wren", who: "a courier with a sealed letter" });
-    expect(chapterWorth(m)).toBe(true);
-  });
-
-  test("the next chapter starts where the last left off: no scene, deed or loss written about twice", () => {
-    const t1 = afterFirst();
-    const mark = markOf(t1, 5);
-    const t2: Trip = { ...t1, over: "deadline", deeds: [...t1.deeds, "slipped past the sergeant"], hand: { ...t1.hand!, scene: 2, opened: true, lost: ["They keep your purse."] } };
-    const m = chapterMaterial(t2, "end", { hero: HERO, since: mark });
-    expect(m.happened.map((h) => h.split(":")[0])).toEqual(["The Toll Yard", "The Magistrate's Door"]);
-    expect(m.deeds).toEqual(["slipped past the sergeant"]);
-    expect(m.lost).toEqual(["They keep your purse."]);
-    expect(m.people.map((p) => p.name)).toEqual(["Halden"]);
-    expect(m.story.over).toBe("lost");
-    expect(m.story.ending).toBe(STOCK_SCENES.lost);
-    // Nothing new since a mark: not worth a chapter at a rest, but the end of a story always is.
-    const still = chapterMaterial(t1, "rest", { hero: HERO, since: mark });
-    expect(still.happened).toEqual([]);
-    expect(chapterWorth(still)).toBe(false);
-    expect(chapterWorth({ ...still, at: "end" })).toBe(true);
-  });
-
-  test("a road story: the stops reached since the last chapter, and who was at each", () => {
-    const t = startTrip(RESCUE, COURIER, "road");
-    const first = t.adv.stops.find((s) => !t.visited.includes(s.id))!;
-    const bram = { id: "bram", name: "Bram", look: "a miller floured to the elbows", voice: "slow and gruff", wants: "his mill wheel mended", attitude: "friendly", helped: true };
-    const walked = { ...t, visited: [...t.visited, first.id], people: { [first.id]: bram } } as unknown as Trip;
-    const m = chapterMaterial(walked, "stop", { hero: HERO, since: markOf(t, 0) });
-    expect(m.happened.length).toBe(1);
-    expect(m.happened[0]).toContain(first.name);
-    expect(m.people).toEqual([{ name: "Bram", who: "a miller floured to the elbows; slow and gruff", wants: "his mill wheel mended", met: `${first.name}; they are friendly toward the player, and the player did what they wanted` }]);
-  });
-
-  test("the model is told it is not a recap, and given the form", () => {
-    const [sys, user] = chapterMessages(chapterMaterial(afterFirst(), "rest", { hero: HERO }), DEFAULT_CONTENT, false) as [Message, Message];
-    expect(sys.content).toContain("A chapter is not a recap");
-    expect(sys.content).toContain("TITLE:");
-    expect(sys.content).toContain("PICTURE:");
-    expect(user.content).toContain("THE PLAYER'S CHARACTER (seen only by others): Wren");
-  });
-});
 
 describe("a model's chapter, checked", () => {
   test("the form asked for is read into its parts", () => {
@@ -135,19 +66,6 @@ describe("a model's chapter, checked", () => {
     const lamp = allowedChapter(d, { ...DEFAULT_CONTENT, lines: ["lamplit"] })!;
     expect(lamp.picture).toBe("");
     expect(lamp.text).toEqual(d.text);
-  });
-
-  test("written by a model; with no model, or none that answers, nothing is written and the reason is given", async () => {
-    let asked: Message[] = [];
-    const ask: Ask = async (messages) => ((asked = messages), ANSWER);
-    const m = chapterMaterial(afterFirst(), "rest", { hero: HERO });
-    const d = await writeChapter(ask, m, DEFAULT_CONTENT, null);
-    expect(d?.title).toBe("The Ferry Keeper's Coin");
-    expect(asked[0]!.content).toContain("not a recap");
-    const why: string[] = [];
-    expect(await writeChapter(null, m, DEFAULT_CONTENT, null, (r) => why.push(r))).toBeNull();
-    expect(await writeChapter(async () => "No.", m, DEFAULT_CONTENT, null, (r) => why.push(r))).toBeNull();
-    expect(why).toEqual(["no model to write it", "only 1 words: too short to be a chapter"]);
   });
 });
 
@@ -228,109 +146,6 @@ describe("the book kept in the user's own storage (backend/book.ts)", () => {
     expect(books.keep("u", "../etc/passwd", b)).rejects.toThrow("not a book's path");
     expect(books.keep("u", file, { v: 2 })).rejects.toThrow("not a book");
     expect(books.read("u", "elsewhere.json")).rejects.toThrow("not a book's path");
-  });
-});
-
-describe("the keeper: chapters written in the background, kept and shelved", () => {
-  const keeper = (ask: Ask | null, draw?: (p: { id: string; text: string }) => Promise<{ imageId: string; url: string } | { why: string }>) => {
-    const saved = new Map<string, Book>();
-    const shown: Book[] = [];
-    const writing: Promise<unknown>[] = [];
-    const fell: string[] = [];
-    let allowed = !!draw;
-    const k = chapterKeeper({
-      ask,
-      card: "Maren",
-      load: async (h) => saved.get(h) ?? null,
-      save: async (h, b) => void saved.set(h, b),
-      shelf: { writing: (w) => void writing.push(w), show: (b) => void shown.push(b) },
-      ...(draw ? { pictures: { allowed: () => allowed, draw } } : {}),
-      fellBack: (job, why) => void fell.push(`${job}: ${why}`),
-    });
-    return { k, saved, shown, writing, fell, allow: (on: boolean) => (allowed = on) };
-  };
-
-  test("a rest's chapter is written, kept, shelved, and its picture drawn, without the game waiting on any of it", async () => {
-    const prompts: string[] = [];
-    const drawn: { id: string; text: string }[] = [];
-    const { k, saved, shown, writing, fell } = keeper(
-      async (messages) => (prompts.push(messages.map((m) => (typeof m.content === "string" ? m.content : "")).join("\n")), ANSWER),
-      async (p) => (drawn.push(p), { imageId: "img9", url: "/api/v1/images/img9" }),
-    );
-    k.heard(["The ferry pulls away into the fog."]);
-    k.due(afterFirst(), "rest", HERO);
-    await k.settled();
-    const b = saved.get("Wren")!;
-    expect(b.chapters.length).toBe(1);
-    expect(b.chapters[0]!.title).toBe("The Ferry Keeper's Coin");
-    expect(b.chapters[0]!.picture).toMatchObject({ status: "ready", imageId: "img9" });
-    expect(writing.length).toBe(1);
-    expect(shown.at(-1)!.chapters[0]!.picture?.status).toBe("ready");
-    // What the narrator said is in what the chapter is written from, and the picture is never more than clothed.
-    expect(prompts[0]).toContain("The ferry pulls away into the fog.");
-    expect(drawn[0]!.text).toContain("A broad tired woman");
-    expect(drawn[0]!.text).toEndWith(CLOTHED);
-    expect(fell).toEqual([]);
-    // From now on the tellings and the next builder are told what it established.
-    k.story(b.chapters[0]!.story);
-    expect(k.established()).toContain("Orla kept the stranger's coin");
-    expect(k.forBuilder()).toContain("Orla kept the stranger's coin");
-  });
-
-  test("pictures are asked only while the user allows them", async () => {
-    const draws: string[] = [];
-    const { k, saved, allow } = keeper(async () => ANSWER, async (p) => (draws.push(p.id), { why: "never" }));
-    allow(false);
-    k.due(afterFirst(), "rest", HERO);
-    await k.settled();
-    expect(draws).toEqual([]);
-    expect(saved.get("Wren")!.chapters[0]!.picture).toBeUndefined();
-  });
-
-  test("a failed chapter is not written, and why goes to the fallback report; its material waits for the next one", async () => {
-    let n = 0;
-    const { k, saved, fell } = keeper(async () => (n++ < 2 ? Promise.reject(new Error("the model is down")) : ANSWER));
-    k.due(afterFirst(), "rest", HERO);
-    await k.settled();
-    expect(saved.get("Wren")?.chapters.length ?? 0).toBe(0);
-    expect(fell).toEqual(["chapter: the model is down"]);
-    // The same story, later: the first scene is still in what the next chapter is written from.
-    const t = afterFirst();
-    k.due({ ...t, hand: { ...t.hand!, scene: 2, opened: false } }, "rest", HERO);
-    await k.settled();
-    expect(saved.get("Wren")!.chapters.length).toBe(1);
-  });
-
-  test("nothing new since the last chapter: none is written, only the mark moves", async () => {
-    let asked = 0;
-    const { k, saved } = keeper(async () => (asked++, ANSWER));
-    const t = afterFirst();
-    k.due(t, "rest", HERO);
-    await k.settled();
-    k.due(t, "rest", HERO);
-    await k.settled();
-    expect(asked).toBe(1);
-    expect(saved.get("Wren")!.chapters.length).toBe(1);
-  });
-
-  test("a picture that fails is reported, and the chapter stands without it", async () => {
-    const { k, saved, fell } = keeper(async () => ANSWER, async () => ({ why: "Inlay Illustrator took too long" }));
-    k.due(afterFirst(), "rest", HERO);
-    await k.settled();
-    expect(saved.get("Wren")!.chapters[0]!.picture).toMatchObject({ status: "failed", why: "Inlay Illustrator took too long" });
-    expect(fell).toEqual(["chapter picture: Inlay Illustrator took too long"]);
-  });
-
-  test("the trip is taken as it was when the chapter came due, though play goes on and changes it", async () => {
-    let release: () => void = () => {};
-    const gate = new Promise<void>((r) => (release = r));
-    const { k, saved } = keeper(async () => (await gate, ANSWER));
-    const t = afterFirst();
-    k.due(t, "rest", HERO);
-    t.deeds.push("something done after the rest");
-    release();
-    await k.settled();
-    expect(saved.get("Wren")!.marks[`${t.adv.id}|${t.seed}`]!.deeds).toEqual(["talked Orla round"]);
   });
 });
 

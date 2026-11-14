@@ -13,9 +13,9 @@ import { CHAT_HERO, chatStory } from "../engine/chatbook.js";
 import { DEFAULT_CONTENT, readContent, type ContentSettings } from "../engine/content.js";
 import { chapterKeeper } from "../game/chapters.js";
 import { chatBook, type ChatBook, type ChatBookResult, type ChatWho } from "../game/chatbook.js";
-import type { Decide } from "../game/decisions.js";
+import type { Decide } from "../game/decide.js";
 import type { PresetSnapshot } from "../game/preset.js";
-import type { Ask } from "../game/prompts.js";
+import type { Ask } from "../game/ask.js";
 import type { ToBackend, ToFrontend } from "../shared/protocol.js";
 import { picturesOn } from "./pictures.js";
 

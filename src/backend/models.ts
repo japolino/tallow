@@ -13,7 +13,7 @@
  * Adapted from the sibling project's model layer (its src/backend/models.ts). Copied, not imported (docs/DESIGN.md, 10).
  */
 import type { DecisionAnswer, DecisionQuestion, EmbeddingConnectionDTO, SpindleAPI } from "lumiverse-spindle-types";
-import type { Message, Role } from "../game/prompts.js";
+import type { Message, Role } from "../game/ask.js";
 import type { ModelsState } from "../shared/protocol.js";
 import { attemptsFor, isAbort, normalizeSettings, patchSettings, pickDecision, ROLES, type ModelsPatch, pickEmbedding, reasoningOverride, textHash, type Attempt, type DecisionConn, type LlmConn, type ModelSettings } from "../meaning/models.js";
 

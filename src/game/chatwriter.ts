@@ -12,7 +12,7 @@ import { type ChapterDraft } from "../engine/chapter.js";
 import { contentRules, type ContentSettings } from "../engine/content.js";
 import { CHAPTER_FORM, CHAPTER_MS, writeDraft } from "./chapterwriter.js";
 import type { PresetSnapshot } from "./preset.js";
-import type { Ask, Message } from "./prompts.js";
+import type { Ask, Message } from "./ask.js";
 
 /** What a chat's chapter is written from. Everything here is the chat's own; nothing is made up by code. */
 export interface ChatMaterial {

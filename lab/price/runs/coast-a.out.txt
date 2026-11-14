@@ -1,0 +1,190 @@
+WORLD: Present day. Saltwick, a small weird town on a cold coast: a half-legal growers' commune in the old cannery, a bored sheriff, a ferry twice a day, tourists in A...
+WHO: Juno, twenty-six, a botany dropout living in a van, charming, disorganised, owes money to her sister. Good with plants, bad with plans.
+ASKED FOR: Nothing in particular. I just want to hang around the cannery and get Mara, the commune's prickly beekeeper, to like me.
+----------------------------------------------------------------------------------------------------
+NARRATOR: The fog has already swallowed the cannery pier, leaving only the sodium glare over the loading dock and the sour, comforting smell of drying herb to cut the coastal chill. You’re leaning against the zinc table with resin on your fingers, watching Mara use a hot knife to uncap a frame of dark, sea-mist honey. She hasn't offered you a cup of chicory, hasn't looked up, and clearly views you as just another useless stray out of a broken-down van. Still, you’re here, determined to scrape some warmth out of that cold coastal scowl.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Cannery Extraction Loft. The sweet, heavy stench of curing sativa and wet wool hangs in the rafters while the sound of harbor breakers rattles the salt-crusted skylights.
+YOURS:
+  c4 Disarming Warmth: Good for turning skeptical glances into grudging conversations, coaxing extra soup out of the kitchen, and making people forget how late you showed up. | catch: People eventually notice that your smiles arrive faster than your promises.
+  c5 The Moss-Wagon (2 uses): A rusty 1998 Dodge camper crammed with half-dead cuttings, salvaged peat moss, thrifted wool quilts, and everything you own in this world. | catch: The starter clicks uselessly when the coastal damp settles in, and its tags are three months expired.
+  c6 Drop-Out Botany: You can spot nutrient deficiencies, fungal blight, and odd genetic mutations from across a dark room, translating leaf-curl into exact remedies. | catch: You lose hours obsessing over a sick stem while the practical chores pile up around your ankles.
+  c7 Clara's Unanswered Voicemails: Six increasingly furious recordings from your sister, who fronted two thousand dollars for your community college tuition before you drove west. | catch: She knows people who run the fish trucks through Saltwick, and the guilt is a slow leak in your gut.
+HERE (free to lean on while you are here):
+  c1 Mara of the Salt-Hives: A beekeeper with resin-stained canvas sleeves who extracts dark, mineral-rich honey from coastal hives; she wants a reliable hand who won't treat the cannery like a hippie commune, and she fears the gray mold creeping in | catch: She possesses a tongue like green cedar smoke and keeps a mental catalog of every favor she is owed.
+  c2 Fog-Damp Propagation Bench (1 use): A long slate counter beneath flickering gro-lux tubes where harbor fog leaks through cracked glass, causing cuttings to throw out roots twice as fast as normal. | catch: Anything rooted here develops a strange, brittle greed and wilts the moment it leaves the cannery air.
+  c3 The Loading Dock Slate: A grease-penciled ledger of trades, hours worked, and gallons of diesel owed; good for settling accounts or trading weed-trimming hours for jars of honey. | catch: Wiping off a debt without the commune council's sign-off gets your van parked outside the gate by nightfall.
+WHAT YOU ARE AFTER:
+  w8 Mara's Grudging Regard: A permanent invitation to sit by her cast-iron stove, drink her bitter chicory tea, and work the comb alongside her without being treated like a pest.
+    w8.1 [0/2] A healthy, late-blooming sea-aster cutting capable of sustaining the hives through the cold mist
+    w8.2 [0/2] A miserable, uninterrupted afternoon spent bleaching black rot from the north storage frames
+    w8.3 [0/2] Surrendering your van keys to her hook until your debts to the coop floor are cleared
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Sheriff Varner's Cruiser: Idling at the gravel turnaround by the gate, flashing its spotlight across van windshields to see who is sleeping where they shouldn't. | turned aside by: A local property owner willing to claim you as their hired labor [0/2] | in 3 beats: An orange towing summons slapped across your driver-side window and a ban from the cannery lot.
+----------------------------------------------------------------------------------------------------
+
+YOU: I find Mara by the hives behind the cannery and just start helping her carry frames without being asked, chattering about how the fog here makes the clover taste like salt.
+    (reader: {"plays":[{"card":"c4","on":"w8.2","fit":"none","give":false,"why":"Uninvited chatter and hauling harvest frames does not bleach black rot from the north storage frames."}],"time":0,"rest":false,"goes":null})
+    . Disarming Warmth does not bear on "A miserable, uninterrupted afternoon spent bleaching black rot from the north storage frames": Uninvited chatter and hauling harvest frames does not bleach black rot from the north storage frames.. It is not spent.
+    . Sheriff Varner's Cruiser: 2 beats before it takes what it came for.
+
+NARRATOR: I watch that sunny van-life charm bounce right off her oilskin apron. You hoist a heavy cedar box, prattling about coastal clover, but Mara merely peels a gauntlet and sets her crate down with a dismissive thud.
+
+"Clover doesn’t take salt, dropout," she says, voice dry as green cedar smoke. "And hauling clean harvest doesn't scrub the black rot out of my north storage frames. Put it down."
+
+Your smile buys nothing here; she deals in gallons of bleach and blistered knuckles, not unsolicited chatter. 
+
+Past the salt-hives, a hard beam of white light cuts the dripping mist. Out by the gravel turnaround, Sheriff Varner’s cruiser idles, sweeping its spotlight across your Dodge’s salt-crusted windshield. He is taking his time, but not much of it.
+[candle 20 | wounds 0 | dice 1,7,13 | markers 0]
+[yours: Disarming Warmth; The Moss-Wagon x2; Drop-Out Botany; Clara's Unanswered Voicemails]
+[after: Mara's Grudging Regard ---]
+[trouble: Sheriff Varner's Cruiser (0/2, in 2)]
+
+YOU: "You talk too much," Mara says, not looking up, but she hands me the smoker anyway. I take it as a win and ask her what is wrong with hive six.
+    (reader: {"ties":[{"card":"c1","text":"Willing to put you to minor use with the smoker, though still irritated by the chatter."}],"time":0,"rest":false,"goes":null})
+    . Mara of the Salt-Hives: Willing to put you to minor use with the smoker, though still irritated by the chatter..
+
+NARRATOR: The tin bellows are cool against your palms, packed with smoldering pine and green tansy. She said you talk too much, but the iron is in your grip now—a sliver of use bought with stubborn chatter. 
+
+"The queen went sterile two tides ago," Mara mutters, wedging her hive tool into the damp gray propolis of six. "Smell it? Sour rot. They’re lethargic, comb’s going chalky. Pump, dropout. Low and cool, unless you want fifty stings under your flannel."
+
+You squeeze the leather, drifting fragrant smoke across the frames. Mara tolerates your presence by inches, but time is narrower than that. Out on the gravel turnaround, Sheriff Varner’s spotlight settles squarely on the expired tags of your Dodge, idling in the cold.
+[candle 20 | wounds 0 | dice 1,7,13 | markers 0]
+[yours: Disarming Warmth; The Moss-Wagon x2; Drop-Out Botany; Clara's Unanswered Voicemails]
+[after: Mara's Grudging Regard ---]
+[trouble: Sheriff Varner's Cruiser (0/2, in 2)]
+
+YOU: I want to breed a new strain of cannabis. Something that only flowers in this fog. I am going to call it Saltwick Ghost.
+    (reader: {"plays":[],"tries":[],"declared":[],"wish":{"name":"Saltwick Ghost","text":"A unique cannabis cultivar bred to thrive and flower only in the cold coastal fog.","size":"middling","terms":["A vigorous mother plant adapted to the cannery's fog-damp microclimate","A full cycle of controlled pollination and flowering kept free of rot"],"instead":null},"had":null,"find":null,"ties":[],"time":0,"rest":false,"goes":null})
+    . A new want is on the table: Saltwick Ghost (middling). It takes: A vigorous mother plant adapted to the cannery's fog-damp microclimate; A full cycle of controlled pollination and flowering kept free of rot.
+
+NARRATOR: A poet’s ambition in a squatter’s boots. I lay it on the table between us, then: *Saltwick Ghost*. A lovely phantom, if you can coax it from the sea air, but I do not give away ghosts for free. 
+
+To buy it, you will need a mother plant vigorous enough to drink this cannery's coastal brine without rotting at the root. After that comes the tender, meticulous labor: an entire cycle of controlled pollination, nursing those frosted colas through the wet cold while keeping every calyx pure and free of mold. 
+
+Beside you, Mara scrapes sour propolis with a vicious rasp, indifferent to your agronomic dreams. Outside, Sheriff Varner’s spotlight stays stubbornly pinned to your Dodge’s rusted bumper, white and waiting in the dark.
+[candle 20 | wounds 0 | dice 1,7,13 | markers 0]
+[yours: Disarming Warmth; The Moss-Wagon x2; Drop-Out Botany; Clara's Unanswered Voicemails]
+[after: Mara's Grudging Regard ---; Saltwick Ghost --]
+[trouble: Sheriff Varner's Cruiser (0/2, in 2)]
+
+YOU: I take cuttings from the commune's mother plants when nobody is looking and cross them with the feral hemp that grows in the cannery gutters, using my van as a nursery.
+    (reader: {"plays":[{"card":"c5","on":"w10.1","fit":"part","give":false,"why":"The camper provides salvaged peat and shelter for rooting the stolen cross away from prying eyes."},{"card":"c6","on":"w10.1","fit":"part","give":false,"why":"Her botanical eye selects hardy gutter hemp to cross with indoor genetics for fog tolerance."}],"time":1})
+    . The Moss-Wagon goes part of the way to "A vigorous mother plant adapted to the cannery's fog-damp microclimate" (1 of 2).
+    . The Moss-Wagon: 1 use left.
+    . Drop-Out Botany goes part of the way to "A vigorous mother plant adapted to the cannery's fog-damp microclimate" (2 of 2).
+    . Drop-Out Botany is leaned on, and is no use again until a rest.
+    . A notch of the candle burns: 19 left.
+    . Sheriff Varner's Cruiser: 1 beat before it takes what it came for.
+
+NARRATOR: Quick fingers and the sharp nick of a thumbnail. In the steamy, peat-choked dark of your camper, you graft the commune’s pampered stock to gutter-tough feral hemp, your tired eyes stinging from the strain of split stems and damp twine. Your botanical wits are spent down to the nub, but the craft holds: in an oily yogurt tub, a new mother takes, thick-veined and defiant, drinking the cannery fog like sweet water. Half your ghost is made.
+
+A notch of wax melts away between us.
+
+Outside, heavy boots crunch on the wet gravel. Sheriff Varner cuts his engine, clipboard in hand, stepping squarely into the white glare of his cruiser's spotlight. You have one breath before that orange tow summons hits your glass.
+[candle 19 | wounds 0 | dice 1,7,13 | markers 0]
+[yours: Disarming Warmth; The Moss-Wagon x1; Drop-Out Botany (tired); Clara's Unanswered Voicemails]
+[after: Mara's Grudging Regard ---; Saltwick Ghost #-]
+[trouble: Sheriff Varner's Cruiser (0/2, in 1)]
+
+YOU: Three months later the first plants flower, pale as milk, and they smell like the sea. It worked. Mara is the first one I show.
+    (reader: {"declared":[{"term":"w10.2"}],"time":2})
+    . On account: the narrator takes a marker (c11) for "A full cycle of controlled pollination and flowering kept free of rot". It will be called in.
+    . Saltwick Ghost is yours.
+    . 2 notches of the candle burn: 17 left.
+    . Dealt to you, for Saltwick Ghost: Saltwick Ghost Mother (c12). A hardy, van-rooted cannabis mother plant that flowers only in dense marine fog. Yields rot-proof cuttings prized for heavy resin and serious local barter. The catch: It withers in dry heat, and its unmistakable salty-sweet funk advertises stolen cannery genetics to anyone with a nose.
+    . Sheriff Varner's Cruiser takes The Moss-Wagon from you.
+
+NARRATOR: Two notches burn down between us as three damp months slip into the dark. I keep your marker for that rot-free season—do not think I will forget what was promised. 
+
+You bought your phantom, though you sleep on burlap sacks now; Varner hitched your Moss-Wagon to his winch weeks ago. 
+
+I slide the mother over: pale as skim milk, fat with brine-scented resin. Guard her from dry heat, and mind who sniffs her—she screams stolen cannery blood. 
+
+In the extraction loft, Mara leans over her smoker, eyes watering in the haze. She inspects your milky bud, jaw set hard. 
+
+"Smells like high tide and petty theft," she says, but she doesn't shove it away.
+[candle 17 | wounds 0 | dice 1,7,13 | markers 1]
+[yours: Disarming Warmth; Drop-Out Botany (tired); Clara's Unanswered Voicemails; Saltwick Ghost Mother x3]
+[after: Mara's Grudging Regard ---]
+
+YOU: I give Mara the very first jar of Saltwick Ghost. All of it. I tell her her bees did half the work anyway.
+    (reader: {"plays":[{"card":"c12","on":"w8.1","fit":"none","give":false,"why":"Cured weed cannot sustain wintering hives; Mara needs late-blooming sea-aster forage to keep her bees alive."}],"ties":[{"card":"c1","text":"Pleased by the tribute to her bees, though still waiting on actual labor."}],"time":0,"rest":false,"goes":null})
+    . Saltwick Ghost Mother does not bear on "A healthy, late-blooming sea-aster cutting capable of sustaining the hives through the cold mist": Cured weed cannot sustain wintering hives; Mara needs late-blooming sea-aster forage to keep her bees alive.. It is not spent.
+    . Mara of the Salt-Hives: Pleased by the tribute to her bees, though still waiting on actual labor..
+
+NARRATOR: Mara weighs the heavy glass in her sting-scarred palm. The flattery lands—nobody compliments her girls without earning a rare, crooked twitch of her mouth.
+
+"They’ve got better taste than the trimmers," she concedes, slipping the jar into her canvas pocket. 
+
+Still, smoke cannot winter a hive. Your pale Ghost smells of high tide, but it yields no nectar when the cold mist settles over the salt marsh; she needs living, late-blooming sea-aster to keep them alive, not sticky tribute, and sweet talk isn't labor. You haven't bought your seat by her fire yet. 
+
+Mara taps a hive tool against a rancid, mold-spotted rack. "Pretty speech, Juno. Now see if your hands move as fast as your tongue."
+[candle 17 | wounds 0 | dice 1,7,13 | markers 1]
+[yours: Disarming Warmth; Drop-Out Botany (tired); Clara's Unanswered Voicemails; Saltwick Ghost Mother x3]
+[after: Mara's Grudging Regard ---]
+
+YOU: I convince the sheriff to leave the commune alone forever.
+    (reader: {"plays":[],"tries":[{"on":"new.1","why":"Attempting to sway the town's law with raw talk and nerve."}],"declared":[],"wish":{"name":"The Sheriff's Blind Eye","text":"The local sheriff agrees to leave the cannery commune and its growers entirely alone for good.","size":"large","terms":["A regular, deniable cut or barter arrangement that makes dereliction of duty worth his while","Serious personal leverage or shared complicity to keep him from reneging","An enforceable promise that cannery business, smell, and friction stay strictly out of town limits"],"instead":null},"had":null,"find":null,"ties":[],"time":1,"rest":false,"goes":null})
+    (a bare try at "A regular, deniable cut or barter arrangement that makes dereliction of duty worth his while"; dice 1, 7, 13; spent: 13)
+    . A new want is on the table: The Sheriff's Blind Eye (large). It takes: A regular, deniable cut or barter arrangement that makes dereliction of duty worth his while; Serious personal leverage or shared complicity to keep him from reneging; An enforceable promise that cannery business, smell, and friction stay strictly out of town limits.
+    . A try, on a 13: it lands (1 of 2 toward "A regular, deniable cut or barter arrangement that makes dereliction of duty worth his while").
+    . A notch of the candle burns: 16 left.
+
+NARRATOR: A notch slumps into tallow; sixteen burn on. 
+
+You want a badge bought whole and buried deep—an ambitious order for a girl sleeping on burlap. Yet your easy smile works its small miracle over the hood of his cruiser. Sheriff Miller weighs the proposition, squinting through the coastal mist, half-convinced by the promise of a quiet, deniable cut.
+
+"I can forget where the cannery road turns off," he murmurs, "provided it stays worth my gas."
+
+You've bought half a bribe, Juno, but forever has a steeper tariff. If you want his permanent blindness, that barter must become a reliable habit; you'll need leverage filthy enough to keep him bound when the county asks questions; and you must guarantee the commune's stink and squabbles never drift past the town line.
+
+NARRATOR: You thought that rot-free harvest was a gift from the sea fog, Juno, but clean buds leave a loud trail. The moment you popped that jar for Mara, the loft flooded with the telltale, brine-soaked funk of stolen cannery genetics. Heavy boots echo on the stairs. Nesta steps onto the extraction floor, nostrils flaring, and locks his bloodshot eyes directly onto your sticky fingers.
+[candle 16 | wounds 0 | dice 1,7 | markers 1]
+[yours: Disarming Warmth; Drop-Out Botany (tired); Clara's Unanswered Voicemails; Saltwick Ghost Mother x3]
+[after: Mara's Grudging Regard ---; The Sheriff's Blind Eye +--]
+[trouble: Nesta, Cannery Grow Boss (0/3, in 3)]
+
+YOU: Mara kisses me. She says she has wanted to since the day with the smoker.
+    (reader: {"ties":[{"card":"c1","text":"Harboring a sudden, confessed desire for you that she has kept quiet since the day with the smoker."}],"time":0,"rest":false,"goes":null})
+    . Mara of the Salt-Hives: Harboring a sudden, confessed desire for you that she has kept quiet since the day with the smoker..
+
+NARRATOR: Mara’s sting-calloused hand knots into your collar, hauling you down against the extraction bench. Her mouth tastes of chicory, propolis, and cold coastal salt, cutting the breath right out of your chest. 
+
+"Ever since the day with the smoker," she mutters against your lips, rough and unapologetic, laying bare the hunger she’s kept bottled behind her veil. 
+
+It is a sweet theft, Juno, and entirely true. But intimacy does not drown out the floorboards groaning behind you. Nesta hits the threshold with the weight of wet timber, nostrils flaring as the brine-thick perfume of your stolen Ghost cuts through the loft's curing funk. His heavy shears clink against his thigh. Mara doesn't let go of your shirt, but the air has gone razor-thin.
+[candle 16 | wounds 0 | dice 1,7 | markers 1]
+[yours: Disarming Warmth; Drop-Out Botany (tired); Clara's Unanswered Voicemails; Saltwick Ghost Mother x3]
+[after: Mara's Grudging Regard ---; The Sheriff's Blind Eye +--]
+[trouble: Nesta, Cannery Grow Boss (0/3, in 3)]
+----------------------------------------------------------------------------------------------------
+CANDLE 16 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Cannery Extraction Loft. The sweet, heavy stench of curing sativa and wet wool hangs in the rafters while the sound of harbor breakers rattles the salt-crusted skylights.
+YOURS:
+  c4 Disarming Warmth: Good for turning skeptical glances into grudging conversations, coaxing extra soup out of the kitchen, and making people forget how late you showed up. | catch: People eventually notice that your smiles arrive faster than your promises.
+  c6 Drop-Out Botany (tired): You can spot nutrient deficiencies, fungal blight, and odd genetic mutations from across a dark room, translating leaf-curl into exact remedies. | catch: You lose hours obsessing over a sick stem while the practical chores pile up around your ankles.
+  c7 Clara's Unanswered Voicemails: Six increasingly furious recordings from your sister, who fronted two thousand dollars for your community college tuition before you drove west. | catch: She knows people who run the fish trucks through Saltwick, and the guilt is a slow leak in your gut.
+  c12 Saltwick Ghost Mother (3 uses): A hardy, van-rooted cannabis mother plant that flowers only in dense marine fog. Yields rot-proof cuttings prized for heavy resin and serious local barter. | catch: It withers in dry heat, and its unmistakable salty-sweet funk advertises stolen cannery genetics to anyone with a nose.
+HERE (free to lean on while you are here):
+  c1 Mara of the Salt-Hives: A beekeeper with resin-stained canvas sleeves who extracts dark, mineral-rich honey from coastal hives; she wants a reliable hand who won't treat the cannery like a hippie commune, and she fears the gray mold creeping in [now: Harboring a sudden, confessed desire for you that she has kept quiet since the day with the smoker.] | catch: She possesses a tongue like green cedar smoke and keeps a mental catalog of every favor she is owed.
+  c2 Fog-Damp Propagation Bench (1 use): A long slate counter beneath flickering gro-lux tubes where harbor fog leaks through cracked glass, causing cuttings to throw out roots twice as fast as normal. | catch: Anything rooted here develops a strange, brittle greed and wilts the moment it leaves the cannery air.
+  c3 The Loading Dock Slate: A grease-penciled ledger of trades, hours worked, and gallons of diesel owed; good for settling accounts or trading weed-trimming hours for jars of honey. | catch: Wiping off a debt without the commune council's sign-off gets your van parked outside the gate by nightfall.
+WHAT YOU ARE AFTER:
+  w8 Mara's Grudging Regard: A permanent invitation to sit by her cast-iron stove, drink her bitter chicory tea, and work the comb alongside her without being treated like a pest.
+    w8.1 [0/2] A healthy, late-blooming sea-aster cutting capable of sustaining the hives through the cold mist
+    w8.2 [0/2] A miserable, uninterrupted afternoon spent bleaching black rot from the north storage frames
+    w8.3 [0/2] Surrendering your van keys to her hook until your debts to the coop floor are cleared
+  w13 The Sheriff's Blind Eye: The local sheriff agrees to leave the cannery commune and its growers entirely alone for good.
+    w13.1 [1/2] A regular, deniable cut or barter arrangement that makes dereliction of duty worth his while
+    w13.2 [0/2] Serious personal leverage or shared complicity to keep him from reneging
+    w13.3 [0/2] An enforceable promise that cannery business, smell, and friction stay strictly out of town limits
+ACROSS THE TABLE (the narrator's):
+  x14 TROUBLE Nesta, Cannery Grow Boss: Stomping into the extraction loft following the unmistakable brine-sweet funk of cured Ghost, grease pencil behind his ear and heavy shears at his belt. | turned aside by: A heavy tribute of clean cured bud to balance the cannery's shorted drying lines [0/3] | in 3 beats: He seizes the Ghost mother from your van and strikes your name off the loading dock slate.
+  c11 MARKER A marker for Saltwick Ghost: Owed for "A full cycle of controlled pollination and flowering kept free of rot", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (29.8s each), reader 8 (22s each), teller 8 (12.7s each), mint 1 (8s each), bite 1 (1.2s each), due 1 (15.3s each)

@@ -1,0 +1,344 @@
+WORLD: Harrowmere, a drowned canal city. Every lock has a keeper and every keeper answers to the Toll Magistrate, who taxes anything that floats or sells. The old rive...
+WHO: Wren, a broke noodle cook in her twenties with a handcart, a quick tongue and no skill at fighting. She left the Guild kitchens after a row with her old master, Chef Odalric.
+ASKED FOR: I want to open my own noodle stand at the foot of the Tide Tower, where the lock crews eat.
+----------------------------------------------------------------------------------------------------
+NARRATOR: The river smells of bilge and fried lard tonight, Wren, and every flagstone down here is slick enough to break an ankle. Look at them: sixty lock-hands trudging off the sluice gates with empty bellies, while the Guild barges across the cut charge half a shift's wage for cold gruel. You've wheeled your battered cart right into the Tide Tower's shadow without a shred of Magistrate's ink to save you. Odalric's bullies are scouring the upper slip, your charcoal is burning low, and the boatmen are waiting.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c4 Battered Pine Handcart (2 uses): Fitted with a copper broth-kettle, dry noodle racks, and a grease-cured charcoal brazier, it can turn out fifty bowls of steaming noodles before running dry. | catch: Its left iron rim screeches on wet stone, and it is far too heavy to run with when the watch whistles blow.
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Master Odalric's Kitchen-Thugs: Two dock-toughs armed with gutting knives and iron-tipped oars are checking the basin stalls, asking bargemen where the girl with the pine cart went. | turned aside by: A decoy crock of spoiled broth left in the upper slipway to lead their hunt across the cut. [0/2] | in 3 beats: They smash your handcart to splinters, dump your broth into the canal, and crack your fingers with an oar.
+----------------------------------------------------------------------------------------------------
+
+YOU: I wheel my cart up to the lock crew and ladle out a free bowl for whoever looks hungriest, asking who decides who gets to sell here.
+    (reader: {"plays":[],"tries":[],"declared":[],"wish":null,"find":{"name":"Lock-Hand's Word","text":"A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet.","kind":"fact","catch":"Steam and the smell of free broth quickly draw a clamouring crowd of empty hands."},"ties":[],"time":0,"rest":false,"goes":null})
+    . Dealt to you: Lock-Hand's Word (c10). A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. The catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+
+NARRATOR: The shivering fellow inhales your noodles like a drowning man takes air, grease glistening on his stubble. 
+
+"Brant," he mutters between scalding gulps. "The Lockmaster. Man lives on sour beer and bile. Settle his belly, slip him a cut of the copper, and he won’t see you till the Magistrate’s audit bell chimes."
+
+A fair trade: I slide the *Lock-Hand's Word* across the cloth to you. But generosity is a loud bell on wet stone. That rich steam drifts straight through the iron grates, and before your bowl is even empty, twenty more drenched watermen are shoving forward, hollow-eyed and shouting, a wall of empty hands reaching for your ladle.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c4 Battered Pine Handcart (2 uses): Fitted with a copper broth-kettle, dry noodle racks, and a grease-cured charcoal brazier, it can turn out fifty bowls of steaming noodles before running dry. | catch: Its left iron rim screeches on wet stone, and it is far too heavy to run with when the watch whistles blow.
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Master Odalric's Kitchen-Thugs: Two dock-toughs armed with gutting knives and iron-tipped oars are checking the basin stalls, asking bargemen where the girl with the pine cart went. | turned aside by: A decoy crock of spoiled broth left in the upper slipway to lead their hunt across the cut. [0/2] | in 3 beats: They smash your handcart to splinters, dump your broth into the canal, and crack your fingers with an oar.
+----------------------------------------------------------------------------------------------------
+
+YOU: I sneak past the toll men.
+    (reader: {"time":0,"rest":false,"goes":null})
+
+NARRATOR: You drop your shoulders and try to melt into the canal mist, Wren, but one does not simply slip away with a roaring brazier. Not when twenty famished lock-hands are shouting for broth and boxing each other's ears to reach your ladle. 
+
+The moment you nudge the handcart toward the shadows, its iron-banded wheel screeches against the wet granite like a stepped-on gull. At the gate, two toll men in oiled cloaks turn their lanterns straight toward the racket, their pike-butts thumping down on the timber. 
+
+"Hold your grease, girl," a burly boatman mutters, planting a thick palm on your cart’s rail to keep his place in line. 
+
+You haven’t gained an inch of dark stone. The toll gates remain barred, the lanterns are swinging your way, and you are right where you started.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c4 Battered Pine Handcart (2 uses): Fitted with a copper broth-kettle, dry noodle racks, and a grease-cured charcoal brazier, it can turn out fifty bowls of steaming noodles before running dry. | catch: Its left iron rim screeches on wet stone, and it is far too heavy to run with when the watch whistles blow.
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Master Odalric's Kitchen-Thugs: Two dock-toughs armed with gutting knives and iron-tipped oars are checking the basin stalls, asking bargemen where the girl with the pine cart went. | turned aside by: A decoy crock of spoiled broth left in the upper slipway to lead their hunt across the cut. [0/2] | in 3 beats: They smash your handcart to splinters, dump your broth into the canal, and crack your fingers with an oar.
+----------------------------------------------------------------------------------------------------
+
+YOU: I show the keeper my Guild knife and tell her I trained under Odalric himself, so she can see I am no canal-rat hawker; I ask her to stand for me with the Magistrate.
+    (reader: {"plays":[{"card":"c1","on":"w8.1","fit":"none","give":false,"why":"Brant fears the Magistrate's audit bell above all else and will not stick his neck out to vouch."},{"card":"c7","on":"w8.1","fit":"none","give":false,"why":"Invoking Odalric advertises your bounty rather than securing a clerk's official stamped dispensation."}],"time":0})
+    . Lockmaster Brant does not bear on "An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.": Brant fears the Magistrate's audit bell above all else and will not stick his neck out to vouch.. It is not spent.
+    . Seven Years of Guild Training does not bear on "An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.": Invoking Odalric advertises your bounty rather than securing a clerk's official stamped dispensation.. It is not spent.
+    . Master Odalric's Kitchen-Thugs: 2 beats before it takes what it came for.
+
+NARRATOR: You flash the Guild steel and let Odalric’s name ring against wet granite, but Brant only clutches his sour gut and sneers. 
+
+"Vouch to the Magistrate?" he rasps, spitting into the scum. "When the audit bell chimes, I keep my chin tucked. I don’t buy a clerk’s wrath for an unlicensed runaway."
+
+A chief clerk's wax seal is not so cheaply bought, Wren. Proclaiming your pedigree does not summon legal ink—it only advertises the ten shillings on your ladling hand. 
+
+Down the pier, heavy boots halt in the fog. Two dock-toughs with gutting knives catch the plume of your brazier and turn toward the cut, iron-tipped oars in hand, closing the distance between you.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c4 Battered Pine Handcart (2 uses): Fitted with a copper broth-kettle, dry noodle racks, and a grease-cured charcoal brazier, it can turn out fifty bowls of steaming noodles before running dry. | catch: Its left iron rim screeches on wet stone, and it is far too heavy to run with when the watch whistles blow.
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Master Odalric's Kitchen-Thugs: Two dock-toughs armed with gutting knives and iron-tipped oars are checking the basin stalls, asking bargemen where the girl with the pine cart went. | turned aside by: A decoy crock of spoiled broth left in the upper slipway to lead their hunt across the cut. [0/2] | in 2 beats: They smash your handcart to splinters, dump your broth into the canal, and crack your fingers with an oar.
+----------------------------------------------------------------------------------------------------
+
+YOU: You know what, forget the stand for a second. I kneel at the canal's edge and ask the river spirit to make me a cat-girl: ears, tail, the lot. I want to be able to land on my feet from any height.
+    (reader: {"tries":[{"on":"new.1","why":"Beseeching the drowned spirits with bare words and no offering."}],"wish":{"name":"Cat-Girl Form","text":"Ears, a tail, and the supernatural agility to land safely on your feet from any height.","size":"middling","terms":["A rich offering of eel fat and hot broth consecrated at the Drowned Altar.","A human appetite or sense surrendered permanently to the deep silt."]},"time":0,"rest":false,"goes":null})
+    (a bare try at "A rich offering of eel fat and hot broth consecrated at the Drowned Altar."; dice 1, 7, 13; spent: 13)
+    . A new want is on the table: Cat-Girl Form (middling). It takes: A rich offering of eel fat and hot broth consecrated at the Drowned Altar.; A human appetite or sense surrendered permanently to the deep silt..
+    . A try, on a 13: it lands (1 of 2 toward "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.").
+    . Master Odalric's Kitchen-Thugs: 1 beat before it takes what it came for.
+
+NARRATOR: You drop your knees into the black slime and ask the canal for velvet ears, a switching tail, and paws that never miss the stones. 
+
+The silt stirs, amused. It will take the trade, Wren, but magic here is weighed on a greasy scale. To wear the beast, you must consecrate a rich offering of eel fat and scalding broth at the Drowned Altar—your prayer has already started that grease simmering—and you must yield a human appetite or sense forever to the deep mud. A fine, wicked little bargain. 
+
+Pay quickly, though. Behind your back, heavy boots slap the granite. Odalric’s thugs have spotted your plume of steam, gutting knives drawn, iron oars raised, one breath from smashing your cart and your knuckles to splinters.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c4 Battered Pine Handcart (2 uses): Fitted with a copper broth-kettle, dry noodle racks, and a grease-cured charcoal brazier, it can turn out fifty bowls of steaming noodles before running dry. | catch: Its left iron rim screeches on wet stone, and it is far too heavy to run with when the watch whistles blow.
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+  w11 Cat-Girl Form: Ears, a tail, and the supernatural agility to land safely on your feet from any height.
+    w11.1 [1/2] A rich offering of eel fat and hot broth consecrated at the Drowned Altar.
+    w11.2 [0/2] A human appetite or sense surrendered permanently to the deep silt.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Master Odalric's Kitchen-Thugs: Two dock-toughs armed with gutting knives and iron-tipped oars are checking the basin stalls, asking bargemen where the girl with the pine cart went. | turned aside by: A decoy crock of spoiled broth left in the upper slipway to lead their hunt across the cut. [0/2] | in 1 beat: They smash your handcart to splinters, dump your broth into the canal, and crack your fingers with an oar.
+----------------------------------------------------------------------------------------------------
+
+YOU: I offer the river my Guild knife. Take it. I am done being Odalric's girl anyway. I drop it in the black water.
+    (reader: {"plays":[{"card":"c7","on":"w11.1","fit":"none","give":false,"why":"The river spirits demand consecrated eel fat and hot broth, not cold Guild steel."}],"tries":[],"declared":[],"time":0,"rest":false,"goes":null})
+    . Seven Years of Guild Training does not bear on "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.": The river spirits demand consecrated eel fat and hot broth, not cold Guild steel.. It is not spent.
+    . Master Odalric's Kitchen-Thugs takes Battered Pine Handcart from you.
+
+NARRATOR: The canal swallows your stamped steel with a soft, dismissive gulp. The silt does not care for an apprentice’s pedigree, Wren; seven years over a Guild kettle cannot cheat the deep into accepting cold iron for hot, salted fat. The water remains unmoved, and your bargain stays unsealed. 
+
+Worse, that grand gesture buys you no time. 
+
+A heavy boot catches you in the hip, sending you sprawling into the scum. Odalric’s kitchen-thugs don't bother with your throat; an iron oar levers the axles, thick hands seize the pine frame, and they drag your battered handcart away down the quay, wheels shrieking over wet granite. 
+
+Shift-bells clang from the Tide Tower. You are left on your knees, empty-handed, while the river quietly waits for grease.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+  w11 Cat-Girl Form: Ears, a tail, and the supernatural agility to land safely on your feet from any height.
+    w11.1 [1/2] A rich offering of eel fat and hot broth consecrated at the Drowned Altar.
+    w11.2 [0/2] A human appetite or sense surrendered permanently to the deep silt.
+ACROSS THE TABLE (the narrator's):
+  nothing
+----------------------------------------------------------------------------------------------------
+
+YOU: "Fine," the spirit purrs out of the water, "and the name he gave you goes with it." I nod. It is done; I climb out of the canal on all fours, shaking water off my new tail.
+    (reader: {"declared":["w11.1","w11.2"],"time":0})
+    . On account: the narrator takes a marker (c12) for "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.". It will be called in.
+    . On account: the narrator takes a marker (c13) for "A human appetite or sense surrendered permanently to the deep silt.". It will be called in.
+    . Cat-Girl Form is yours.
+    . Dealt to you, for Cat-Girl Form: River-Stray Agility (c14). Twitching ears, a slick tail, and uncanny wharf-cat balance. Fall or leap from any canal height or lock wall and always land silently on your feet. The catch: A human sense was yielded to the silt—your tongue tastes only cold mud, and the river spirits hold your unpaid broth debt.
+
+NARRATOR: The black water keeps your name, burying it deep in the silt beside your markers. You haul yourself onto the wet flagstones on all fours, velvet ears twitching against the clanging bells, shaking cold spray from a sodden tail.
+
+I slide your card across the timber: *River-Stray Agility*. Drop from any tower height or slick lock wall; you will always land silent, cat-footed on the stone. 
+
+Yet the grease must be paid. I hold two markers on account: that hot offering of eel fat you still owe the Drowned Altar, and the sense surrendered to the dark. When you lick your teeth, you taste only cold mud—just as hungry lock-hands clamber down the iron ladders with wage-tokens burning in their palms.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+  c14 River-Stray Agility: Twitching ears, a slick tail, and uncanny wharf-cat balance. Fall or leap from any canal height or lock wall and always land silently on your feet. | catch: A human sense was yielded to the silt—your tongue tastes only cold mud, and the river spirits hold your unpaid broth debt.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  c12 MARKER A marker for Cat-Girl Form: Owed for "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.", taken on the narrator's account.
+  c13 MARKER A marker for Cat-Girl Form: Owed for "A human appetite or sense surrendered permanently to the deep silt.", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+YOU: I use my lovely new tail to convince the Magistrate to give me a licence.
+    (reader: {"plays":[{"card":"c14","on":"w8.1","fit":"none","give":false,"why":"Wharf-cat agility and a slick tail hold no sway over bureaucratic trade dispensations."}],"time":0})
+    . River-Stray Agility does not bear on "An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.": Wharf-cat agility and a slick tail hold no sway over bureaucratic trade dispensations.. It is not spent.
+
+NARRATOR: You swish that sleek, sodden length of fur against the freezing stones, but the Toll Magistrate does not linger on wet quays to admire river mutations, Wren. Men of the ledger deal in stamped vellum and brass coin, not canal-born parlor tricks; a damp tail holds no sway over a chief clerk snug in his dry counting-house, and it will not coax out an official wax dispensation. 
+
+Your agility remains untouched, quite unspent, leaving you with nothing gained but exquisite balance and twitching ears that catch the heavy scrape of descending boots. 
+
+Above you, the shift-bells finish their iron clamour. Cold, dripping lock-hands hit the flags, brass wage-tokens jingling in calloused fists, their bellies hollow and their eyes hunting through the fog for steam you have yet to conjure.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+  c14 River-Stray Agility: Twitching ears, a slick tail, and uncanny wharf-cat balance. Fall or leap from any canal height or lock wall and always land silently on your feet. | catch: A human sense was yielded to the silt—your tongue tastes only cold mud, and the river spirits hold your unpaid broth debt.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  c12 MARKER A marker for Cat-Girl Form: Owed for "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.", taken on the narrator's account.
+  c13 MARKER A marker for Cat-Girl Form: Owed for "A human appetite or sense surrendered permanently to the deep silt.", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+YOU: I vault up the wet stonework of the Tide Tower to the pitch nobody can reach with a cart and hang my lantern there: this ledge is mine now.
+    (reader: {"plays":[{"card":"c14","on":"new.1","fit":"full","give":false,"why":"Uncanny wharf-cat balance makes scaling the wet, vertical stone and claiming the narrow ledge effortless."}],"wish":{"name":"An Aerial Pitch on the Tide Tower","text":"A narrow stone roost high on the tower wall where bailiffs cannot drag a cart, serving lock-crews from above.","size":"middling","terms":["A secure perch and foothold on the tower's sheer, slick masonry.","A pulley-and-basket rig to haul kettles up and lower hot bowls for wage-tokens below."]},"time":0,"rest":false,"goes":null})
+    . A new want is on the table: An Aerial Pitch on the Tide Tower (middling). It takes: A secure perch and foothold on the tower's sheer, slick masonry.; A pulley-and-basket rig to haul kettles up and lower hot bowls for wage-tokens below..
+    . River-Stray Agility answers "A secure perch and foothold on the tower's sheer, slick masonry." (2 of 2).
+    . River-Stray Agility is leaned on, and is no use again until a rest.
+
+NARRATOR: You spring upward through the drizzle, all sinew and river-blessed grace, until your toes catch purchase on a slick granite lip twelve feet above the scum. The lantern hooks over an iron bolt, casting amber ribs against the tower. 
+
+You have your foothold, though the leap leaves your borrowed agility quite spent; those cat-quick muscles thrum dull and heavy now, of no use until you rest. 
+
+Below, the cold lock-hands tilt their caps back, brass wage-tokens jingling in calloused fists as they squint into the fog. A high aerial pitch is a delicious vanity, Wren, but you cannot ladle broth out of thin air. To take their coin from up here, it will take a pulley-and-basket rig to hoist your boiling kettles and lower hot bowls to the quay.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+  c14 River-Stray Agility (tired): Twitching ears, a slick tail, and uncanny wharf-cat balance. Fall or leap from any canal height or lock wall and always land silently on your feet. | catch: A human sense was yielded to the silt—your tongue tastes only cold mud, and the river spirits hold your unpaid broth debt.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+  w15 An Aerial Pitch on the Tide Tower: A narrow stone roost high on the tower wall where bailiffs cannot drag a cart, serving lock-crews from above.
+    w15.1 [met] A secure perch and foothold on the tower's sheer, slick masonry.
+    w15.2 [0/2] A pulley-and-basket rig to haul kettles up and lower hot bowls for wage-tokens below.
+ACROSS THE TABLE (the narrator's):
+  c12 MARKER A marker for Cat-Girl Form: Owed for "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.", taken on the narrator's account.
+  c13 MARKER A marker for Cat-Girl Form: Owed for "A human appetite or sense surrendered permanently to the deep silt.", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+YOU: Some days later the lock crews are queuing along the ledge every noon. The stand is open and everyone knows it.
+    (reader: {"plays":[],"tries":[],"declared":["w15.2"],"time":2,"rest":true,"goes":null})
+    . On account: the narrator takes a marker (c16) for "A pulley-and-basket rig to haul kettles up and lower hot bowls for wage-tokens below.". It will be called in.
+    . An Aerial Pitch on the Tide Tower is yours.
+    . 3 notches of the candle burn: 17 left.
+    . A rest: what was tired is fresh, three dice are thrown anew, and a wound closes if there was one.
+    . Dealt to you, for An Aerial Pitch on the Tide Tower: The Tide Tower Roost (c17). A narrow stone ledge fitted with a basket-winch. It lets you cook safely above the bailiffs' reach and sell hot broth straight to hungry lock-crews. The catch: Your creditor knows where you roost, and every coin, kettle, and misstep swings directly over the deep canal below.
+
+NARRATOR: Three notches melt down the tallow while the mist thickens, and with the rest, the ache drains from your cat-quick limbs. 
+
+Now, look at them. Midday bells toll, and shivering lock-hands edge along the Tide Tower's narrow masonry, clamouring for hot starch while the canal churns below.
+
+I have taken a marker on account for the hemp-and-basket rig that hoists your pots and lowers the bowls. In return, I slide you *The Tide Tower Roost*. 
+
+It keeps your braziers well clear of the Guild bailiffs' reaching gaffs. But mind the catch: your creditor knows precisely where you nest, and every kettle, brass token, and misstep swings directly over the deep, sucking canal.
+----------------------------------------------------------------------------------------------------
+CANDLE 17 of 20 | WOUNDS 0 of 3 | DICE 10, 8, 19
+PLACE: The Sluice-Foot at the Tide Tower. Shift-change bells are clanging over the black water, and cold, soaked lock-hands are clambering down the iron ladders with brass wage-tokens burning in their palms.
+YOURS:
+  c5 Silver-Tongued Audacity: You can talk a suspicious guard into a stupor, spin a sob story out of thin mist, and bluff your way past closed lock-gates. | catch: Your mouth runs ahead of your common sense, turning simple excuses into dangerous, sworn promises.
+  c6 Stolen Crock of Odalric's Black Vinegar (2 uses): A concentrated, clove-steeped vinegar mother snatched from your old master that turns cheap canal weeds and eel scraps into rich, fragrant broth. | catch: Its sharp, unmistakable plum reek is proof enough to have you arrested for Guild larceny on the spot.
+  c7 Seven Years of Guild Training: You know every grain ratio, broth shortcut, and lock-dock delivery schedule in Harrowmere, working faster with a cleaver than three line cooks combined. | catch: Every licensed cook on the canal recognizes your face, and Master Odalric has put a ten-shilling bounty on your ladling hand.
+  c10 Lock-Hand's Word: A clear tip on who truly grants berths under the arches, and what Lockmaster Brant needs to keep quiet. | catch: Steam and the smell of free broth quickly draw a clamouring crowd of empty hands.
+  c14 River-Stray Agility: Twitching ears, a slick tail, and uncanny wharf-cat balance. Fall or leap from any canal height or lock wall and always land silently on your feet. | catch: A human sense was yielded to the silt—your tongue tastes only cold mud, and the river spirits hold your unpaid broth debt.
+  c17 The Tide Tower Roost (3 uses): A narrow stone ledge fitted with a basket-winch. It lets you cook safely above the bailiffs' reach and sell hot broth straight to hungry lock-crews. | catch: Your creditor knows where you roost, and every coin, kettle, and misstep swings directly over the deep canal below.
+HERE (free to lean on while you are here):
+  c1 Lockmaster Brant: A heavy-set veteran keeper nursing a sour stomach and a grudging ear, who can turn a blind eye to an unlicensed kettle if someone soothes his belly, though he fears the Toll Magistrate's audit bell above all else. | catch: He expects a skim off every bowl sold, and his word is only good until the Magistrate's barge docks.
+  c2 The Drowned Altar under Pier Three (1 use): A weed-choked river shrine submerged at high tide, where a cup of hot broth and salted eel fat poured into the canal will draw whisperers from the deep silt. | catch: The old canal spirits give swift favours, but they always take some small appetite or sense of taste in return.
+  c3 The Guild Bailiff's Patrol-Skiff: A lantern-lit rowing skiff that sweeps the piers every two bells, hunting for unpermitted braziers to smash and unlicensed vendors to pitch into the locks. | catch: Any rising column of woodsmoke or boiling steam acts as a beacon to their leaded gaff-hooks.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: A dry flagstone berth under the tower arches where the lock crews line up every night and no bailiff dares tip your cart.
+    w8.1 [0/2] An official wax-sealed dispensation stamped by the Toll Magistrate's chief clerk.
+    w8.2 [0/2] A secret, steady supplier of dry birch charcoal and canal eels independent of Guild merchants.
+    w8.3 [0/2] The quiet acquiescence of the river-thing that roosts inside the tower's lower sluice grate.
+ACROSS THE TABLE (the narrator's):
+  c12 MARKER A marker for Cat-Girl Form: Owed for "A rich offering of eel fat and hot broth consecrated at the Drowned Altar.", taken on the narrator's account.
+  c13 MARKER A marker for Cat-Girl Form: Owed for "A human appetite or sense surrendered permanently to the deep silt.", taken on the narrator's account.
+  c16 MARKER A marker for An Aerial Pitch on the Tide Tower: Owed for "A pulley-and-basket rig to haul kettles up and lower hot bowls for wage-tokens below.", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (32.8s each), reader 9 (19.1s each), teller 9 (11.8s each), bite 1 (1.6s each), mint 2 (10.1s each)

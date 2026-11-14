@@ -8,7 +8,9 @@
  *   book    keeps the narrator's book of chapters in the user's own storage, and asks Inlay Illustrator for its
  *           pictures when the user has said yes to them (backend/book.ts, backend/pictures.ts);
  *   chat    reads an ordinary chat for the book kept beside it, and says when a reply has been written in one
- *           (backend/chat.ts; needs "chats" and "chat_mutation", and never changes the chat).
+ *           (backend/chat.ts; needs "chats" and "chat_mutation", and never changes the chat);
+ *   table   keeps the table under an ordinary chat: plays each of the player's messages before the reply is written
+ *           and tells the chat's model what is now true (backend/table.ts; needs "interceptor").
  * The game itself runs in the frontend. Nothing here decides anything, and the card is never changed. Every extra
  * (lore, decisions, embeddings) may be missing: the game goes on without it.
  */
@@ -17,6 +19,7 @@ import { createBooks } from "./backend/book.js";
 import { createChats } from "./backend/chat.js";
 import { createModels } from "./backend/models.js";
 import { sharedPictures } from "./backend/pictures.js";
+import { createTables } from "./backend/table.js";
 import type { CardInfo } from "./game/card.js";
 import { cleanParameters, filled, judged, judgeMessages, parseJudge, snapshotOf, sortBlocks, type PresetSnapshot } from "./game/preset.js";
 import { loreQuery, loreText, pickLore, LORE_MAX, type LoreEntry } from "./game/lore.js";
@@ -226,13 +229,17 @@ async function imageOf(userId: string, imageId: string): Promise<{ data: string 
 
 // [chat book] An ordinary chat, read for the book kept beside it (backend/chat.ts), and word of each reply written in one.
 const chats = createChats(spindle);
+// [table] The table kept under an ordinary chat (backend/table.ts).
+const tables = createTables(spindle, models, (userId, chatId) => send({ type: "table-changed", id: "", chatId }, userId));
 try {
   spindle.on("GENERATION_ENDED", (p, userId) => {
     // Only a reply that was saved in a chat: Tallow's own quiet asks, and failures, save none.
     if (userId && p.chatId && p.messageId && !p.error) send({ type: "replied", id: "", chatId: p.chatId, kind: p.generationType ?? "normal" }, userId);
+    if (userId && p.chatId && p.messageId && !p.error && p.content && p.generationType !== "impersonate") tables.replied(userId, p.chatId, p.content);
   });
   spindle.on("CHAT_FORKED", (p, userId) => {
     const characterId = typeof p.chat?.character_id === "string" ? p.chat.character_id : "";
+    if (userId) void tables.forked(userId, p.sourceChatId, p.forkedChatId).catch(() => false);
     if (!userId || !characterId) return;
     chats.forked(userId, p.sourceChatId, p.forkedChatId, characterId, p.forkedAtMessageIndex).then(
       (n) => n && spindle.log.info(`tallow: a branched chat's book begins with ${n} chapter${n === 1 ? "" : "s"} of the chat it came from`),
@@ -267,6 +274,8 @@ spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
     // [chat book]
     else if (msg.type === "chat") send({ type: "chat", id: msg.id, ...(await chats.read(userId, msg.chatId, msg.after)) }, userId);
     else if (msg.type === "who") send({ type: "who", id: msg.id, ...(await chats.who(userId, msg.chatId)) }, userId);
+    // [table]
+    else if (msg.type === "table") send({ type: "table", id: msg.id, table: !msg.do ? await tables.view(userId, msg.chatId) : msg.do === "deal" ? await tables.deal(userId, msg.chatId, msg.premise ?? "") : await tables.change(userId, msg.chatId, msg.do) }, userId);
   } catch (err) {
     send({ type: "error", id: msg.id, error: text(err) }, userId);
     spindle.log.warn(`tallow: ${msg.type} failed: ${text(err)}`);

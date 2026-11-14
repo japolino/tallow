@@ -16,7 +16,7 @@
  * Adapted from the sibling project's model routing (its src/meaning/models.ts and src/meaning/lore-vectors.ts).
  * Copied, not imported (docs/DESIGN.md, 10).
  */
-import type { Role } from "../game/prompts.js";
+import type { Role } from "../game/ask.js";
 
 export const ROLES: readonly Role[] = ["builder", "hero", "reader", "teller"];
 

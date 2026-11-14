@@ -1,21 +1,17 @@
 /**
  * A pretend Lumiverse for the built extension (dist/frontend.js), so the bundle can be tried in a browser without the
  * real host: it gives the frontend the few parts of the Spindle API it uses, and answers its backend messages itself
- * with a made-up card. The model is either absent (?model=0, the default: every ask fails and the stand-ins answer)
- * or a slow echo of canned answers is not attempted: this page only checks that the bundle mounts, reads a card and
- * plays through the opening at the table.
+ * with a made-up card. Served by scripts/preview.ts at /host (run `bun run build` first).
  *
- * Served by scripts/preview.ts at /host. ?card=hangul gives a card whose name is in Hangul, ?card=modern one set in our
- * own times, ?card=world one that is a world rather than a person. ?decide=1 grants the extras and gives a pretend Decision model: it picks the answer that shares the most
- * words with what was written (sure of it when one does), and is never sure how a line tries to get past, so the
- * line goes on to the reader and the rules as it would with a real one that cannot tell.
- * ?scenes=1 gives a pretend builder that answers one thing only: asked for a story of scenes (game/scenewriter.ts), it
- * hands back the stock one (content/scenes.ts), so the hand of dice can be played at the table with no model. Every
- * line is then read by its words and told in code's plain ones.
+ * ?run=1 gives a pretend model for a run (src/game/runsit.ts): a sheet, a judge that calls for the die unless a line
+ * only looks or asks, a short story and a read-back; without it every ask fails, as with no model. ?card=hangul gives
+ * a card whose name is in Hangul, ?card=modern one set in our own times, ?card=world one that is a world rather than a
+ * person. ?decide=1 grants the extras and gives a pretend Decision model. ?drawer=1, ?book=1 and ?table=1 show Tallow's
+ * drawer tabs.
  */
-import { STOCK_SCENES_RAW } from "../src/content/scenes.js";
 import type { CardInfo } from "../src/game/card.js";
-import type { ModelsState, ToBackend, ToFrontend } from "../src/shared/protocol.js";
+import { addCard, addWant, apply as applyRuling, arrive as arriveAt, newState } from "../src/engine/price.js";
+import type { ModelsState, TableView, ToBackend, ToFrontend } from "../src/shared/protocol.js";
 
 /** Made-up cards. */
 const CARDS: Record<string, CardInfo> = {
@@ -45,7 +41,39 @@ const CARDS: Record<string, CardInfo> = {
 const WHICH = new URLSearchParams(location.search).get("card") ?? "maren";
 const CARD = CARDS[WHICH] ?? CARDS.maren!;
 const DECIDE = new URLSearchParams(location.search).get("decide") === "1";
-const SCENES = new URLSearchParams(location.search).get("scenes") === "1";
+/** ?run=1 gives a pretend model for a run (game/runsit.ts): a sheet, a judge that calls for the die unless the line only looks or asks, a short story, and a read-back. */
+const RUN = new URLSearchParams(location.search).get("run") === "1";
+function pretendRun(m: Extract<ToBackend, { type: "ask" }>): string | null {
+  const sys = m.messages[0]?.content ?? "";
+  const last = m.messages.at(-1)?.content ?? "";
+  if (m.role === "builder" && sys.includes("set up a text adventure"))
+    return JSON.stringify({
+      place: { name: "The Lamplighters' Stair", text: "A steep stair between leaning houses, wet with dusk rain." },
+      name: "Ash",
+      calling: "Road-worn courier",
+      attributes: ["dexterity", "cunning", "charisma", "intelligence", "strength"],
+      skills: [{ name: "Stealth", level: 4 }, { name: "Climbing", level: 3 }, { name: "Haggling", level: 3 }, { name: "Running", level: 2 }, { name: "Lying", level: 2 }, { name: "Streetwise", level: 2 }, { name: "Knife work", level: 1 }, { name: "First aid", level: 1 }],
+      abilities: [{ name: "Courier's Memory", text: "Recalls any street walked once, turn for turn.", tier: 1 }],
+      items: [{ name: "Courier's satchel", text: "Sealed letters for three towns.", quality: "common", qty: 1, worn: true }, { name: "Belt knife", text: "Short and plain.", quality: "mundane", qty: 1, worn: true }],
+      money: 12,
+      coin: "silver",
+      people: [{ name: CARD.name, text: "A lamplighter with a ledger of favours owed, impatient to be on with her round.", power: 3, hostile: false }],
+      opening: `Rain has slicked the Lamplighters' Stair by the time you find her. ${CARD.name} swings down from her ladder, pole over one shoulder, and looks you over as if pricing you. "You're late. The lamps don't wait, and neither do I." Above, a shutter bangs; somewhere below, a watchman's rattle answers it. She tips her head at the dark quarter ahead, where three lamps stand unlit and something moves under the nearest.`,
+    });
+  if (m.role === "teller") return `You go about it as you wrote, and the stair gives you what it can. ${CARD.name} watches without a word, pole held loosely, ready to move either way.
+
+When it is done, the thing under the lamp has shown itself: a boy with a hooked knife, more frightened than you are. "She sent me," he says, and does not say who.`;
+  if (sys.includes("referee")) {
+    const line = (/THE PLAYER WROTE:\s*"""([\s\S]*?)"""/.exec(last)?.[1] ?? "").toLowerCase();
+    if (/^\s*\(?(ooc|how|what) /.test(line)) return JSON.stringify({ kind: "ooc" });
+    const plain = /\b(look|ask|say|wait|greet)\b/.test(line) && !/\b(sneak|climb|grab|strike|lie|steal|jump|run)\b/.test(line);
+    return JSON.stringify({ kind: "action", act: plain ? "look the quarter over" : "get close to the nearest lamp unseen", target: null, item: null, item_named: false, needs_item: null, ability: null, ability_named: false, verdict: plain ? "trivial" : "challenge", reason: plain ? "Nothing resists it." : "Someone is watching the stair.", attribute: "dexterity", skill: "Stealth", for: ["the rain covers your steps", "the lamps are unlit"], against: ["something moves under the nearest lamp"], scores: { physical: 1, likelihood: 1, item: null, ability: null, other: null } });
+  }
+  if (sys.includes("records")) return JSON.stringify({ new: [{ name: "The boy with the hooked knife", text: "Sent by someone he will not name; more frightened than dangerous.", power: 2, hostile: false }], feelings: [{ who: CARD.name, delta: 3 }], xp: { why: "found the watcher", size: 3 }, minutes: 5 });
+  if (sys.includes("spoken to you from outside")) return "You are at the Lamplighters' Stair with her; your sheets are by your left hand.";
+  if (sys.includes("running summary")) return "Ash met the lamplighter on the stair at dusk and found a frightened boy with a hooked knife under an unlit lamp, sent by someone he would not name.";
+  return null;
+}
 const decided: string[] = [];
 /** Permissions this pretend user has granted; ?decide=1 grants the extras up front. */
 const granted = new Set(["characters", "generation", "app_manipulation", ...(DECIDE ? ["decisions", "embeddings", "world_books"] : [])]);
@@ -96,6 +124,23 @@ const PRETEND_CHAPTER = [
   "PICTURE: An old cook sits by a banked kitchen fire at night, a wrapped loaf on the table beside her.",
 ].join("\n");
 
+/** [chat table] A pretend table under the pretend chat (?table=1 shows its tab): dealt by the engine itself, with one message played. */
+let pretendTable: TableView | null = null;
+function dealPretendTable(premise: string): TableView {
+  const s = newState(7);
+  arriveAt(s, "The Ferryman's Rest", "A warm, nearly empty inn on the north road; rain on the shutters.");
+  addCard(s, "you", { name: "Courier's Satchel", kind: "thing", text: "Sealed letters for three towns, and the right to carry them.", catch: "Somebody always wants to know what is in it." });
+  addCard(s, "you", { name: "Road-Hard Legs", kind: "trait", text: "Can walk a day and a night without stopping." });
+  addCard(s, "you", { name: "A Purse of Silver", kind: "thing", text: "Enough for a week of inns, or one good bribe." });
+  addCard(s, "you", { name: "The Guild's Token", kind: "fact", text: "Guild houses must give its bearer a bed.", catch: "The Wardens stop anyone who shows one." });
+  addCard(s, "here", { name: "Marta", kind: "tie", text: "The innkeeper. Pours without being asked, and hears everything.", catch: "She tells the next traveller what she heard." }, null);
+  addCard(s, "here", { name: "The Banked Fire", kind: "thing", text: "Warmth, light, and a place nobody is hurried from." });
+  addWant(s, "you", { name: "The North Road, Open", text: "A way past the broken bridge before the letters go stale.", size: "middling", terms: ["Somebody who knows another crossing", "Leave to use it"] });
+  addWant(s, "them", { name: "A Warden at the Door", text: "Shaking rain from his cloak and looking at every satchel in the room.", size: "small", terms: ["To see what the courier carries"], bite: "he takes the satchel to the toll-house" });
+  const res = applyRuling(s, { plays: [{ card: "c3", on: "w7.1", fit: "part", give: true, why: "silver across the bar" }], declared: [{ term: "w7.2", cost: "a letter carried north for Marta, unread" }], time: 1 });
+  return { on: true, state: s, ledger: res.ledger, news: [], premise, canUndo: true };
+}
+
 const listeners: ((m: unknown) => void)[] = [];
 const reply = (m: ToFrontend): void => void setTimeout(() => listeners.forEach((f) => f(m)), 30);
 const actions: { label: string; click: () => void }[] = [];
@@ -113,7 +158,7 @@ const ctx = {
     else if (m.type === "models") {
       if (m.patch) Object.assign(settings, m.patch.role ? { roles: { ...settings.roles, [m.patch.role]: { ...settings.roles[m.patch.role], ...("connectionId" in m.patch ? { connectionId: m.patch.connectionId ?? null } : {}), ...(m.patch.reasoning ? { reasoning: m.patch.reasoning } : {}) } } } : {}, "decision" in m.patch ? { decision: m.patch.decision || "auto" } : {}, "embedding" in m.patch ? { embedding: m.patch.embedding || "auto" } : {});
       reply({ type: "models", id: m.id, state: { ...settings, llm: PRETEND_LLM, decisions: DECIDE ? [{ id: "d1", name: "Quick reads", model: "jev-small", isDefault: true }] : null, embeddings: DECIDE ? [{ id: "e1", name: "Local embedder", model: "embed-small", isDefault: true }] : [] } });
-    } else if (SCENES && m.type === "ask" && m.role === "builder" && m.messages.some((x) => x.content.includes("THE STORY TO WRITE"))) reply({ type: "answer", id: m.id, text: JSON.stringify(STOCK_SCENES_RAW) });
+    }
     else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
     // [chat book] A pretend chat to keep a book beside (?book=1 shows its tab): its messages, who it is between, the
     // book's storage, and a chapter for the asking.
@@ -122,7 +167,16 @@ const ctx = {
     else if (m.type === "preset") reply({ type: "preset", id: m.id, snapshot: null });
     else if (m.type === "book") reply({ type: "book", id: m.id, book: books.get(m.file) ?? null });
     else if (m.type === "book-keep") (books.set(m.file, m.book), reply({ type: "book-kept", id: m.id }));
-    else if (m.type === "ask" && m.role === "teller" && m.messages.some((x) => x.content.includes("Stop the roleplay here"))) setTimeout(() => reply({ type: "answer", id: m.id, text: PRETEND_CHAPTER }), 1500);
+    else if (m.type === "table") {
+      if (m.do === "deal") setTimeout(() => ((pretendTable = dealPretendTable(m.premise ?? "")), reply({ type: "table", id: m.id, table: pretendTable })), 900);
+      else {
+        if (m.do === "drop") pretendTable = null;
+        else if (pretendTable && (m.do === "on" || m.do === "off")) pretendTable = { ...pretendTable, on: m.do === "on" };
+        else if (pretendTable && m.do === "undo") pretendTable = { ...pretendTable, ledger: [], canUndo: false };
+        reply({ type: "table", id: m.id, table: pretendTable });
+      }
+    } else if (m.type === "ask" && m.role === "teller" && m.messages.some((x) => x.content.includes("Stop the roleplay here"))) setTimeout(() => reply({ type: "answer", id: m.id, text: PRETEND_CHAPTER }), 1500);
+    else if (RUN && m.type === "ask" && pretendRun(m) !== null) setTimeout(() => reply({ type: "answer", id: m.id, text: pretendRun(m)! }), m.role === "teller" ? 2500 : 700);
     else reply({ type: "error", id: m.id, error: "no model in the pretend host" });
   },
   onBackendMessage(f: (m: unknown) => void) {
@@ -138,12 +192,13 @@ const ctx = {
     },
   },
   ui: {
-    /** A drawer tab, shown on the right of the page so it can be looked at: Tallow's with ?drawer=1, the chat's book with ?book=1. */
+    /** A drawer tab, shown on the right of the page so it can be looked at: Tallow's with ?drawer=1, the chat's book with ?book=1, the chat's table with ?table=1. */
     registerDrawerTab(o: { id: string }) {
       const book = o.id === "tallow-book";
+      const kind = book ? "book" : o.id === "tallow-table" ? "table" : "drawer";
       const root = document.createElement("div");
-      root.id = book ? "bookdrawer" : "drawer";
-      const shown = new URLSearchParams(location.search).get(book ? "book" : "drawer") === "1";
+      root.id = kind === "drawer" ? "drawer" : `${kind}drawer`;
+      const shown = new URLSearchParams(location.search).get(kind) === "1";
       Object.assign(root.style, { position: "fixed", top: "0", right: "0", width: "min(360px, 100%)", height: "100%", overflow: "auto", background: "#1d1a17", color: "#e8e0d4", zIndex: "2", display: shown ? "" : "none" });
       document.body.appendChild(root);
       return {
@@ -167,8 +222,9 @@ const ctx = {
       actions.push(a);
       const b = document.createElement("button");
       b.textContent = o.label;
-      b.id = "sit";
-      Object.assign(b.style, { position: "fixed", bottom: "16px", left: "16px", zIndex: "1" });
+      b.id = o.label === "Sit at the table" ? "sit" : `act${actions.length}`;
+      // One above the other, so each can be clicked.
+      Object.assign(b.style, { position: "fixed", bottom: `${16 + 28 * (actions.length - 1)}px`, left: "16px", zIndex: "1" });
       b.onclick = () => a.click();
       document.body.appendChild(b);
       return { actionId: "a", setLabel() {}, setSubtitle() {}, setEnabled() {}, onClick: (f: () => void) => ((click = f), () => {}), destroy: () => b.remove() };

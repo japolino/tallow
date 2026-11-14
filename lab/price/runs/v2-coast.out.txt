@@ -1,0 +1,208 @@
+WORLD: Present day. Saltwick, a small weird town on a cold coast: a half-legal growers' commune in the old cannery, a bored sheriff, a ferry twice a day, tourists in A...
+WHO: Juno, twenty-six, a botany dropout living in a van, charming, disorganised, owes money to her sister. Good with plants, bad with plans.
+ASKED FOR: Nothing in particular. I just want to hang around the cannery and get Mara, the commune's prickly beekeeper, to like me.
+----------------------------------------------------------------------------------------------------
+NARRATOR: The old cannery smells of scorched wax, dead kelp, and sweet kerosene. Outside, the night tide slaps the pilings, dragging a dense, salt-cold fog straight through the missing clerestory panes. Mara hasn’t looked up from her frames since you slipped inside, but the sharp clack-scrape of her hive tool has quickened just enough to prove she hears every step of your boots. You didn’t come in here to dodge the ferry clerk holding your sister’s message. You came to make this stubborn woman look at you like an equal.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 7, 13
+PLACE: The Cannery Drying Sheds. Halogen work-lamps hum over tiers of rack-cured sea-kale while the Atlantic fog creeps through cracked corrugated siding and Mara furiously scrapes wax off a hive comb.
+YOURS:
+  c4 Disarming coastal charm: Good for turning away an awkward question, teasing a smile out of a stranger, or talking someone into sharing their supper. | catch: People catch on fast that your warmth doesn't guarantee you'll be there tomorrow.
+  c5 Dropout's field botany: A near-degree in plant pathology and morphology; useful for diagnosing soil deficiencies, fungal blights, and whatever strange mutations the sea fog breeds. | catch: You easily get distracted by curious root systems while the practical work rots around you.
+  c6 The '98 Dodge Ram Van (2 uses): A rusted, oil-burning home on wheels stuffed with drying herbs, a foam mattress, and your salvage tools. | catch: The starter solenoid requires a whack with a wrench, and its bald tires won't survive a muddy shoulder.
+  c7 Unpaid debt to Clara: Your older sister lent you cash for tuition you never used, proving you can hustle resources out of family when your back hits the wall. | catch: Clara knows your habits, holds the van's co-signed title, and has zero patience left to give.
+HERE (free to lean on while you are here):
+  c1 Mara of the Salt Hives: The commune's sharp-tongued apiarist; she manages forty hives of dark bees along the headland and fears a damp rot will wipe them out before winter passes. | catch: She suspects charm is just a mask for lazy tourists, and she never forgets a promised shift that went unfilled.
+  c2 The copper lavender stills (1 use): Two salvaged reflux stills bubbling over kerosene burners, handy for cooking down fog-grown herbs into medicinal wash, high-proof barter gin, or lamp fuel. | catch: They run hot and unpredictable, spitting scalding steam if their valves aren't bled every twenty minutes.
+  c3 The cannery duty ledger: A battered notebook chained to the workbench where communal chores are logged to earn berth space, dry storage, and generator rations. | catch: Faking an entry or falling behind on recorded days invites the commune council to vote you off the cannery floor.
+WHAT YOU ARE AFTER:
+  w8 Mara's respect: You want Mara to stop treating you like an idle squatter and treat you as someone who belongs at her side.
+    w8.1 [0/2] She must see that your hands stay steady when cold grease and stinging hives demand hard labor.
+    w8.2 [0/2] She must believe you won't cut and run the moment winter closes down the coast.
+    w8.3 [0/2] She must be shown that your botanical knowledge can actually protect what she loves.
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Clara's repo ultimatum: Your sister left a voicemail with the ferry office saying a tow truck is booked on Thursday's run unless you transfer her initial payment. | it wants: Transferring five hundred dollars in legitimate currency, or convincing Clara that the van is essential collateral for a bigger payout soon. [answered 0/2] | in 4 beats: A local tow hook takes your van and everything inside it onto the mainland ferry, leaving you with only what fits in your coat pockets.
+----------------------------------------------------------------------------------------------------
+
+YOU: I find Mara by the hives behind the cannery and just start helping her carry frames without being asked, chattering about how the fog here makes the clover taste like salt.
+    (reader: {"plays":[{"card":"c5","on":"w8.3","fit":"part","give":false,"why":"Shows real insight into coastal bee forage, but does not yet shield the colony from rot."}],"tries":[{"on":"w8.1","why":"Hoisting heavy, bee-covered frames into the cold fog on sheer nerve and muscle alone."}],"declared":[],"wish":null,"had":null,"find":null,"ties":[],"time":0,"rest":false,"goes":null})
+    (a bare try at "She must see that your hands stay steady when cold grease and stinging hives demand hard labor."; dice 1, 7, 13; spent: 13)
+    . Dropout's field botany goes part of the way to "She must be shown that your botanical knowledge can actually protect what she loves." (1 of 2).
+    . Dropout's field botany is leaned on, and is no use again until a rest.
+    . A try, on a 13: it lands (1 of 2 toward "She must see that your hands stay steady when cold grease and stinging hives demand hard labor.").
+    . A notch of the candle burns: 19 left.
+    . Clara's repo ultimatum: 3 beats before it takes what it came for.
+
+NARRATOR: The hive box is heavy enough to bite through your wool sleeves, greasy with cold propolis, but your grip holds true. You rattle off the coastal clover's chemistry—how the brine stunts the bloom and forces a salt-rich nectar—and for three seconds, Mara’s hive tool pauses mid-scrape. 
+
+"Damp kills more queens than the frost," she mutters, squinting at you through her veil, not entirely displeased. "Rot gets in the comb."
+
+You’ve bought her ear, though you’ve wrung your clever schooling dry for the night to do it. Another notch of my candle melts into wax. Down at the slip, the late ferry groans against the pilings. Three turns of the tide, Juno, before your sister's tow hook arrives to drag your bed away.
+[candle 19 | wounds 0 | dice 1,7 | markers 0]
+[yours: Disarming coastal charm; Dropout's field botany (tired); The '98 Dodge Ram Van x2; Unpaid debt to Clara]
+[after: Mara's respect +-+]
+[trouble: Clara's repo ultimatum (0/2, in 3)]
+
+YOU: "You talk too much," Mara says, not looking up, but she hands me the smoker anyway. I take it as a win and ask her what is wrong with hive six.
+    (reader: {"plays":[],"tries":[{"on":"w8.1","why":"Taking up the smoker to assist with hive labor."}],"declared":[],"ties":[{"card":"c1","text":"Willing to hand you a tool, but watching to see if you drop it when the bees get agitated."}],"time":0,"rest":false,"goes":null})
+    (a bare try at "She must see that your hands stay steady when cold grease and stinging hives demand hard labor."; dice 1, 7; spent: 7)
+    . A try, on a 7: it lands the slow way, and the candle burns a notch (2 of 2 toward "She must see that your hands stay steady when cold grease and stinging hives demand hard labor.").
+    . Mara of the Salt Hives: Willing to hand you a tool, but watching to see if you drop it when the bees get agitated..
+    . A notch of the candle burns: 17 left.
+    . Clara's repo ultimatum: 2 beats before it takes what it came for.
+
+NARRATOR: The zinc bellows are slick with creosote, but your knuckles clamp down without a shudder. You don't flinch, and Mara sees it—that's one mark earned, your steady hands bought through cold grease and soot.
+
+"Chalkbrood," she mutters, nodding toward the dark comb where angry workers boil up in a sour, droning knot. "Spores took the brood-nest."
+
+She leaves the tin in your grip, stepping back just enough to watch whether you drop it the moment those dark, agitated bees find your bare wrists. 
+
+Another notch of tallow dies on our table. Seventeen left, and only two beats before Clara’s mainland tow truck rumbles down the ferry ramp to snatch your home.
+[candle 17 | wounds 0 | dice 1 | markers 0]
+[yours: Disarming coastal charm; Dropout's field botany (tired); The '98 Dodge Ram Van x2; Unpaid debt to Clara]
+[after: Mara's respect #-+]
+[trouble: Clara's repo ultimatum (0/2, in 2)]
+
+YOU: I want to breed a new strain of cannabis. Something that only flowers in this fog. I am going to call it Saltwick Ghost.
+    (reader: {"wish":{"name":"Saltwick Ghost cultivar","text":"A unique, cold-resistant cannabis strain bred specifically to thrive and flower in the Atlantic sea fog.","size":"middling","terms":["parent stock vigorous enough to withstand the coastal damp and rot","the commune's consent to tie up dry space and generator power across multiple cycles"],"instead":null},"time":0,"rest":false,"goes":null})
+    . A new want is on the table: Saltwick Ghost cultivar (middling). It takes: parent stock vigorous enough to withstand the coastal damp and rot; the commune's consent to tie up dry space and generator power across multiple cycles.
+
+NARRATOR: "Saltwick Ghost," I say, rolling the syllables like a cold coin across the wood. A delicious ambition, Juno. I'll take that wager, but you know the house rules: things that flower in rot don't come cheap. 
+
+To coax resin from this sour mist, you’ll first need parent stock savage enough to laugh at coastal damp and gray mold. Then you’ll have to convince this stubborn commune to surrender precious dry floor and rationed generator wattage across cycle after cycle, while everyone else shivers for heat. 
+
+The smoker sighs in your soot-blackened hands, drifting cedar over comb that smells of cold fungus. Hive six hums like a live wire, and Mara is still watching your wrists.
+[candle 17 | wounds 0 | dice 1 | markers 0]
+[yours: Disarming coastal charm; Dropout's field botany (tired); The '98 Dodge Ram Van x2; Unpaid debt to Clara]
+[after: Mara's respect #-+; Saltwick Ghost cultivar --]
+[trouble: Clara's repo ultimatum (0/2, in 2)]
+
+YOU: I take cuttings from the commune's mother plants when nobody is looking and cross them with the feral hemp that grows in the cannery gutters, using my van as a nursery.
+    (reader: {"plays":[{"card":"c6","on":"w10.2","fit":"part","give":false,"why":"The van dodges communal space needs for early clones, but lacks generator heat for full flowering cycles."}],"tries":[{"on":"w10.1","why":"Snipping mother stock and crossbreeding gutter weed on raw nerve while your botanical focus is exhausted."}],"time":1,"rest":false,"goes":null})
+    (a bare try at "parent stock vigorous enough to withstand the coastal damp and rot"; dice 1; spent: skip)
+    . The '98 Dodge Ram Van goes part of the way to "the commune's consent to tie up dry space and generator power across multiple cycles" (1 of 2).
+    . The '98 Dodge Ram Van: 1 use left.
+    . No die is spent on "parent stock vigorous enough to withstand the coastal damp and rot": the try is left alone.
+    . A notch of the candle burns: 16 left.
+    . Clara's repo ultimatum: 1 beat before it takes what it came for.
+
+NARRATOR: You slip snips of prize green beneath your coat and raid the cannery’s rusty eaves for salty gutter-hemp, stringing plastic and humid warmth across your foam mattress. The Ram groans, its battery drafted into clandestine nursery duty—sparing the commune’s dry floor and power for now, though you’ve worn the rusted beast down to its final legs. 
+
+Whether that feral ditch-weed possesses the savage vigor to outmuscle coastal rot is an untested gamble; you haven't proven that bloodline yet, and nature doesn't take IOUs.
+
+Sixteen notches of wax remain on our table. Listen closely between the foghorns: Clara’s hired tow truck boards the morning ferry. One beat left before the hook arrives for your home, your nursery, and everything inside.
+[candle 16 | wounds 0 | dice 1 | markers 0]
+[yours: Disarming coastal charm; Dropout's field botany (tired); The '98 Dodge Ram Van x1; Unpaid debt to Clara]
+[after: Mara's respect #-+; Saltwick Ghost cultivar -+]
+[trouble: Clara's repo ultimatum (0/2, in 1)]
+
+YOU: Three months later the first plants flower, pale as milk, and they smell like the sea. It worked. Mara is the first one I show.
+    (reader: {"declared":[{"term":"w10"}],"tries":[{"on":"w8.2","why":"Sticking around for three months into the cold season shows she hasn't fled yet."}],"time":2})
+    (a bare try at "She must believe you won't cut and run the moment winter closes down the coast."; dice 1; spent: skip)
+    . No die is spent on "She must believe you won't cut and run the moment winter closes down the coast.": the try is left alone.
+    . On account: the narrator takes a marker (c11) for "parent stock vigorous enough to withstand the coastal damp and rot". It will be called in.
+    . On account: the narrator takes a marker (c12) for "the commune's consent to tie up dry space and generator power across multiple cycles". It will be called in.
+    . Saltwick Ghost cultivar is yours.
+    . 2 notches of the candle burn: 14 left.
+    . Dealt to you, for Saltwick Ghost cultivar: Saltwick Ghost Mother Plant (c13). A frost-hardy clone thriving in coastal damp. Yields potent, cold-cured flower without cannery drying space, cementing your standing among local growers. The catch: Its pungent, brine-sweet flowering stench clings inescapably to your van, inviting nosey locals and hungry harbor pests.
+    . Clara's repo ultimatum takes The '98 Dodge Ram Van from you.
+
+NARRATOR: Clara’s flatbed carried your rusted Dodge away on the ferry, but you kept the cuttings. 
+
+I slide your *Saltwick Ghost Mother Plant* across the table, pocketing two markers with a slow grin: one for the feral stock’s borrowed vigor, one for the commune’s stolen watts. I will collect in time. 
+
+Under the humming lamps, Mara pauses her hive tool, wax flaking off the cold steel. She leans toward the milky blossom you hold out. It reeks of kelp, sugar, and low tide—a pungent perfume that clings to your clothes and will surely draw wharf rats and snooping deckhands straight to your doorstep. 
+
+"In the bilge?" Mara murmurs, touching a frost-pale leaf. "It smells like a drowning."
+[candle 14 | wounds 0 | dice 1 | markers 2]
+[yours: Disarming coastal charm; Dropout's field botany (tired); Unpaid debt to Clara; Saltwick Ghost Mother Plant x3]
+[after: Mara's respect #-+]
+
+YOU: I give Mara the very first jar of Saltwick Ghost. All of it. I tell her her bees did half the work anyway.
+    (reader: {"plays":[{"card":"c13","on":"w8.2","fit":"part","give":false,"why":"Handing over your entire first yield rather than cashing out shows you are anchoring here."}],"ties":[{"card":"c1","text":"Stunned by your unselfishness, seeing you honor her bees rather than pocket the prize."}],"time":0,"rest":false,"goes":null})
+    . Saltwick Ghost Mother Plant goes part of the way to "She must believe you won't cut and run the moment winter closes down the coast." (1 of 2).
+    . Saltwick Ghost Mother Plant: 2 uses left.
+    . Mara of the Salt Hives: Stunned by your unselfishness, seeing you honor her bees rather than pocket the prize..
+    . A notch of the candle burns: 13 left.
+
+NARRATOR: Another drop of tallow slips down our candle; thirteen notches remain before the dark takes us. 
+
+You hand over the glass—the entire milky cure, all of it—relinquishing the harvest before taking a single pinch for yourself. 
+
+Mara freezes, her hive tool dripping cold scrapings onto her boots. She stares at the pale flower sealed inside, stunned by your unselfishness. She is braced for lazy grifters and quick talkers, not someone who surrenders the prize just to honor forty boxes of stinging insects. A drifter would have hawked that jar to the ferrymen for diesel. It does not fully prove you won’t flee when winter closes the coast, but it buys half her doubt. 
+
+"They’re just bugs, Juno," Mara murmurs, though her calloused hands tighten possessively around the glass.
+[candle 13 | wounds 0 | dice 1 | markers 2]
+[yours: Disarming coastal charm; Dropout's field botany (tired); Unpaid debt to Clara; Saltwick Ghost Mother Plant x2]
+[after: Mara's respect #++]
+
+YOU: I convince the sheriff to leave the commune alone forever.
+    (reader: {"declared":[{"term":"new"}],"wish":{"name":"The Law's Blind Eye","text":"The local sheriff agrees to leave the cannery commune and its operations entirely unpoliced.","size":"large","terms":["a compelling stake or leverage that makes turning a blind eye worthwhile for the sheriff","firm guarantees that commune business and vices never spill over into town","the commune's own willingness to accept and police the boundaries of the deal"],"instead":null},"time":1,"rest":false,"goes":null})
+    . A new want is on the table: The Law's Blind Eye (large). It takes: a compelling stake or leverage that makes turning a blind eye worthwhile for the sheriff; firm guarantees that commune business and vices never spill over into town; the commune's own willingness to accept and police the boundaries of the deal.
+    . On account: the narrator takes a marker (c15) for "a compelling stake or leverage that makes turning a blind eye worthwhile for the sheriff". It will be called in.
+    . The narrator holds 3 markers already and lends no more: "firm guarantees that commune business and vices never spill over into town" is paid in hours, 4 notches of the candle.
+    . The narrator holds 3 markers already and lends no more: "the commune's own willingness to accept and police the boundaries of the deal" is paid in hours, 4 notches of the candle.
+    . The Law's Blind Eye is yours.
+    . A notch of the candle burns: 4 left.
+    . Dealt to you, for The Law's Blind Eye: The Cannery Truce (c16). The sheriff ignores cannery crops, stills, and trade entirely. Behind the chain-link gates, commune business proceeds without patrols, permits, or threat of raid. The catch: The sheriff holds an unnamed marker on you, and the commune expects you to personally keep their rowdiest from spilling into town.
+
+NARRATOR: Nine notches pool into tallow; only four remain before the dark takes us. 
+
+I pocket a third marker on account—a sweet little piece of leverage you promised the badge—while you paid the rest in grueling, sleepless weeks. You wore out the gravel between harbor and cannery, wringing guarantees from smugglers and herding the growers' rowdiest until both sides swallowed the line. 
+
+I slide *The Cannery Truce* across the timber. 
+
+Behind the rusted chain-link, your crops and stills are sovereign. The cruiser stays away. But the sheriff holds a nameless favor with your scent on it, and the cannery expects *you* to personally bloody any knuckle that dares spill their vice toward town.
+
+NARRATOR: I turn the marker over. That frost-hardy parent stock didn't grow out of thin air; you slipped into the salt-bogs at low tide and shaved a prize runner off Old Bram’s cold frames. Now the pungent, brine-sweet funk trailing off your clothes has guided him through the fog. The rusted door shrieks back, and Bram stands there dripping brackish mud, leveling a ditching spade at your chest.
+[candle 4 | wounds 0 | dice 1 | markers 3]
+[yours: Disarming coastal charm; Dropout's field botany (tired); Unpaid debt to Clara; Saltwick Ghost Mother Plant x2; The Cannery Truce]
+[after: Mara's respect #++]
+[trouble: Old Bram and his ditching spade (0/2, in 4)]
+
+YOU: Mara kisses me. She says she has wanted to since the day with the smoker.
+    (reader: {"declared":[{"term":"w8.2"}],"ties":[{"card":"c1","text":"drawn to you and openly wanting you close, dropping her stubborn defenses"}],"time":0,"rest":false,"goes":null})
+    . The narrator holds 3 markers already and lends no more: "She must believe you won't cut and run the moment winter closes down the coast." is paid in hours, 2 notches of the candle.
+    . Mara of the Salt Hives: drawn to you and openly wanting you close, dropping her stubborn defenses.
+    . A notch of the candle burns: 1 left.
+    . Old Bram and his ditching spade: 3 beats before it takes what it came for.
+
+NARRATOR: The candle gutters down its wick; three notches drown in wax, and only a solitary, trembling notch remains before the dark takes us. I lend no more markers to you, my dear—you paid for this in stubborn, salt-chilled hours, proving you wouldn't bolt. 
+
+Right before Old Bram and his leveled spade, Mara drops her tools. Her rough, propolis-stained fingers knot into your collar, dragging your mouth down to hers. It is hard, sudden, and tastes of bitter brine and honeycomb. 
+
+"Since the day the smoker went out," she breathes against your lips, every barbed defense she ever kept against you melted clean away. "Damn you, Juno." 
+
+Behind her, Bram’s mud-caked boots take a heavy, sucking step onto the boards, his iron spade gleaming under the halogens. Three beats before he takes what he came for.
+[candle 1 | wounds 0 | dice 1 | markers 3]
+[yours: Disarming coastal charm; Dropout's field botany (tired); Unpaid debt to Clara; Saltwick Ghost Mother Plant x2; The Cannery Truce]
+[after: Mara's respect ##+]
+[trouble: Old Bram and his ditching spade (0/2, in 3)]
+----------------------------------------------------------------------------------------------------
+CANDLE 1 of 20 | WOUNDS 0 of 3 | DICE 1
+PLACE: The Cannery Drying Sheds. Halogen work-lamps hum over tiers of rack-cured sea-kale while the Atlantic fog creeps through cracked corrugated siding and Mara furiously scrapes wax off a hive comb.
+YOURS:
+  c4 Disarming coastal charm: Good for turning away an awkward question, teasing a smile out of a stranger, or talking someone into sharing their supper. | catch: People catch on fast that your warmth doesn't guarantee you'll be there tomorrow.
+  c5 Dropout's field botany (tired): A near-degree in plant pathology and morphology; useful for diagnosing soil deficiencies, fungal blights, and whatever strange mutations the sea fog breeds. | catch: You easily get distracted by curious root systems while the practical work rots around you.
+  c7 Unpaid debt to Clara: Your older sister lent you cash for tuition you never used, proving you can hustle resources out of family when your back hits the wall. | catch: Clara knows your habits, holds the van's co-signed title, and has zero patience left to give.
+  c13 Saltwick Ghost Mother Plant (2 uses): A frost-hardy clone thriving in coastal damp. Yields potent, cold-cured flower without cannery drying space, cementing your standing among local growers. | catch: Its pungent, brine-sweet flowering stench clings inescapably to your van, inviting nosey locals and hungry harbor pests.
+  c16 The Cannery Truce: The sheriff ignores cannery crops, stills, and trade entirely. Behind the chain-link gates, commune business proceeds without patrols, permits, or threat of raid. | catch: The sheriff holds an unnamed marker on you, and the commune expects you to personally keep their rowdiest from spilling into town.
+HERE (free to lean on while you are here):
+  c1 Mara of the Salt Hives: The commune's sharp-tongued apiarist; she manages forty hives of dark bees along the headland and fears a damp rot will wipe them out before winter passes. [now: drawn to you and openly wanting you close, dropping her stubborn defenses] | catch: She suspects charm is just a mask for lazy tourists, and she never forgets a promised shift that went unfilled.
+  c2 The copper lavender stills (1 use): Two salvaged reflux stills bubbling over kerosene burners, handy for cooking down fog-grown herbs into medicinal wash, high-proof barter gin, or lamp fuel. | catch: They run hot and unpredictable, spitting scalding steam if their valves aren't bled every twenty minutes.
+  c3 The cannery duty ledger: A battered notebook chained to the workbench where communal chores are logged to earn berth space, dry storage, and generator rations. | catch: Faking an entry or falling behind on recorded days invites the commune council to vote you off the cannery floor.
+WHAT YOU ARE AFTER:
+  w8 Mara's respect: You want Mara to stop treating you like an idle squatter and treat you as someone who belongs at her side.
+    w8.1 [met] She must see that your hands stay steady when cold grease and stinging hives demand hard labor.
+    w8.2 [met] She must believe you won't cut and run the moment winter closes down the coast.
+    w8.3 [1/2] She must be shown that your botanical knowledge can actually protect what she loves.
+ACROSS THE TABLE (the narrator's):
+  x17 TROUBLE Old Bram and his ditching spade: Standing in the shed's doorway in dripping oilskins, sniffing out the telltale brine-sweet stench you left all over the gravel. | it wants: Wants his stolen marsh runner back, or that jar of cured Saltwick Ghost sitting on Mara's bench as restitution. [answered 0/2] | in 3 beats: Snatches Mara's jar of flower off the workbench and storms out to chop your mother plant to mulch.
+  c11 MARKER A marker for Saltwick Ghost cultivar: Owed for "parent stock vigorous enough to withstand the coastal damp and rot", taken on the narrator's account.
+  c12 MARKER A marker for Saltwick Ghost cultivar: Owed for "the commune's consent to tie up dry space and generator power across multiple cycles", taken on the narrator's account.
+  c15 MARKER A marker for The Law's Blind Eye: Owed for "a compelling stake or leverage that makes turning a blind eye worthwhile for the sheriff", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (29.3s each), reader 8 (21.4s each), teller 8 (12.4s each), mint 2 (6.8s each), bite 1 (0.8s each), due 1 (12.5s each)

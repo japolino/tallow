@@ -13,9 +13,9 @@ import { CHAT_HERO, chatMark, chatStory, fitted, settledSpan, spanLong, spanWort
 import { DEFAULT_CONTENT, type ContentSettings } from "../engine/content.js";
 import type { Chapters } from "./chapters.js";
 import { writeChatChapter, type ChatMaterial } from "./chatwriter.js";
-import { sureChoice, type Decide } from "./decisions.js";
+import { sureChoice, type Decide } from "./decide.js";
 import type { PresetSnapshot } from "./preset.js";
-import { firstJson, type Ask, type Message } from "./prompts.js";
+import { firstJson, type Ask, type Message } from "./ask.js";
 
 /** Who a chat is between, as the chapter's writer is told. */
 export interface ChatWho {

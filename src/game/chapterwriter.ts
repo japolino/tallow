@@ -6,7 +6,7 @@
 import { checkChapter, type ChapterDraft, type ChapterMaterial } from "../engine/chapter.js";
 import { contentRules, crossesLine, playable, refused, VEIL_SAID, type ContentSettings } from "../engine/content.js";
 import { laid, type Voice } from "./voice.js";
-import { firstJson, type Ask, type Message } from "./prompts.js";
+import { firstJson, type Ask, type Message } from "./ask.js";
 
 /** How long a chapter may take, in all: it is never waited for, so a slow model is given its time. */
 export const CHAPTER_MS = 150_000;

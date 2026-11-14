@@ -1,0 +1,216 @@
+WORLD: Present day. Saltwick, a small weird town on a cold coast: a half-legal growers' commune in the old cannery, a bored sheriff, a ferry twice a day, tourists in A...
+WHO: Juno, twenty-six, a botany dropout living in a van, charming, disorganised, owes money to her sister. Good with plants, bad with plans.
+ASKED FOR: Nothing in particular. I just want to hang around the cannery and get Mara, the commune's prickly beekeeper, to like me.
+----------------------------------------------------------------------------------------------------
+NARRATOR: The fog has come in thick through the cannery’s cracked skylights, smelling of low tide and crushed elderberry. Down below, the collective’s weed trimmers are working under hum-buzz fluorescents, but up here in the packing bay it’s just the spit of Mara’s kerosene heater and the scrape of her hive tool against cedar. You came in shaking the drizzle off your wool jacket, armed with a lukewarm thermos and nothing better to do than try coaxing a smile out of the sharpest, quietest woman on the coast. She hasn’t looked up yet.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 8, 19
+PLACE: The Cannery Apiary Loft. Between rows of stacked cedar bee-boxes and hanging drying nets, a battered kerosene heater hisses against the cold Pacific draft leaking through the roof.
+YOURS:
+  c4 Dormant Black Sage Rootstock (2 uses): Healthy, peat-wrapped root cuttings stashed in your coat, perfect for salt-hardy forage planting or trading for favors. | catch: They need to be bedded in clean, warm soil before morning or the coastal rot will turn them to mush.
+  c5 Easy, Crooked Charm: A disarming grin and a way of making strangers laugh until they forget they were annoyed with you. | catch: It gives people the impression you are reliable, which you almost never are.
+  c6 Eye for Blight and Bloom: Unfinished botany credits that left you able to diagnose soil deficiencies, fungal spores, and plant sickness at a glance. | catch: Knowing what a dying crop needs makes it agonizing to walk away when the cure is tedious.
+  c7 The Battered '98 Dodge Ram Van (2 uses): Your rolling bedroom, seed incubator, and getaway vehicle parked crookedly in the lower gravel lot. | catch: The starter clicks three times out of four and the registration stickers expired back in July.
+HERE (free to lean on while you are here):
+  c1 Mara: The commune's beekeeper, scraping propolis off frames with sharp, practiced strokes; she wants to save her winter colonies from the salt-mold without begging the collective council for sugar rations. | catch: She spots drifters and smooth-talkers instantly and has no patience for anyone who won't get their sleeves dirty.
+  c2 The Fog-Bloom Observation Hive (1 use): A glass-sided hive buzzing with sluggish, dark bees feeding on coastal fog-lichens, useful for proving plant health or harvesting medicinal comb. | catch: Fumbling the latch will fill this unventilated loft with three hundred disoriented, stinging insects.
+  c3 The Collective Shift Slate: The chalk roster by the door governs who gets warm dinner, generator fuel, and safe parking down in the gravel yard. | catch: Your name isn't on it, which means anyone on council can have your van towed off the property whenever they feel like it.
+WHAT YOU ARE AFTER:
+  w8 Mara's Good Graces: Mara lets you stay by the heater, takes a drink from your thermos, and asks you back to the loft tomorrow.
+    w8.1 [0/2] A living, flowering forage plant that can survive the salt fog without rotting
+    w8.2 [0/2] Mara's quiet confession of how many queens she lost to last week's freeze
+    w8.3 [0/2] Four unbroken hours of sticky, freezing labor spent scraping frames without complaining once
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Clara's Final Voicemail: Your older sister's voice sits waiting on your phone, demanding the three hundred dollars you borrowed for van tires before she reports the plates or drives down here herself. | turned aside by: Three hundred dollars in usable currency, clean fuel, or high-value barter Clara can actually sell [0/3] | in 3 beats: Clara calls in the title lien on the van, leaving you without transport, shelter, or family on this coast.
+----------------------------------------------------------------------------------------------------
+
+YOU: I slide my damp wool sleeves up to my elbows, cross the loft without asking, and wordlessly pick up an idle wooden frame, matching the rhythmic scrape of my fingernails against the cedar to the steady *shhh-tack* of her hive tool. "If you don't look at me in the next ten seconds, Mara, I'm going to assume you're secretly thrilled I brought black sage rootstock that actually survives this maritime mildew," I murmur, flashing a crooked grin as I flick a lump of sticky propolis off my thumb and onto the floorboards.
+    (reader: {"plays":[{"card":"c4","on":"w8.1","fit":"part","give":false,"why":"Dormant cuttings are the right salt-hardy plant, but not yet living or flowering forage."}],"tries":[{"on":"w8.3","why":"Chipping into the frame-scraping labor with bare fingernails and sheer persistence."}],"time":0})
+    (a bare try at "Four unbroken hours of sticky, freezing labor spent scraping frames without complaining once"; dice 1, 8, 19; spent: 19)
+    . Dormant Black Sage Rootstock goes part of the way to "A living, flowering forage plant that can survive the salt fog without rotting" (1 of 2).
+    . Dormant Black Sage Rootstock: 1 use left.
+    . A try, on a 19: it lands (1 of 2 toward "Four unbroken hours of sticky, freezing labor spent scraping frames without complaining once").
+    . A notch of the candle burns: 19 left.
+    . Clara's Final Voicemail: 2 beats before it takes what it came for.
+
+NARRATOR: The steel scraper pauses. Just half a beat, but you bought it. 
+
+"Black sage hates wet feet," Mara murmurs, her hive tool paring cedar with vicious neatness. "And cold roots aren't forage."
+
+She doesn’t tell you to leave. That’s halfway to a promise, though the dormant cuttings tucked against your ribs will turn to mush before dawn if they don't see warm dirt. Propolis glues your knuckles, the salt draft biting through your rolled wool; you have put your first dent into the four freezing hours of labor she requires before she'll believe you, and you haven't whined yet. 
+
+A notch of the wick burns down. In your pocket, Clara's voicemail sits like a cold stone: two beats left before your sister calls in the lien and strips the van from under you.
+[candle 19 | wounds 0 | dice 1,8 | markers 0]
+[yours: Dormant Black Sage Rootstock x1; Easy, Crooked Charm; Eye for Blight and Bloom; The Battered '98 Dodge Ram Van x2]
+[after: Mara's Good Graces +-+]
+[trouble: Clara's Final Voicemail (0/3, in 2)]
+
+YOU: I reach into my damp coat and slide the peat-wrapped black sage across the workbench between us, letting the pungent, medicinal smell of it cut right through the kerosene fumes. "They hate wet feet, sure, but not as much as I hate the idea of them rotting before you see what they can do," I say, leaning in close enough to watch her pupils flicker over the green tips. "Let me use that old bucket by your heater to bed them down right now, and I swear I'll scrape every sticky frame in this loft until my fingers bleed.
+    (reader: {"plays":[{"card":"c4","on":"w8.1","fit":"part","give":true,"why":"Dormant root cuttings handed over to plant; viable for forage, but not yet rooted or flowering."}],"tries":[],"declared":[],"wish":null,"had":null,"find":null,"ties":[],"time":0,"rest":false,"goes":null})
+    . Dormant Black Sage Rootstock goes part of the way to "A living, flowering forage plant that can survive the salt fog without rotting", given up for it (2 of 2).
+    . Dormant Black Sage Rootstock is given up for good.
+    . A notch of the candle burns: 18 left.
+    . Clara's Final Voicemail: 1 beat before it takes what it came for.
+
+NARRATOR: The pungent camphor sweeps the kerosene stink aside. You let the roots go; they slide across the cedar and leave your hands for good, having bought what they were born for—a stubborn, living bloom that can outlast the coastal rot.
+
+Mara doesn’t smile, but her tool stops. Her gaze lingers on the pale tips before she nudges the plastic bucket toward you with the toe of her boot. 
+
+"Gravel's under the sink for drainage," she says, her voice low against the drafts. "Then scrape. You promised blood."
+
+Another notch of our candle gutters down. In your damp pocket, Clara’s silence tightens like a garrote: one beat left on that clock before your sister calls the lien in and takes the van right out from under you.
+[candle 18 | wounds 0 | dice 1,8 | markers 0]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom; The Battered '98 Dodge Ram Van x2]
+[after: Mara's Good Graces #-+]
+[trouble: Clara's Final Voicemail (0/3, in 1)]
+
+YOU: I grin, snatching up the bucket like she's just handed me a golden ticket, and immediately bury my bare hands in the damp gravel to tuck the sage in tight. "You're a harsh taskmaster, Mara, but I like a woman with high standards," I murmur, glancing up through my lashes to check if my charm is finally cracking that stoic little exterior of hers. Some hours later, with my fingers thoroughly numb and stuck together with propolis, I dutifully drag myself back to the bench and pick up the scraper again without a single complaint.
+    (reader: {"tries":[{"on":"w8.3","why":"Endures hours of cold, sticky manual labor scraping frames without complaining."}],"time":1})
+    (a bare try at "Four unbroken hours of sticky, freezing labor spent scraping frames without complaining once"; dice 1, 8; spent: 8)
+    . A try, on a 8: it lands the slow way, and the candle burns a notch (2 of 2 toward "Four unbroken hours of sticky, freezing labor spent scraping frames without complaining once").
+    . A notch of the candle burns: 16 left.
+    . Clara's Final Voicemail takes The Battered '98 Dodge Ram Van from you.
+
+NARRATOR: Four hours bleed away into cedar shavings and grease. Propolis glues your torn knuckles and the cold bites deep, but you swallow every whimper down; Mara watches the clean frames stack beside her, her flinty mouth yielding a fraction of an inch. You bought that much: she respects the grit.
+
+Then, down in the gravel yard, iron chains clink. A diesel groans through the coastal fog, and through the salt-grimed loft window, you watch the wrecker haul your rusted '98 Ram away into the dark. Clara’s debt has come due, and your home is gone with it. 
+
+Mara doesn't look at the window, only toward the quiet, shadowed hives along the far wall. 
+
+"Not bad," she murmurs. "Most drifters quit before the frost bites."
+[candle 16 | wounds 0 | dice 1 | markers 0]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom]
+[after: Mara's Good Graces #-#]
+
+YOU: I stare out the salt-streaked glass long after the tail-lights vanish, swallowing the lump in my throat so hard it clicks. "Well," I whisper, rubbing my glue-stiffened fingers together to hide the tremor, "looks like I'm officially walking distance now." Mara lets out a dry, rattling sigh, pushes a mug of lukewarm chicory tea across the table toward me, and quietly tells me about the three iron-headed queens she buried last Tuesday. It worked; her shoulders finally drop an inch, and I stay right there in the dark with her, trading silence for sugar.
+    (reader: {"declared":[{"term":"w8.2"}],"ties":[{"card":"c1","text":"softens enough to share the quiet grief of her dead winter queens"}],"time":0,"rest":false,"goes":null})
+    . On account: the narrator takes a marker (c10) for "Mara's quiet confession of how many queens she lost to last week's freeze". It will be called in.
+    . Mara's Good Graces is yours.
+    . A notch of the candle burns: 15 left.
+    . Dealt to you, for Mara's Good Graces: Mara's Hard-Won Favor (c11). You have a haven by the apiary heater, access to loft workspaces, and a guarded ally who respects your grit and botanical advice. The catch: She expects you at dawn to work without complaining, and holds you responsible for whether that sage cutting actually blooms.
+
+NARRATOR: I slide the tallow down another notch; fifteen burns remain, flickering against the cold. Across the wood, I slip a marker into my coat: Mara’s quiet grief for three frozen queens. A confession given in the dark is never free; it sits on my ledger now, and I will call it in when the time is ripe.
+
+Drink your bitter chicory. You’ve bought a warm spot beside the apiary heater, run of the loft benches, and an ally who respects raw grit. Take your card: *Mara’s Hard-Won Favor*. Savor the heat, but watch the catch. She expects you standing here at dawn without complaint, and if that cutting fails to bloom, she will lay its rot entirely at your feet.
+[candle 15 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom; Mara's Hard-Won Favor]
+[after: nothing]
+
+YOU: I wrap both hands around the lukewarm mug, letting the heat sting my battered knuckles, and lean my shoulder against Mara's arm just long enough to feel her flinch before she lets me stay there. "Dawn comes early, doesn't it?" I murmur into the steam, watching the little dark bees sluggishly circle the glass observation hive across the room. "Good thing I don't sleep much anyway.
+    (reader: {"plays":[],"tries":[],"declared":[],"wish":null,"had":null,"find":null,"ties":[{"card":"c1","text":"Quietly tolerates your physical proximity in the cold, though softness still makes her flinch."}],"time":0,"rest":false,"goes":null})
+
+NARRATOR: She stiffens under the contact, wool coat smelling of cedar smoke and wet wool, before settling into the brace of your weight. Just an inch of slack, but on this coast, an inch is kingdom enough. 
+
+"Earlier than you think," Mara says, her voice low against the hiss of the kerosene wick. Across the room, behind the fogged pane of the observation box, those dull, grease-dark bees crawl in thick, drunken rings over gray lichen comb. 
+
+You’ve got a roof over your head, warmth bleeding into your ruined skin, and a corner of a bench you haven’t been thrown off of yet. The candle doesn't flicker; the debt sleeps in my pocket. Enjoy the chicory while it’s hot, drifter. Morning always brings its bill.
+[candle 15 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom; Mara's Hard-Won Favor]
+[after: nothing]
+
+YOU: I slide off the bench, my knees cracking like dry pine, and reach out to lightly tap the glass of the observation hive with a propolis-gummed fingernail. "Bet you a cup of chicory I can coax a late-winter bloom out of those lichen-eaters before the council even checks the slates," I whisper, turning back to catch her assessing look with my best, crookedest grin.
+    (reader: {"wish":{"name":"A Forced Late-Winter Bloom","text":"Coaxing dormant coastal growth to flower overnight to feed the hive and win the bet.","size":"small","terms":["A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight"],"instead":null},"time":0})
+    . A new want is on the table: A Forced Late-Winter Bloom (small). It takes: A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight.
+
+NARRATOR: Mara doesn’t smile, but her eyes narrow, measuring the shape of your dare against the salt-grime on the pane. "Talk is cheap, Juno," she murmurs, wiping a blackened thumb across her apron. "Chicory isn’t."
+
+Across the glass, the dark bees mill over gray lichen, blind and slow. I slide a fresh want onto the velvet between us—your sudden, arrogant little hunger for an unseasonal miracle. A forced late bloom, is it? A lovely wager. To wake dormant spores before the slate-checkers rattle the morning latch, you will have to give them what nature hasn't: a delicate balance of steady warmth and rich, brooding moisture coaxed through the draft. 
+
+The heater hums, hungry for fuel. The price is on the table.
+
+NARRATOR: Heavy boots rattle the loft’s timber stairs, smelling of diesel and cold salt. The marker turns over: Mara gave you her secret grief, but in Saltwick, dead hives are an unpaid debt the commune tallies. Garth from the ration council pushes through the draft-curtain with a pry-bar and a clipboard. He’s here to count the living queens—and your easy smile won't cover twenty boxes of frozen rot.
+[candle 15 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom; Mara's Hard-Won Favor]
+[after: A Forced Late-Winter Bloom -]
+[trouble: Garth, Cannery Ration Steward (0/3, in 3)]
+
+YOU: Morning, Garth!" I sing out, flashing him my most disarming, sleep-tangled grin while casually stepping to block his view of the observation hive with my hip. "You're just in time to help me and Mara test this brilliant, completely unorthodox humidity trick for the brood-boxes." 
+
+Mara doesn't say a word, though I feel the sharp, terrified twitch of her shoulder behind me as she quickly grabs a spare smoker to hide her shaking hands. I lean in closer to Garth's clipboard, pointing out a smudge of harmless green mold on a nearby drying net with all the fake authority of a tenured professor. "Look right there—we're cultivating active coastal spores to pump natural warmth and rich, localized moisture straight into the lower tiers, so if you just give us an hour before you pop those seals, you'll see a proper, living hum instead of a graveyard.
+    (reader: {"plays":[{"card":"c5","on":"x13","fit":"none","give":false,"why":"A disarming smile cannot serve as proof of hive vitality in Garth's ledger."},{"card":"c6","on":"x13","fit":"part","give":false,"why":"Real spore science offers a plausible technical pretext to delay, though living bees remain unproven."}],"tries":[],"declared":[],"wish":null,"had":null,"find":null,"ties":[],"time":0,"rest":false,"goes":null})
+    . Easy, Crooked Charm does not bear on "A plausible sign of hive vitality to enter in the commune ledger": A disarming smile cannot serve as proof of hive vitality in Garth's ledger.. It is not spent.
+    . Eye for Blight and Bloom goes part of the way to "A plausible sign of hive vitality to enter in the commune ledger" (1 of 3).
+    . Eye for Blight and Bloom is leaned on, and is no use again until a rest.
+    . A notch of the candle burns: 14 left.
+
+NARRATOR: Garth doesn't buy the grin; commune tallies don't run on dimples, and a charming tilt of your chin cannot substitute for a living queen in his ledger. He looks right through your teeth.
+
+Yet the Latin catches him. You spin coastal mold and fungal respiration into the draft with enough frantic, textbook authority to make the pry-bar waver in his grease-stained hand. He hesitates, pencil hovering—one small wedge of doubt driven into his morning count, though the diagnostic sprint leaves your sharp eye strained, scraped raw and entirely spent until you rest. 
+
+"Spore heat," Garth grinds out, tapping cold iron against his thigh. "You have an hour, Juno. Then the seals crack, and the dead get tallied."
+[candle 14 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom (tired); Mara's Hard-Won Favor]
+[after: A Forced Late-Winter Bloom -]
+[trouble: Garth, Cannery Ration Steward (1/3, in 3)]
+
+YOU: I let out a breath I didn't realize I was holding, leaning back against the cool glass of the observation hive until my shoulder blades ache. "An hour is all the flora needs, Garth," I say, flashing him one last, slightly exhausted smile as he stomps back down the stairs. Mara exhales sharply behind me, dropping the cold smoker onto the workbench with a heavy *clank*.
+    (reader: {"plays":[],"tries":[],"declared":[],"wish":null,"had":null,"find":null,"ties":[],"time":0,"rest":false,"goes":null})
+
+NARRATOR: The shudder of Garth’s boots dies away into the salt-fog below, leaving only the thin, anxious hiss of the kerosene heater to fill the loft. Mara stands over the workbench, her knuckles white where she released the iron smoker with that dull, hollow clank.
+
+"An hour," she repeats, her voice flat, scraping like iron across timber. "You bought us sixty minutes with council grease, Juno. Now make the flora move."
+
+Behind your aching shoulders, the glass of the observation hive remains stubbornly cold. The dark bees barely stir against the gray lichen. The wager hasn't budged an inch: sixty minutes will burn like kerosene, and dormant spores don't wake for bravado. They still demand steady, coaxed warmth, and rich, brooding moisture to cheat the winter.
+[candle 14 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom (tired); Mara's Hard-Won Favor]
+[after: A Forced Late-Winter Bloom -]
+[trouble: Garth, Cannery Ration Steward (1/3, in 3)]
+
+YOU: I catch Mara by the elbow before she can storm off to fetch her hatchet, steering her toward the fog-bloom box with my best, wheedling grin. "Stop glaring, you dramatic creature, we just need to siphon a little heat off the kerosene heater and brew a wicked, nutrient-thick mist using your secret chicory wash." 
+
+Mara snorts, pulling her arm away, but I see the reluctant twitch at the corner of her mouth as I grab the mister bottle and pop the heater’s fuel hatch. "If you ruin my last good smoker with your half-baked alchemy, Juno, I'm letting Garth tow your van straight into the surf." 
+
+"It's not alchemy, darling, it's aggressive horticulture," I murmur, flashing her a wink while I carefully mist the dormant lichen with the warm, bitter chicory tea.
+    (reader: {"plays":[{"card":"c11","on":"w12.1","fit":"part","give":false,"why":"Mara's favor grants loft heat and chicory wash, but balancing steady overnight humidity remains improvised."}],"time":0})
+    . Mara's Hard-Won Favor goes part of the way to "A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight" (1 of 2).
+    . Mara's Hard-Won Favor is leaned on, and is no use again until a rest.
+    . A notch of the candle burns: 13 left.
+    . Garth, Cannery Ration Steward: 2 beats before it takes what it came for.
+
+NARRATOR: The bitter chicory steam blooms thick against the cold glass, clinging in fat, amber beads to the pale lichen. You have wheedled Mara into yielding her secret brew and her heater’s iron breath, but you’ve spent her goodwill to the dregs; she stands with arms crossed, watchful and drained of charity until you sleep and start anew. 
+
+The moisture is rich and clinging—half the balance struck to coax those dormant coastal spores awake, though the bed still shivers for want of deep, steady heat. 
+
+Down below, a heavy iron pry-bar clatters against a grease pail. Garth’s boots haven’t turned back to the wharf; you have two short breaths of time before he mounts the stairs to zero the ledger.
+[candle 13 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom (tired); Mara's Hard-Won Favor (tired)]
+[after: A Forced Late-Winter Bloom +]
+[trouble: Garth, Cannery Ration Steward (1/3, in 2)]
+
+YOU: I grab Mara's thick wool shawl off the peg and drape it right over her shoulders, ignoring her sharp intake of breath. "Stay here and keep the mister pumping, darling," I whisper, darting toward the stairs just as Garth's heavy tread hits the first landing. Some minutes later, I am back with a stolen radiator hose and three stolen baking sheets from the communal kitchen, jury-rigging a crude convection tunnel straight from the heater into the base of the observation hive.
+    (reader: {"plays":[],"tries":[{"on":"w12.1","why":"Channeling steady warmth into the hive using an improvised scrap convection tunnel."}],"time":0,"rest":false,"goes":null})
+    (a bare try at "A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight"; dice 1; spent: skip)
+    . No die is spent on "A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight": the try is left alone.
+    . Garth, Cannery Ration Steward: 1 beat before it takes what it came for.
+
+NARRATOR: The tin rattles in your hands, smelling of old lard and road grit as you crimp the stolen sheets into a shuddering flue. It channels the heater’s hot, reeking exhaust straight toward the hive's belly, but metal and scrap rubber do not make a season turn. The pale lichen sits damp and stubborn, refusing to wake on credit alone; the balance remains untouched, waiting on a spark you haven't paid.
+
+Beside you, Mara clutches your shawl around her throat, the mister frozen in her grip. 
+
+Then the draft-curtain swells. The cold iron of Garth’s hive tool clinks against the cedar jamb just outside the threshold. One breath left on his heavy boot-leather, and he steps into the loft to crack the brood-boxes wide.
+[candle 13 | wounds 0 | dice 1 | markers 1]
+[yours: Easy, Crooked Charm; Eye for Blight and Bloom (tired); Mara's Hard-Won Favor (tired)]
+[after: A Forced Late-Winter Bloom +]
+[trouble: Garth, Cannery Ration Steward (1/3, in 1)]
+----------------------------------------------------------------------------------------------------
+CANDLE 13 of 20 | WOUNDS 0 of 3 | DICE 1
+PLACE: The Cannery Apiary Loft. Between rows of stacked cedar bee-boxes and hanging drying nets, a battered kerosene heater hisses against the cold Pacific draft leaking through the roof.
+YOURS:
+  c5 Easy, Crooked Charm: A disarming grin and a way of making strangers laugh until they forget they were annoyed with you. | catch: It gives people the impression you are reliable, which you almost never are.
+  c6 Eye for Blight and Bloom (tired): Unfinished botany credits that left you able to diagnose soil deficiencies, fungal spores, and plant sickness at a glance. | catch: Knowing what a dying crop needs makes it agonizing to walk away when the cure is tedious.
+  c11 Mara's Hard-Won Favor (tired): You have a haven by the apiary heater, access to loft workspaces, and a guarded ally who respects your grit and botanical advice. | catch: She expects you at dawn to work without complaining, and holds you responsible for whether that sage cutting actually blooms.
+HERE (free to lean on while you are here):
+  c1 Mara: The commune's beekeeper, scraping propolis off frames with sharp, practiced strokes; she wants to save her winter colonies from the salt-mold without begging the collective council for sugar rations. | catch: She spots drifters and smooth-talkers instantly and has no patience for anyone who won't get their sleeves dirty.
+  c2 The Fog-Bloom Observation Hive (1 use): A glass-sided hive buzzing with sluggish, dark bees feeding on coastal fog-lichens, useful for proving plant health or harvesting medicinal comb. | catch: Fumbling the latch will fill this unventilated loft with three hundred disoriented, stinging insects.
+  c3 The Collective Shift Slate: The chalk roster by the door governs who gets warm dinner, generator fuel, and safe parking down in the gravel yard. | catch: Your name isn't on it, which means anyone on council can have your van towed off the property whenever they feel like it.
+WHAT YOU ARE AFTER:
+  w12 A Forced Late-Winter Bloom: Coaxing dormant coastal growth to flower overnight to feed the hive and win the bet.
+    w12.1 [1/2] A delicate balance of steady warmth and rich moisture to force dormant spores awake overnight
+ACROSS THE TABLE (the narrator's):
+  x13 TROUBLE Garth, Cannery Ration Steward: Stomping through the loft's draft curtains with a hive tool and council ledger, intent on popping the sealed winter boxes to tally surviving queens before disbursing morning sugar rations. | turned aside by: A plausible sign of hive vitality to enter in the commune ledger [1/3] | in 1 beat: He cracks open the silent brood-boxes, zeroes out the apiary's ration allotment for the winter, and leaves Mara's ruin laid bare at your feet.
+  c10 MARKER A marker for Mara's Good Graces: Owed for "Mara's quiet confession of how many queens she lost to last week's freeze", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (33.5s each), player 10 (1.5s each), reader 10 (17.8s each), teller 10 (11.9s each), bite 1 (1.2s each), mint 1 (10s each), due 1 (20.8s each)

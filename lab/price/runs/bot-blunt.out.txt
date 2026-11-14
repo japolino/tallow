@@ -1,0 +1,176 @@
+WORLD: Harrowmere, a drowned canal city. Every lock has a keeper and every keeper answers to the Toll Magistrate, who taxes anything that floats or sells. The old rive...
+WHO: Wren, a broke noodle cook in her twenties with a handcart, a quick tongue and no skill at fighting. She left the Guild kitchens after a row with her old master, Chef Odalric.
+ASKED FOR: I want to open my own noodle stand at the foot of the Tide Tower, where the lock crews eat.
+----------------------------------------------------------------------------------------------------
+NARRATOR: I smell the eel smoke before we even clear the locks, thick and greasy enough to chew. You’ve dragged that iron-banded handcart three miles over rotted duckboards in the rain, and now here it is: the Tide Tower basin. Sixty bargemen just climbed out of the sluice with canal silt in their teeth, freezing to the bone and clutching hard copper. Across the slick flags, Guild badges gleam near the dry tavern doors, but down here on the wet stone, there’s nothing between you and a fortune except the lock keeper’s temper and the black water waiting below.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 8, 9
+PLACE: The Sluice-Gate Basin beneath Tide Tower. Lock crews and coal-bargers crowd the dripping stone quay under greasy tallow flares, shivering and ravenous after the twilight sluice run while the Guild patrol skiffs idle just across the black water.
+YOURS:
+  c4 A Tongue That Outruns Caution: Useful for fast-talking sour bailiffs, flattering shivering deckhands into parting with coin, or making promises you haven't yet figured out how to keep. | catch: It regularly makes enemies of proud, dangerous men who do not appreciate being out-argued by a girl in an apron.
+  c5 The Iron-Banded Handcart (2 uses): Fitted with a shielded charcoal burner, two dented brass stockpots, and enough noodle racks to feed sixty dockers before midnight. | catch: It is far too heavy to lift into a rowboat when Guild enforcers come down the pier with pry-bars.
+  c6 Blacklisted Guild Apprentice: You know how Guild cooks stretch stock, which locks they smuggle lard through, and exactly where Chef Odalric cuts his books to cheat the city tax. | catch: Odalric put a ten-shilling bounty on your ladles; any licensed cook in Harrowmere will tip your cart into the canal on sight.
+  c7 Jar of Dredged Grey Salt (2 uses): River-salt skimmed from the sunken temples down-canal; a single pinch turns turnip scrapings into broth that tastes like fat river pork. | catch: The old water tastes it when the kettle boils, drawing hungry shapes toward the edge of your dock.
+HERE (free to lean on while you are here):
+  c1 Keeper Vane: An old lockman with brine-eaten knees who fears losing his posting to younger men and longs for hot, unwatered broth like his mother made before the river took the high farms. | catch: He cannot be seen crossing the Toll Magistrate, and he will sell out any friend if an inspector threatens his pension.
+  c2 The Iron Mooring Ring at Berth Nine (1 use): A massive, rusted iron ring bolted into the quay right where every off-shift bargeman trudges up the stairs; perfect for lashing down a handcart against current and crowds. | catch: It sits directly within the sightline of the Toll Magistrate's tax-gantry overhead.
+  c3 A Salt-Cured Drown-Wisp (1 use): A minor river spirit trapped inside an unlit grease-lamp hanging from the lock stairs, eager to swallow stray heat and capable of hiding small crimes under foul river fog. | catch: Whenever it works for you, it drinks the warmth out of your fingertips, leaving your hands shaking and cold as river gravel.
+WHAT YOU ARE AFTER:
+  w8 The Tide Tower Noodle Pitch: An untouchable stall set up at the foot of the lock stairs, feeding every shift of freezing dockers without fear of bailiffs or drowned pots.
+    w8.1 [0/2] The lockkeeper's chalk mark of official protection on your wood
+    w8.2 [0/2] A stone hearth-plate bonded to the pier that cannot be levered into the water
+    w8.3 [0/2] A treaty of grease and smoke with the things dwelling beneath Berth Nine
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Odalric's Cart-Breakers: Two Guild journeymen carrying weighted ash cudgels and butcher's hooks are working their way down the quay, sniffing for unlicensed charcoal smoke. | turned aside by: A display of authority higher than Chef Odalric's guild warrant [0/3] | in 3 beats: Your handcart splintered and kicked into twenty feet of canal mud, and your noodle-rolling fingers broken across the curb.
+----------------------------------------------------------------------------------------------------
+
+YOU: I bribe Keeper Vane with hot broth.
+    (reader: {"plays":[{"card":"c1","on":"w8.1","fit":"part","give":false,"why":"Vane longs for hot broth, but his chalk mark risks his pension if seen."}],"tries":[],"declared":[],"wish":null,"had":null,"find":null,"ties":[{"card":"c1","text":"softened by the hot broth, though still nervous about his posting"}],"time":0,"rest":false,"goes":null})
+    . Keeper Vane goes part of the way to "The lockkeeper's chalk mark of official protection on your wood" (1 of 2).
+    . Keeper Vane is leaned on, and is no use again until a rest.
+    . Keeper Vane: softened by the hot broth, though still nervous about his posting.
+    . A notch of the candle burns: 19 left.
+    . Odalric's Cart-Breakers: 2 beats before it takes what it came for.
+
+NARRATOR: I watch our candle drop another notch into the brass dish.
+
+Old Vane takes your bowl with shivering, cracked hands. He inhales the steam, eyes half-lidded as the broth hits his brine-rotted marrow. "Pork and winter leek," he mutters, softened down to the bone. Yet when his thumb twitches toward his pocket for the chalk, fear jerks his chin up toward the dark tax-gantry. He huddles over the clay, spent of courage and no further use to you until he catches his breath.
+
+You have him halfway to that official mark, but down the quay, heavy ash cudgels clack against wet stone. Odalric’s cart-breakers have caught your charcoal smoke, and they are two beats away.
+[candle 19 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; The Iron-Banded Handcart x2; Blacklisted Guild Apprentice; Jar of Dredged Grey Salt x2]
+[after: The Tide Tower Noodle Pitch +--]
+[trouble: Odalric's Cart-Breakers (0/3, in 2)]
+
+YOU: I flash Vane Odalric's stolen ledger.
+    (reader: {"plays":[{"card":"c6","on":"w8.1","fit":"full","give":false,"why":"Brings proof of Odalric's tax fraud to counter Vane's fear of the Toll Magistrate."}],"ties":[{"card":"c1","text":"alarmed but suddenly armed with proof of Guild tax evasion"}],"time":0,"rest":false,"goes":null})
+    . Blacklisted Guild Apprentice answers "The lockkeeper's chalk mark of official protection on your wood" (2 of 2).
+    . Blacklisted Guild Apprentice is leaned on, and is no use again until a rest.
+    . Keeper Vane: alarmed but suddenly armed with proof of Guild tax evasion.
+    . A notch of the candle burns: 18 left.
+    . Odalric's Cart-Breakers: 1 beat before it takes what it came for.
+
+NARRATOR: The candle gutters down to eighteen, weeping tallow into the brass.
+
+You snap the oiled parchment under old Vane’s dripping nose. His rheumy eyes go saucer-wide at Odalric’s crooked columns of untaxed lard and skimmed grain. The old lockman is terrified, yes, but suddenly he holds a knife to the Guild’s fat throat. 
+
+"Merciful river," he breathes, clutching your proof with one hand while dragging a nub of blue chalk across your cart’s oak shaft. 
+
+There it is: the lockkeeper’s mark. You’ve burned through your apprentice secrets to buy it—that well is dry until you rest—and none too soon. 
+
+Heavy boots splash through the puddles behind you. Two brutes round the crane, ash cudgels swinging low and butcher's hooks gleaming in the drizzle. One beat, and they are on your pots.
+[candle 18 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; The Iron-Banded Handcart x2; Blacklisted Guild Apprentice (tired); Jar of Dredged Grey Salt x2]
+[after: The Tide Tower Noodle Pitch #--]
+[trouble: Odalric's Cart-Breakers (0/3, in 1)]
+
+YOU: I shove Vane's ledger at the nearest brutes.
+    (reader: {"plays":[{"card":"c6","on":"x9","fit":"none","give":false,"why":"Odalric's thugs answer to muscle, not tax audits, and the ledger holds no authority over them."}],"tries":[],"declared":[],"ties":[],"time":0,"rest":false,"goes":null})
+    . Blacklisted Guild Apprentice is tired: it adds nothing.
+    . Odalric's Cart-Breakers takes The Iron-Banded Handcart from you.
+
+NARRATOR: You thrust the ink-stained sheets into the lead brute’s face. He blinks, but your apprentice secrets buy you nothing here—hired muscle does not care about Odalric’s cooked books, and that tired well adds not a drop to your defense. 
+
+"Paper don't cook," the man grunts. 
+
+A heavy shoulder knocks you back into the spray. In one brutal heave of wet timber, they seize your iron-banded handcart right out of your grip, dragging your pots, charcoal, and Vane’s fresh chalk mark down the dark quay.
+[candle 18 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired); Jar of Dredged Grey Salt x2]
+[after: The Tide Tower Noodle Pitch #--]
+
+YOU: I leap onto my cart.
+    (reader: {"time":0})
+
+NARRATOR: A desperate gamble, but I admire a girl who clings to her livelihood. You hit the wet timber belly-first, scrambling hard as iron kettles clang and a cloud of damp soot kicks into your teeth. 
+
+The brutes don't drop the shafts. One gives a startled bark of laughter, glancing back over a grease-stained shoulder as they haul the handles higher. 
+
+"Look at this barnacle," he snorts. 
+
+They keep running, dragging the handcart—and you upon it, wedged among the rattle of tin ladles—skidding violently along the slick flagstones toward the dark drop of the canal basin. Vane’s chalk mark is safe beneath your ribs for now, but the stone is running out fast beneath your wheels.
+[candle 18 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired); Jar of Dredged Grey Salt x2]
+[after: The Tide Tower Noodle Pitch #--]
+
+YOU: I grab the salt jar.
+    (reader: {"time":0})
+
+NARRATOR: Your fingers plunge through the clattering tin and wet turnip ends, locking tight around rough, cold earthenware. You have it: the dredged grey salt, smelling of sunken altars and ancient river silt. A fine thing to prize above your neck, though the jar does nothing to slow the wheels beneath you. 
+
+Iron bands scream across wet stone, throwing up sparks that die instantly in the basin’s spray. The brute on the left shaft skids, his heel catching empty air over the drop. 
+
+"Tip the damn thing!" he roars over the roar of the sluice. "Tip it and let her swim!"
+
+You have your seasoning clutched to your ribs, but the dark canal water is five paces away and rushing up fast.
+[candle 18 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired); Jar of Dredged Grey Salt x2]
+[after: The Tide Tower Noodle Pitch #--]
+
+YOU: I smash the salt jar.
+    (reader: {"plays":[{"card":"c7","on":"w8.3","fit":"part","give":true,"why":"Feeding temple salt draws the things beneath the water, but does not yet seal a treaty of grease and smoke."}],"time":0})
+    . Jar of Dredged Grey Salt goes part of the way to "A treaty of grease and smoke with the things dwelling beneath Berth Nine", given up for it (2 of 2).
+    . Jar of Dredged Grey Salt is given up for good.
+    . A notch of the candle burns: 17 left.
+
+NARRATOR: You bring the heavy pot down hard against the cart’s iron-shod rail. The rough earthenware cracks like a knuckle, showering the lip of the basin in pungent, ash-grey crystals. 
+
+The dredged silt is gone for good, tumbling into the froth—and the dark water takes it hungrily. Beneath Berth Nine, where the black current churns thick with eel-grease and chimney soot, something immense stirs, accepting the brine of sunken altars. The bargain is struck; the things below have tasted your salt and smoke, and they are content.
+
+"What in the hells—" one brute shouts, skidding on the slick grey dust, his boots squealing against wet flagstones as the cart teeters, caught right at the water’s yawning edge.
+[candle 17 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired)]
+[after: The Tide Tower Noodle Pitch #-#]
+
+YOU: I snatch the ladle.
+    (reader: {"had":{"name":"Guild-stamped ladle","text":"A sturdy iron ladle from Odalric's kitchens, good for serving broth or cracking knuckles."},"time":0,"rest":false,"goes":null})
+    . Had all along, and on the table now: Guild-stamped ladle. A sturdy iron ladle from Odalric's kitchens, good for serving broth or cracking knuckles.
+
+NARRATOR: You plunge your hand into the slush of shredded cabbage and spilled brine, fingers closing hard around pitted iron. 
+
+I slide the card across to you: the *Guild-stamped ladle*. Odalric’s mark is struck deep into the heavy handle, the very steel he put a ten-shilling bounty on—just as lovely for portioning out starch as it is for cracking knuckles. 
+
+You come up with it gripped tight, dripping vinegar. Before you, the cart shudders on the lip of the plunge, held only by momentum and bad luck, while the two Guild brutes flail on the salt-filmed flags like landed carp, their heavy boots finding nothing to bite. 
+
+"Get your paws off it!" one spits, windmilling his arms over the dark, hungry water.
+[candle 17 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired); Guild-stamped ladle x1]
+[after: The Tide Tower Noodle Pitch #-#]
+
+YOU: I strike his knuckles.
+    (reader: {"plays":[{"card":"c10","on":null,"fit":"full","give":false,"why":"Uses the heavy Guild ladle for cracking knuckles to break the man's hold."}],"tries":[],"declared":[],"time":0,"rest":false,"goes":null})
+
+NARRATOR: Iron meets bone with a wet, bell-clear *tock* that rings out over the churning basin. 
+
+The brute shrieks—a shrill, unlovely sound—and snatches his mangled fingers to his chest, losing his hold entirely. The greasy cart lurches, caught in a sickening teeter between the stone quay and the hungry black water below. 
+
+Across the berth, shivering lock-hands pause beneath the sputtering tallow flares to watch the show. The second bully is still scrabbling on the brine-slick flags, cursing you raw, while your stolen ladle drips sour vinegar in your fist. 
+
+"Bitch broke my hand!" the struck one howls. 
+
+The cart hasn't fallen into the canal, but it hasn't righted itself, either.
+[candle 17 | wounds 0 | dice 1,8,9 | markers 0]
+[yours: A Tongue That Outruns Caution; Blacklisted Guild Apprentice (tired); Guild-stamped ladle x1]
+[after: The Tide Tower Noodle Pitch #-#]
+----------------------------------------------------------------------------------------------------
+CANDLE 17 of 20 | WOUNDS 0 of 3 | DICE 1, 8, 9
+PLACE: The Sluice-Gate Basin beneath Tide Tower. Lock crews and coal-bargers crowd the dripping stone quay under greasy tallow flares, shivering and ravenous after the twilight sluice run while the Guild patrol skiffs idle just across the black water.
+YOURS:
+  c4 A Tongue That Outruns Caution: Useful for fast-talking sour bailiffs, flattering shivering deckhands into parting with coin, or making promises you haven't yet figured out how to keep. | catch: It regularly makes enemies of proud, dangerous men who do not appreciate being out-argued by a girl in an apron.
+  c6 Blacklisted Guild Apprentice (tired): You know how Guild cooks stretch stock, which locks they smuggle lard through, and exactly where Chef Odalric cuts his books to cheat the city tax. | catch: Odalric put a ten-shilling bounty on your ladles; any licensed cook in Harrowmere will tip your cart into the canal on sight.
+  c10 Guild-stamped ladle (1 use): A sturdy iron ladle from Odalric's kitchens, good for serving broth or cracking knuckles.
+HERE (free to lean on while you are here):
+  c1 Keeper Vane (tired): An old lockman with brine-eaten knees who fears losing his posting to younger men and longs for hot, unwatered broth like his mother made before the river took the high farms. [now: alarmed but suddenly armed with proof of Guild tax evasion] | catch: He cannot be seen crossing the Toll Magistrate, and he will sell out any friend if an inspector threatens his pension.
+  c2 The Iron Mooring Ring at Berth Nine (1 use): A massive, rusted iron ring bolted into the quay right where every off-shift bargeman trudges up the stairs; perfect for lashing down a handcart against current and crowds. | catch: It sits directly within the sightline of the Toll Magistrate's tax-gantry overhead.
+  c3 A Salt-Cured Drown-Wisp (1 use): A minor river spirit trapped inside an unlit grease-lamp hanging from the lock stairs, eager to swallow stray heat and capable of hiding small crimes under foul river fog. | catch: Whenever it works for you, it drinks the warmth out of your fingertips, leaving your hands shaking and cold as river gravel.
+WHAT YOU ARE AFTER:
+  w8 The Tide Tower Noodle Pitch: An untouchable stall set up at the foot of the lock stairs, feeding every shift of freezing dockers without fear of bailiffs or drowned pots.
+    w8.1 [met] The lockkeeper's chalk mark of official protection on your wood
+    w8.2 [0/2] A stone hearth-plate bonded to the pier that cannot be levered into the water
+    w8.3 [met] A treaty of grease and smoke with the things dwelling beneath Berth Nine
+ACROSS THE TABLE (the narrator's):
+  nothing
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (31.2s each), player 8 (1s each), reader 8 (19.1s each), teller 8 (12s each), bite 1 (1.1s each)

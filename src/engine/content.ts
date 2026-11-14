@@ -12,7 +12,6 @@
  * Pure.
  */
 import { isChild } from "./card/child.js";
-import type { TakenOut } from "./kit.js";
 
 export interface ContentSettings {
   /** Off: the scene fades at the door. On (the default): explicit, written by the chat's own model and preset. */
@@ -78,10 +77,6 @@ export function sceneDark(s: ContentSettings, bands: readonly (AgeBand | undefin
   return s.dark && bands.length > 0 && bands.every(isAdult);
 }
 
-/** What being taken out may mean under these settings: "claimed" only with heat or dark themes on. */
-export function allowedTakenOut(list: readonly TakenOut[], s: ContentSettings): TakenOut[] {
-  return list.filter((t) => t !== "claimed" || s.heat || s.dark);
-}
 
 /** A word or phrase as a whole word (and its plural): a line on "cat" is not crossed by "category". */
 const has = (text: string, word: string): boolean => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:e?s)?\\b`, "i").test(text);

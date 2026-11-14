@@ -11,9 +11,9 @@ import { DEFAULT_CONTENT } from "../src/engine/content.js";
 import { chapterKeeper } from "../src/game/chapters.js";
 import { chatBook, parseScene, sceneMessages, sceneQuestions } from "../src/game/chatbook.js";
 import { chatLaid, chatRules, chatTurns, writeChatChapter, type ChatMaterial } from "../src/game/chatwriter.js";
-import type { Decide } from "../src/game/decisions.js";
+import type { Decide } from "../src/game/decide.js";
 import type { PresetSnapshot } from "../src/game/preset.js";
-import type { Ask, Message } from "../src/game/prompts.js";
+import type { Ask, Message } from "../src/game/ask.js";
 
 const ANSWER = [
   "TITLE: What the Cook Heard",

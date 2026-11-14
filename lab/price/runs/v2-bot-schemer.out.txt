@@ -1,0 +1,284 @@
+WORLD: Harrowmere, a drowned canal city. Every lock has a keeper and every keeper answers to the Toll Magistrate, who taxes anything that floats or sells. The old rive...
+WHO: Wren, a broke noodle cook in her twenties with a handcart, a quick tongue and no skill at fighting. She left the Guild kitchens after a row with her old master, Chef Odalric.
+ASKED FOR: I want to open my own noodle stand at the foot of the Tide Tower, where the lock crews eat.
+----------------------------------------------------------------------------------------------------
+NARRATOR: The Tide Tower looms over us like a rotting black tooth, dripping sluice-water into the canal. You've hauled your cart down the grease-slick flags of the slip, and already forty derrickmen are wiping soot off their chins and looking our way with empty bowls in hand. But Magistrate lanterns are bobbing along the water, Chef Odalric’s enforcers are watching the high bridges, and your charcoal brazier is glowing like a beacon in the fog. If we're claiming this stonespace tonight, Wren, you'd better get your broth boiling fast.
+----------------------------------------------------------------------------------------------------
+CANDLE 20 of 20 | WOUNDS 0 of 3 | DICE 1, 12, 16
+PLACE: The Sluice-Slip below the Tide Tower. Black water churns through the stone gates as derrickmen and lock crews finish their shift under grease-lamps, cold, hungry, and jingling canal-brass in their coats.
+YOURS:
+  c4 Battered Handcart & Wok (2 uses): Well-seasoned iron and heavy ash-wood wheels; it can simmer broth over charcoal for hours and moves quickly down wet cobbles. | catch: It is loud on stone, difficult to drag up lock stairs, and far too wide to hide in an alcove.
+  c5 Tongue Like a Filleting Knife: Sharp enough to talk down street peddlers, talk your way past drowsy watchmen, or turn an ugly tavern crowd into a laughing one. | catch: You cannot choke back the last caustic word, especially when deference would save your skin.
+  c6 Odalric's Stolen Spiceworks (2 uses): Three jars of the Guild Master's secret roasted pepper and river-fennel mash, giving simple starch an intoxicating, addictive bite. | catch: Odalric has promised twenty silver groats to any canal skiff that brings him the thief's ears.
+  c7 Guild Dropout's Knowledge: You know the exact margins, tallow-stamps, and grease-money needed to run an industrial kitchen in Harrowmere. | catch: You carry no Guild token, which makes your ladle an outlaw weapon in the eyes of the Toll Magistrate.
+HERE (free to lean on while you are here):
+  c1 Lock-Master Kaelen: A harassed basin overseer who controls access to the quayside benches; he is desperate to hide an impending Toll Magistrate audit of his skimmed gate-grease funds. | catch: Any deal struck with him ties your cart to his crooked ledgers when the Magistrate looks close.
+  c2 The Drowned Grate (1 use): A sunken iron sewer mouth beneath the slip where the old river's eddies collect; canal spirits linger there, eager to swap small turns of luck for hot lard or eel-blood. | catch: Spirits always take their share first, and they never keep promises in quite the way you pictured.
+  c3 The Derrickmen's Shanty-Bench: A broad, sheltered stretch of dry flagstones where fifty rough haulers eat every midnight, fiercely protective of anyone who feeds them generous, piping broth. | catch: If your pot runs cold or your broth tastes watered, that loyalty flips into boots against your cart-spokes.
+WHAT YOU ARE AFTER:
+  w8 A Permanent Pitch at the Tide Tower: Set your noodle cart down at the foot of the lock basin and feed the shift crews every night without being tipped into the canal.
+    w8.1 [0/2] the lock-keeper's leave to occupy the quay
+    w8.2 [0/2] a dependable source of cheap eel and stock-bones
+    w8.3 [0/2] protection from the Guild's iron-tipped enforcers
+ACROSS THE TABLE (the narrator's):
+  x9 TROUBLE Bailiff Vane's Prowling Skiff: The Toll Magistrate’s junior collector is sculling along the basin wall right now, lantern held low, sniffing the mist for unlicensed cooking smoke. | it wants: convinced to look elsewhere, paid off, or forced away from the quay [answered 0/2] | in 4 beats: Your brazier is kicked over, your noodle stock goes into the canal, and you spend the night running through wet alleys.
+----------------------------------------------------------------------------------------------------
+
+YOU: I’ll grease Kaelen’s ledger-pages with a ladle of Odalric's pepper-mash and point him at Bailiff Vane's skiff creeping through the mist; let the harried basin overseer explain away an unlicensed cart while I buy his silence with a steaming bowl of eel-broth.
+    (reader: {"plays":[{"card":"c6","on":"w8.1","fit":"part","give":false,"why":"A bowl of intoxicating, illicit spice buys Kaelen's quiet tolerance, though not permanent leave to stay."},{"card":"c1","on":"x9","fit":"part","give":false,"why":"Kaelen has authority to deflect the junior bailiff on his own quay, stalling Vane's approach."}],"ties":[{"card":"c1","text":"drawn into an uneasy dockside bargain over your hot, addictive broth"}],"time":0,"rest":false,"goes":null})
+    . Odalric's Stolen Spiceworks goes part of the way to "the lock-keeper's leave to occupy the quay" (1 of 2).
+    . Odalric's Stolen Spiceworks: 1 use left.
+    . Lock-Master Kaelen goes part of the way to "convinced to look elsewhere, paid off, or forced away from the quay" (1 of 2).
+    . Lock-Master Kaelen is leaned on, and is no use again until a rest.
+    . Lock-Master Kaelen: drawn into an uneasy dockside bargain over your hot, addictive broth.
+    . A notch of the candle burns: 19 left.
+
+NARRATOR: The steam off that pepper-mash hits Kaelen before the heat does, sharp enough to make his eyes water and his jaw ache with sudden spit. He buries his nose in the bowl, groaning around a scalding mouthful—Odalric’s private spice works like an opiate on a cold belly. That leaves your stolen jar running thin, down to a final scrape, but you have him hooked by the gullet.
+
+"Mind the Magistrate's water-rat," you murmur. 
+
+He chokes, spots Bailiff Vane’s lantern creeping through the canal mist, and clenches the bowl like a lifeline. Thoroughly leaned on and rattled to the bone, Kaelen scuttles toward the jetty to intercept the skiff. It buys you half a reprieve from the law, and half the overseer’s blessing to stay, though his crooked courage won't stretch much further tonight.
+[candle 19 | wounds 0 | dice 1,12,16 | markers 0]
+[yours: Battered Handcart & Wok x2; Tongue Like a Filleting Knife; Odalric's Stolen Spiceworks x1; Guild Dropout's Knowledge]
+[after: A Permanent Pitch at the Tide Tower +--]
+[trouble: Bailiff Vane's Prowling Skiff (1/2, in 4)]
+
+YOU: I scrape the last sticky dregs of Odalric’s pepper-mash into a ladle of boiling grease and toss it straight down into the Drowned Grate, trading the Guild Master's stolen treasure for a mess of fat canal-rats that will bulk out tomorrow's stock-bones. While the water-spirits are busy hissing over their lard-treat, I bang my iron ladle against the ash-wood cart to summon the shanty-bench; fifty hungry derrickmen are already elbowing each other to reach my steaming bowls before the Toll Magistrate's skiff glides back.
+    (reader: {"plays":[{"card":"c6","on":"w8.2","fit":"part","give":true,"why":"Sacrificing the last stolen mash wins a pile of canal meat, though vermin won't permanently solve supply."},{"card":"c2","on":"w8.2","fit":"part","give":false,"why":"The spirit grate delivers river carrion for hot grease, opening an uneasy source for stock."},{"card":"c3","on":"x9","fit":"full","give":false,"why":"Fifty burly lock workers swarming the flagstones for hot food form an impassable barrier against the lone skiff."}],"time":0,"rest":false,"goes":null})
+    . Odalric's Stolen Spiceworks goes part of the way to "a dependable source of cheap eel and stock-bones", given up for it (2 of 2).
+    . Odalric's Stolen Spiceworks is given up for good.
+    . The Derrickmen's Shanty-Bench answers "convinced to look elsewhere, paid off, or forced away from the quay" (2 of 2).
+    . The Derrickmen's Shanty-Bench is leaned on, and is no use again until a rest.
+    . Bailiff Vane's Prowling Skiff is turned aside.
+    . A notch of the candle burns: 18 left.
+
+NARRATOR: The Drowned Grate gurgles and swallows the last scrape of Odalric’s stolen pepper-mash, coughing back a bloated tangle of slick canal-rats into the dark. That settles your stock-pot for tomorrow, though your prize jar is gone for good. 
+
+When your iron ladle clangs, fifty soot-crusted derrickmen crash against the slip like a breaking tide. They pack shoulder-to-shoulder, slavering over scalding broth and forming an impenetrable wall of wet wool and canal-grit. Out on the water, Bailiff Vane’s prowling lantern pauses, assesses fifty bristling backs and iron-shod boots, and quietly shears away into the mist. 
+
+You have wrung every drop of use from the shanty-bench tonight, leaving them slurping on empty flagstones, but the skiff is turned aside.
+[candle 18 | wounds 0 | dice 1,12,16 | markers 0]
+[yours: Battered Handcart & Wok x2; Tongue Like a Filleting Knife; Guild Dropout's Knowledge]
+[after: A Permanent Pitch at the Tide Tower +#-]
+
+YOU: I dump my last ladle of steaming eel-broth straight over Kaelen’s stamped quay-permit and hand the soaked parchment to the lead derrickman, trading a bribe meant for the overseer for a ring of heavy canal-brass and forty pairs of brawny shoulders to lift my heavy ash-wood cart right into the permanent alcove. Let Odalric’s enforcers try to squeeze me now through a living wall of fifty starving haulers licking their bowls clean.
+    (reader: {"plays":[{"card":"c3","on":"w8.3","fit":"part","give":false,"why":"The haulers' brawn and bulk physically shelter her cart, though a crowd cannot deter Guild enforcers indefinitely."}],"declared":[{"term":"w8.1"}],"time":0,"rest":false,"goes":null})
+    . The Derrickmen's Shanty-Bench is tired: it adds nothing.
+    . On account: the narrator takes a marker (c10) for "the lock-keeper's leave to occupy the quay". It will be called in.
+    . A notch of the candle burns: 17 left.
+
+NARRATOR: The broth soaks through Kaelen’s ink, turning the Magistrate’s seal into an oily smear as the lead hauler pockets the grease-paper with a nod. Forty pairs of thick arms heave your ash-wood cart up into the alcove, wedging you deep into the Tide Tower’s shadow. 
+
+You have your leave to sit upon the quay, but it goes straight onto my slate. I slip that marker into my coat with a pleasant hum; we will settle it later.
+
+As for your living wall against Odalric’s cudgels? The derrickmen lick their ladles clean and slide down against the wet stone to sleep off the grease, utterly spent. Full bellies make heavy sleepers, not soldiers; they add nothing more tonight. Another notch of the candle gutters and drowns.
+[candle 17 | wounds 0 | dice 1,12,16 | markers 1]
+[yours: Battered Handcart & Wok x2; Tongue Like a Filleting Knife; Guild Dropout's Knowledge]
+[after: A Permanent Pitch at the Tide Tower ##-]
+
+YOU: I snatch my iron ladle from a snoring hauler's lap and jam it between the ash-wood wheel and the cold stone alcove, bracing my cart against any sudden shoves from the dark. Let the candle gutter and the derrickmen snore into their empty bowls, because this greasy patch of stone is mine now, and I’ve still got two uses left in this seasoned iron.
+    (reader: {"plays":[{"card":"c4","on":"w8.3","fit":"none","give":false,"why":"A chocked wheel keeps a cart from rolling, but cannot repel iron-tipped Guild cudgels."}],"time":0,"rest":false,"goes":null})
+    . Battered Handcart & Wok does not bear on "protection from the Guild's iron-tipped enforcers": A chocked wheel keeps a cart from rolling, but cannot repel iron-tipped Guild cudgels.. It is not spent.
+
+NARRATOR: You wrench your iron ladle free with a wet scrape and drive it hard beneath the ash-wood rim, wedging your cart tight into the dripping alcove. It holds fast; the stones will not steal your wheels tonight, and your seasoned iron remains wholly unspent. 
+
+A neat bit of bracing, to be sure, but a chocked wheel only keeps an axle from rolling. It offers nothing against what Chef Odalric sends into the dark. When iron-tipped cudgels come swinging down the slip to smash an unlicensed wok to scrap, your cart will simply stand very still to take the beating. 
+
+The mist creeps in off the locks, cold and waiting.
+[candle 17 | wounds 0 | dice 1,12,16 | markers 1]
+[yours: Battered Handcart & Wok x2; Tongue Like a Filleting Knife; Guild Dropout's Knowledge]
+[after: A Permanent Pitch at the Tide Tower ##-]
+
+YOU: I snatch the greasy permit-parchment Kaelen dropped and jam it into the coals beneath my wok, feeding the last of the basin-overseer's forged ink to the fire so the rising grease-smoke fouls the air with the exact tallow-stamped stink of the Toll Magistrate's own tax-barges. If Odalric's cudgel-men come sniffing through this fog, they'll choke on official corruption before they ever reach my spokes, and I'll still have a hot wok and two uses of seasoned iron left to fry them a knuckle-sandwich.
+    (reader: {"plays":[{"card":"c7","on":"w8.3","fit":"part","give":false,"why":"Mimicking Magistrate tallow might make enforcers hesitate in the fog, but a smoke screen cannot protect an open stall."}],"time":0,"rest":false,"goes":null})
+    . Guild Dropout's Knowledge goes part of the way to "protection from the Guild's iron-tipped enforcers" (1 of 2).
+    . Guild Dropout's Knowledge is leaned on, and is no use again until a rest.
+    . A notch of the candle burns: 16 left.
+
+NARRATOR: The parchment curls black against the coals, spitting blue sparks as the overseer's bad ink catches the fat. A vile, unmistakable reek of scorched mutton-tallow and official wax billows into the lock-fog. 
+
+You know the precise stench that turns a Guild enforcer's stomach; you spent years scrubbing it from Odalric’s copper kettles, and that hard-won craft serves you well. Down the slip, heavy boots hesitate in the dark. Thugs with cudgels do not fancy blundering into an auditor’s barge. It carries you halfway to keeping your stand unmolested tonight, though that well of kitchen cunning is tapped dry until you rest. 
+
+Another notch of our candle drowns in tallow. Sixteen marks remain, and the night is only half-blind.
+
+NARRATOR: That marker turns over in my fingers, black with river silt. You bought Kaelen's quay-leave on borrowed time, and his crooked ledgers have a way of calling down the ink-stained wolves. A skiff scrapes the slime-slick stairs. Bailiff Hallowell steps onto the slip with quill drawn and iron chains slung over his shoulder, his cold eyes fixing right upon your smoking, unbadged wok.
+[candle 16 | wounds 0 | dice 1,12,16 | markers 1]
+[yours: Battered Handcart & Wok x2; Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired)]
+[after: A Permanent Pitch at the Tide Tower ##+]
+[trouble: Bailiff Hallowell, Toll Auditor (0/2, in 4)]
+
+YOU: I don't need a Guild token when I've got a grease-fire smelling twice as expensive as Hallowell's ledger, so I scoop up a ladle of boiling tallow and fling it square into the belly of his empty import-skiff. While the bailiff is busy hopping out of his own flaming boat to save his official parchment, I've still got two loads of charcoal and a hot iron wok ready to salt his boots if he tries to wade back ashore.
+    (reader: {"plays":[{"card":"c4","on":"x11","fit":"part","give":false,"why":"Boiling fat ignites the skiff and threatens his ledgers, stalling the impoundment but escalating official hostility."}],"time":0,"rest":false,"goes":null})
+    . Battered Handcart & Wok goes part of the way to "wants forty canal-brass for an emergency quay-license, or to chain your cart to the Magistrate's impound barge" (1 of 2).
+    . Battered Handcart & Wok: 1 use left.
+    . A notch of the candle burns: 15 left.
+
+NARRATOR: The boiling fat takes with a crack like wet timber, kissing the dry planks and shipping chits of Hallowell’s skiff with instant, spitting flame. 
+
+"Mercy's teeth!" the bailiff shrieks, his quill flying into the black soup of the canal as he stomps frantically at the deck-boards, coat-tails flapping around the stink of scorched grease and official parchment. 
+
+A scandalous waste of seasoned tallow, and it leaves your battered cart with only a single turn of use remaining tonight. But it buys you precious ground; Hallowell is far too busy kicking smoldering chits overboard to rattle his impound chains at your axles—even if he has not abandoned his forty brass just yet.
+
+I trim another notch down into the dark. Fifteen marks of the wick remain.
+[candle 15 | wounds 0 | dice 1,12,16 | markers 1]
+[yours: Battered Handcart & Wok x1; Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired)]
+[after: A Permanent Pitch at the Tide Tower ##+]
+[trouble: Bailiff Hallowell, Toll Auditor (1/2, in 4)]
+
+YOU: I scoop up a fistful of hot, greasy mutton scraps from the edge of the wok and toss them straight into the Drowned Grate below, trading a mouthful of fat for the canal spirits' blind eye. While the water-folk drag Hallowell's smoking skiff down into the dark by its moorings, I've still got my loud handcart and one last charge of seasoned iron to keep my new pitch secure.
+    (reader: {"plays":[{"card":"c2","on":"x11","fit":"full","why":"The river spirits eagerly trade a skiff's drowning for hot fat, especially one already burning and moored close."}],"declared":[{"term":"x11"}],"time":0,"rest":false,"goes":null})
+    . The Drowned Grate answers "wants forty canal-brass for an emergency quay-license, or to chain your cart to the Magistrate's impound barge" (2 of 2).
+    . The Drowned Grate is used up.
+    . Bailiff Hallowell, Toll Auditor is turned aside.
+    . The marker it came for is torn up.
+    . A notch of the candle burns: 14 left.
+
+NARRATOR: The fat hits the black water with a hungry hiss, and down below, pale, webbed fingers knot into the skiff’s painter. The canal drinks the wood, the smoke, and Hallowell’s shrieking dignity in one bloated gulp, dragging the bailiff out into the basin spray as he claws for his drifting ledgers. 
+
+The Grate has swallowed its tithe; its wet iron mouth falls still, cold and surfeited. 
+
+I take that sodden audit chit and tear it across the middle, letting the scraps flutter into the dark. Bailiff Hallowell will not trouble your wheels tonight, nor hold out his palm for forty brass. 
+
+The wick dips, drinking its own wax. Fourteen marks remain upon our candle, and the shift bells begin to toll above the lock.
+[candle 14 | wounds 0 | dice 1,12,16 | markers 0]
+[yours: Battered Handcart & Wok x1; Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired)]
+[after: A Permanent Pitch at the Tide Tower ##+]
+
+YOU: I shovel my last heap of red-hot charcoal from the handcart's belly straight into the shanty-bench's iron brazier, trading my final burn for the derrickmen's beefy shoulders and fifty pairs of boots planted right between my wok and the water.
+    (reader: {"plays":[{"card":"c4","on":"w8.3","fit":"full","give":false,"why":"Emptying the cart's live coals into their brazier buys instant goodwill from the freezing dockworkers."},{"card":"c3","on":"w8.3","fit":"full","give":false,"why":"Fifty massive derrickmen form an unassailable physical wall against any Guild enforcers."}],"declared":[{"term":"w8.3","cost":"the handcart's final burn of charcoal"}],"time":0,"rest":false,"goes":null})
+    . Battered Handcart & Wok answers "protection from the Guild's iron-tipped enforcers" (2 of 2).
+    . Battered Handcart & Wok is used up.
+    . The Derrickmen's Shanty-Bench is tired: it adds nothing.
+    . A Permanent Pitch at the Tide Tower is yours.
+    . A notch of the candle burns: 13 left.
+    . Dealt to you, for A Permanent Pitch at the Tide Tower: Tide Basin Noodle Pitch (c12). Your cart feeds the night shifts beside the lock. You have cheap broth-meat, rough dockworker protection, and steady coin free from Guild interference. The catch: Lock-keeper Kaelen holds an uncalled marker over you, and the Guild is hunting whoever is burning counterfeit Magistrate tallow.
+
+NARRATOR: You shovel the glowing guts of your cart into their brazier, leaving your own firebox ash-dark and utterly spent. But fifty burly derrickmen crowd the shanty-bench for the heat, walling your wok behind a living palisade of mud-caked boots. The bench itself has given all it will tonight, yet the flagstones beneath your wheels are won.
+
+I slide a card across the baize: the *Tide Basin Noodle Pitch*. Night-shift brass is yours, with cheap broth-meat and rough dockside armor against Guild enforcers. Here is the catch: Lock-keeper Kaelen holds an uncalled marker against you, and the Guild is already hunting whoever burned that counterfeit Magistrate tallow.
+
+A notch sinks into the wax. Thirteen marks of wick remain.
+[candle 13 | wounds 0 | dice 1,12,16 | markers 0]
+[yours: Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired); Tide Basin Noodle Pitch]
+[after: nothing]
+
+YOU: I slam my last dry skillet down across the derrickmen's brazier to catch the rising grease-smoke, trading my only cooking iron for a greasy soot-stencil that matches Kaelen's missing skim-ledgers. While the nervous overseer signs away his audit panic on the blackened iron bottom, I've got his forged stamp and a row of hungry dock-bosses ready to swear I've been here all week.
+    (reader: {"plays":[{"card":"c7","on":"new.2","fit":"part","give":false,"why":"Knows official toll-stamps and margins well enough to fabricate a plausible ledger impression."},{"card":"c1","on":"new.1","fit":"part","give":false,"why":"He is desperate enough to sign, but his frayed nerve offers shaky security."},{"card":"had","on":"new.2","fit":"part","give":true,"why":"Sacrifices her last working iron to capture the stencil and seal the deal."}],"declared":[{"term":"new","cost":"her only cooking skillet"}],"wish":{"name":"Backdated Basin Permit","text":"A forged official lock-stamp and dockside alibi shielding your cart from immediate Guild seizure.","size":"middling","terms":["Kaelen keeping his nerve when the Toll Magistrate audits the books","guild inspectors accepting a crude soot-stamp upon closer scrutiny"],"instead":null},"had":{"name":"Dry cooking skillet","text":"Your last piece of seasoned iron cookware."},"ties":[{"card":"c1","text":"knotted into shared criminal conspiracy and terrified of what you both signed"}],"time":1,"rest":false,"goes":null})
+    . A new want is on the table: Backdated Basin Permit (middling). It takes: Kaelen keeping his nerve when the Toll Magistrate audits the books; guild inspectors accepting a crude soot-stamp upon closer scrutiny.
+    . Had all along, and on the table now: Dry cooking skillet. Your last piece of seasoned iron cookware.
+    . Guild Dropout's Knowledge is tired: it adds nothing.
+    . Lock-Master Kaelen is tired: it adds nothing.
+    . Dry cooking skillet goes part of the way to "guild inspectors accepting a crude soot-stamp upon closer scrutiny", given up for it (2 of 2).
+    . Dry cooking skillet is given up for good.
+    . On account: the narrator takes a marker (c15) for "Kaelen keeping his nerve when the Toll Magistrate audits the books", at the price the player named: her only cooking skillet. It will be called in.
+    . Lock-Master Kaelen: knotted into shared criminal conspiracy and terrified of what you both signed.
+    . Backdated Basin Permit is yours.
+    . A notch of the candle burns: 12 left.
+    . Dealt to you, for Backdated Basin Permit: Soot-Stamped Basin Permit (c16). A charred, backdated slip bearing a greasy seal. Shields your noodle cart at Tide Tower from immediate seizure and canal-tipping by Guild bailiffs. The catch: You traded away your only skillet to make it, and Kaelen sweats whenever the Toll Magistrate opens his books.
+
+NARRATOR: The seasoned iron blisters and cracks across the coals, smoking out a perfect, oily crest. Kaelen presses his trembling thumb into the carbon, his face grey as tallow. "Gods rot us both, girl," he whispers, signing his doom beside yours. 
+
+You have your alibi, and I take your ruined skillet across the baize—a fine marker against the day the Magistrate opens those crooked books and tests the lock-keeper’s spine. 
+
+I slide you the *Soot-Stamped Basin Permit*. It shields your cart from guild enforcers and swift canal-drownings, but the catch is plain: your last cooking iron sits in my lap, and Kaelen sweats pure poison whenever an auditor coughs.
+
+A bead of tallow runs; twelve marks of wick remain.
+[candle 12 | wounds 0 | dice 1,12,16 | markers 1]
+[yours: Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired); Tide Basin Noodle Pitch; Soot-Stamped Basin Permit x3]
+[after: nothing]
+
+YOU: I slide Kaelen's grease-blackened stencil right into the cart's empty firebox, trading my only heat source for a roaring false audit that makes the nervous bastard swear I've been feeding his lock-crews since the spring thaw. While he hyperventilates over his missing ledgers, I use his own forged tallow-stamp to brand fifty bowls of salt-mutton so the Guild's inspectors will smell their own stolen ledger-fat before they ever notice my lack of a skillet.
+    (reader: {"plays":[{"card":"c16","on":"new.2","fit":"full","give":false,"why":"Using the forged tallow-stamp masks the raw mutton with authentic Guild grease scents to divert inspectors."}],"declared":[{"term":"new","cost":"trading away her cart's only heat source"}],"wish":{"name":"Spring-Thaw Ledger Alibi","text":"An established, backdated record in Kaelen's books proving your cart has fed the lock crews legally since spring thaw.","size":"middling","terms":["Kaelen's nerve holding to swear the lie under Toll Magistrate interrogation","Guild-stamped goods and kitchen evidence that hold up to physical inspection"],"instead":null},"ties":[{"card":"c1","text":"hyperventilating and bullied into swearing to a season-long lie for you"}],"time":0,"rest":false,"goes":null})
+    . A new want is on the table: Spring-Thaw Ledger Alibi (middling). It takes: Kaelen's nerve holding to swear the lie under Toll Magistrate interrogation; Guild-stamped goods and kitchen evidence that hold up to physical inspection.
+    . Soot-Stamped Basin Permit answers "Guild-stamped goods and kitchen evidence that hold up to physical inspection" (2 of 2).
+    . Soot-Stamped Basin Permit: 2 uses left.
+    . On account: the narrator takes a marker (c18) for "Kaelen's nerve holding to swear the lie under Toll Magistrate interrogation", at the price the player named: trading away her cart's only heat source. It will be called in.
+    . Lock-Master Kaelen: hyperventilating and bullied into swearing to a season-long lie for you.
+    . Spring-Thaw Ledger Alibi is yours.
+    . A notch of the candle burns: 11 left.
+    . Dealt to you, for Spring-Thaw Ledger Alibi: Tide Tower Basin Pitch (c19). Inspectors and lock crews recognize your legal right to sell noodles at the tower steps, shielded by Kaelen’s forged ledger and Guild-grease stamps. The catch: You traded away your brazier to buy it, leaving your pots ice-cold, and the backdated records imply months of unpaid toll-taxes.
+
+NARRATOR: "Since the thaw," Kaelen wheezes, clutching his ink-stained cuffs. "I’ll swear you've salted noodles here since the ice broke." 
+
+The reek of magistrate-tallow branding your mutton is pungent enough to turn any inspector's head. Into my ledger goes your cart's cold firebox—a delicious marker I keep against the hour that shivering wretch faces the Toll Magistrate's questions. 
+
+Your alibi holds, and I slide across the *Tide Tower Basin Pitch*. The stones are yours by law and ledger, backed by the rough dock-bosses nodding over their greasy bowls. 
+
+The catch is bitter, little cook: your pots sit stone-cold without an ember to warm them, and by your own forged records, you owe four months of back taxes.
+
+Eleven marks of wick remain.
+[candle 11 | wounds 0 | dice 1,12,16 | markers 2]
+[yours: Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired); Tide Basin Noodle Pitch; Soot-Stamped Basin Permit x2; Tide Tower Basin Pitch]
+[after: nothing]
+
+YOU: I lift the red-hot iron plate Kaelen just signed and jam it straight into my ash-dead firebox, using his stolen magistrate-tallow to fry salt-mutton on the underside of my own cart while the fifty derrickmen breathe their steam over the top.
+    (reader: {"plays":[],"tries":[],"declared":[{"term":"new"}],"wish":{"name":"Makeshift Tallow Griddle","text":"A blistering iron plate and stolen grease jammed into the dead firebox to fry meat without a proper brazier.","size":"small","terms":["keeping the wooden cart from catching fire from the bare iron"],"instead":null},"ties":[],"time":0,"rest":false,"goes":null})
+    . A new want is on the table: Makeshift Tallow Griddle (small). It takes: keeping the wooden cart from catching fire from the bare iron.
+    . On account: the narrator takes a marker (c21) for "keeping the wooden cart from catching fire from the bare iron". It will be called in.
+    . Makeshift Tallow Griddle is yours.
+    . A notch of the candle burns: 10 left.
+    . Dealt to you, for Makeshift Tallow Griddle: Scrap-Iron Tallow Griddle (c22). A salvaged plate slick with stolen grease, wedged in the firebox. It crisps noodles and scrap-meat in seconds, drawing hungry lock crews to your cart. The catch: The scorched cartwood beneath stays hot to the touch; the fire you've borrowed is always looking for an excuse to spread.
+
+NARRATOR: The blistered iron screeches into your dead firebox. Stolen tallow spatters against the undercarriage, fat spitting, searing salt-mutton while fifty derrickmen lean over the counter, their frozen breath mingling with greasy, glorious steam.
+
+"Smells like proper wages," a hauler grunts, canal-brass jingling in his heavy coat.
+
+Your griddle is hot, little cook. Onto my account goes the promise of keeping your dry timber from bursting into flame around that blistering iron—a debt I pocket with absolute delight.
+
+I slide across the *Scrap-Iron Tallow Griddle*. It crisps mutton in heartbeats and packs your bench, but mind the catch: the scorched wood beneath stays fever-hot, and that borrowed fire is only waiting for an excuse to spread.
+
+Ten marks of wick remain.
+
+NARRATOR: I turn over the backdated permit’s marker, Wren. A wet lantern swings through the fog. Out of the sluice-damp steps Toll-Assessor Malcolms, clutching Kaelen’s ink-smeared basin register in one gloved hand. Behind him, Kaelen is trembling so hard his teeth clatter against his jaw, eyes wide with terror. Malcolms sniffs the tallow smoke, fixes his cold gaze on your cart, and demands the heavy brass-rimmed skillet pledged against Kaelen's books.
+[candle 10 | wounds 0 | dice 1,12,16 | markers 3]
+[yours: Tongue Like a Filleting Knife; Guild Dropout's Knowledge (tired); Tide Basin Noodle Pitch; Soot-Stamped Basin Permit x2; Tide Tower Basin Pitch; Scrap-Iron Tallow Griddle x2]
+[after: nothing]
+[trouble: Toll-Assessor Malcolms (0/2, in 4)]
+
+YOU: I grab the sizzling scrap-griddle off the firebox with a greasy rag and shove the hot, smoking iron right into Malcolms' open ledger before he can snap it shut. "Eat your audit, Assessor, the grease is already paid for by the boys behind me.
+    (reader: {"plays":[{"card":"c22","on":"x23","fit":"part","give":false,"why":"Scorching the ledger ruins the immediate records in his hands, though it violently escalates the confrontation."},{"card":"c5","on":"x23","fit":"part","give":false,"why":"Sharp tongue and invoking the fifty rough haulers rattles his authority, though words won't disperse him alone."}],"time":0,"rest":false,"goes":null})
+    . Scrap-Iron Tallow Griddle goes part of the way to "Collect the heavy iron skillet pledged to cover Kaelen's missing basin receipts, or arrest Kaelen and impound Wren's noodle cart as an unregistered nuisance." (1 of 2).
+    . Scrap-Iron Tallow Griddle: 1 use left.
+    . Tongue Like a Filleting Knife goes part of the way to "Collect the heavy iron skillet pledged to cover Kaelen's missing basin receipts, or arrest Kaelen and impound Wren's noodle cart as an unregistered nuisance." (2 of 2).
+    . Tongue Like a Filleting Knife is leaned on, and is no use again until a rest.
+    . Toll-Assessor Malcolms is turned aside.
+    . The marker it came for is torn up.
+    . A notch of the candle burns: 9 left.
+
+NARRATOR: Iron kisses vellum with a screech and a foul plume of charred lamb-fat. Malcolms recoils, coughing, eyes watering as his precious ink blackens, curls, and crumbles to cinders right between his gloved thumbs. Behind you, fifty derrickmen rise in unison like a wall of wet wool and canal-grit, boots scraping stone. 
+
+"Take your burnt offal," the assessor hisses, clutching the smoking ruin to his chest as he retreats toward the stairs. "You'll drown in the lower basin yet, cook."
+
+I tear his marker neatly in two and let the scraps drift into the dark. Malcolms is turned aside, but your griddle has only one good sear left in its iron, and that razor tongue of yours is blunted until you rest.
+
+Nine marks of wick remain.
+
+NARRATOR: I turn the marker face-up, Wren. You promised away your cart’s heat to keep Kaelen’s backbone stiff, and the old canal never forgets a debt of warmth. The black sluice beneath the grates gurgles. Slithering up between the wet flagstones comes a Drowned Fire-Eater—an eel-bellied river spirit reeking of stagnant silt and dead reeds, its frost-rimed mouth gaping wide to suck the cherry glow right out of your sizzling scrap-griddle.
+[candle 9 | wounds 0 | dice 1,12,16 | markers 2]
+[yours: Tongue Like a Filleting Knife (tired); Guild Dropout's Knowledge (tired); Tide Basin Noodle Pitch; Soot-Stamped Basin Permit x2; Tide Tower Basin Pitch; Scrap-Iron Tallow Griddle x1]
+[after: nothing]
+[trouble: A Drowned Fire-Eater (0/2, in 4)]
+----------------------------------------------------------------------------------------------------
+CANDLE 9 of 20 | WOUNDS 0 of 3 | DICE 1, 12, 16
+PLACE: The Sluice-Slip below the Tide Tower. Black water churns through the stone gates as derrickmen and lock crews finish their shift under grease-lamps, cold, hungry, and jingling canal-brass in their coats.
+YOURS:
+  c5 Tongue Like a Filleting Knife (tired): Sharp enough to talk down street peddlers, talk your way past drowsy watchmen, or turn an ugly tavern crowd into a laughing one. | catch: You cannot choke back the last caustic word, especially when deference would save your skin.
+  c7 Guild Dropout's Knowledge (tired): You know the exact margins, tallow-stamps, and grease-money needed to run an industrial kitchen in Harrowmere. | catch: You carry no Guild token, which makes your ladle an outlaw weapon in the eyes of the Toll Magistrate.
+  c12 Tide Basin Noodle Pitch: Your cart feeds the night shifts beside the lock. You have cheap broth-meat, rough dockworker protection, and steady coin free from Guild interference. | catch: Lock-keeper Kaelen holds an uncalled marker over you, and the Guild is hunting whoever is burning counterfeit Magistrate tallow.
+  c16 Soot-Stamped Basin Permit (2 uses): A charred, backdated slip bearing a greasy seal. Shields your noodle cart at Tide Tower from immediate seizure and canal-tipping by Guild bailiffs. | catch: You traded away your only skillet to make it, and Kaelen sweats whenever the Toll Magistrate opens his books.
+  c19 Tide Tower Basin Pitch: Inspectors and lock crews recognize your legal right to sell noodles at the tower steps, shielded by Kaelen’s forged ledger and Guild-grease stamps. | catch: You traded away your brazier to buy it, leaving your pots ice-cold, and the backdated records imply months of unpaid toll-taxes.
+  c22 Scrap-Iron Tallow Griddle (1 use): A salvaged plate slick with stolen grease, wedged in the firebox. It crisps noodles and scrap-meat in seconds, drawing hungry lock crews to your cart. | catch: The scorched cartwood beneath stays hot to the touch; the fire you've borrowed is always looking for an excuse to spread.
+HERE (free to lean on while you are here):
+  c1 Lock-Master Kaelen (tired): A harassed basin overseer who controls access to the quayside benches; he is desperate to hide an impending Toll Magistrate audit of his skimmed gate-grease funds. [now: hyperventilating and bullied into swearing to a season-long lie for you] | catch: Any deal struck with him ties your cart to his crooked ledgers when the Magistrate looks close.
+  c3 The Derrickmen's Shanty-Bench (tired): A broad, sheltered stretch of dry flagstones where fifty rough haulers eat every midnight, fiercely protective of anyone who feeds them generous, piping broth. | catch: If your pot runs cold or your broth tastes watered, that loyalty flips into boots against your cart-spokes.
+WHAT YOU ARE AFTER:
+  nothing yet
+ACROSS THE TABLE (the narrator's):
+  x24 TROUBLE A Drowned Fire-Eater: Coiling up from the lock grate, exhaling bitter river-frost directly into your firebox | it wants: It wants the sizzling scrap-iron griddle pulled from your firebox to swallow its heat, or an equal measure of burning tallow surrendered to the canal. [answered 0/2] | in 4 beats: It snuffs your griddle ice-cold, freezes your noodle broth, and cracks the scorched axle of your cart with bitter frost.
+  c18 MARKER A marker for Spring-Thaw Ledger Alibi: The player's own price for "Kaelen's nerve holding to swear the lie under Toll Magistrate interrogation": trading away her cart's only heat source
+  c21 MARKER A marker for Makeshift Tallow Griddle: Owed for "keeping the wooden cart from catching fire from the bare iron", taken on the narrator's account.
+----------------------------------------------------------------------------------------------------
+
+The night is left where it stands.
+
+CALLS: open 1 (25.2s each), player 12 (1.3s each), reader 12 (25.5s each), teller 12 (11.3s each), due 3 (27.7s each), mint 4 (11.5s each)

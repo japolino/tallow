@@ -12,9 +12,6 @@
  *
  * Pure: a trip and a book in, the next book out. Nothing is changed in place.
  */
-import type { Trip } from "./adventure.js";
-import { samePerson, whatStands } from "./lasting.js";
-import { standingSaid } from "./tell-lasting.js";
 
 /**
  * When a chapter is written: at a rest, at the end of a story, when you stop in the middle of one, after a night of free
@@ -94,103 +91,6 @@ const clip = (s: string, n: number): string => {
   const t = s.replace(/\s+/g, " ").trim();
   return t.length > n ? `${t.slice(0, n - 1).trim()}…` : t;
 };
-
-/** Where a story stands now, as a mark for the next chapter to start from. */
-export function markOf(t: Trip, told: number): ChapterMark {
-  // The scene in play (or the next one) is where the next chapter starts: one still going on is written about again, with how it ended.
-  return { deeds: [...t.deeds], scene: t.hand?.scene ?? 0, lost: t.hand?.lost.length ?? 0, visited: t.visited.length, told };
-}
-
-/** How a story ended, in its own words when it has them. */
-function ending(t: Trip): ChapterMaterial["story"]["ending"] {
-  const s = t.adv.scenes;
-  if (!t.over) return undefined;
-  if (s) return t.over === "won" ? s.won : s.lost;
-  return t.over === "won" ? `The player reached the goal: ${t.adv.goal}` : "The player did not reach the goal in time.";
-}
-
-/**
- * Gather what a chapter is written from: the people of the story, what happened since the last chapter and how it
- * went, what the player did and what it cost, who walks with them, what the narrator said, and what earlier chapters
- * established. What tries have won that stays true, and who goes with the player because of one, come from engine/lasting.ts (`whatStands`). Add more through `o.more`.
- */
-export function chapterMaterial(t: Trip, at: ChapterAt, o: MaterialOptions): ChapterMaterial {
-  const since = o.since ?? null;
-  const happened: string[] = [];
-  const people: ChapterPerson[] = [];
-  const seen = new Set<string>();
-  const person = (p: ChapterPerson): void => {
-    const key = p.name.toLowerCase();
-    if (!p.name.trim() || seen.has(key)) return;
-    seen.add(key);
-    people.push({ name: clip(p.name, 60), who: clip(p.who, 200), ...(p.wants ? { wants: clip(p.wants, 160) } : {}), met: clip(p.met, 160) });
-  };
-  const h = t.hand;
-  const story = t.adv.scenes;
-  if (h && story) {
-    // A story of scenes: the scenes since the last chapter, the one in play last if it has been come to.
-    const from = Math.max(0, Math.min(since?.scene ?? 0, story.scenes.length));
-    const upTo = t.over ? Math.min(story.scenes.length - 1, h.scene) : h.opened ? h.scene : h.scene - 1;
-    for (let i = from; i <= upTo && i < story.scenes.length; i++) {
-      const s = story.scenes[i]!;
-      const done = i < h.scene || (i === h.scene && !!t.over);
-      const taken = h.lost.includes(s.taken);
-      const how = !done ? `still going on: ${s.closing}` : taken ? `it went the other way: ${s.taken}` : `the player got through: ${s.through}`;
-      happened.push(`${s.name}: ${clip(s.situation, 320)} How it went: ${clip(how, 240)}`);
-      if (s.person) person({ name: s.person.name, who: s.person.who, wants: s.person.wants, met: `${s.name}; ${done ? (taken ? "the player lost there" : "the player got through") : "the player is still there"}` });
-    }
-  } else {
-    // A road story or free form: the stops reached since the last chapter, and who was at each.
-    for (const id of t.visited.slice(since?.visited ?? 0)) {
-      const stop = t.adv.stops.find((s) => s.id === id);
-      if (!stop) continue;
-      happened.push(`${stop.name}: ${clip(stop.situation ?? "", 320)}`);
-      const p = (t.people ?? {})[id] ?? stop.person;
-      if (p) person({ name: p.name, who: [p.look, p.voice].filter(Boolean).join("; ") || "someone there", ...(p.wants ? { wants: p.wants } : {}), met: `${stop.name}; they are ${p.attitude ?? "wary"} toward the player${p.helped ? ", and the player did what they wanted" : ""}` });
-    }
-  }
-  // Who walks with the player: a road story's own companions, and whoever a try has won to come along (lasting.ts),
-  // with how they stand with the player and what came with them.
-  const stands = whatStands(t);
-  const sentence = (x: string): string => x.trim().replace(/[.!\s]+$/, "");
-  const companions = [
-    ...t.party
-      .map((id) => t.adv.companions.find((c) => c.id === id))
-      .filter((c): c is NonNullable<typeof c> => !!c)
-      .map((c) => ({ name: clip(c.name, 60), who: clip(c.who, 200) })),
-    ...stands.with.map((c) => ({
-      name: clip(c.name, 60),
-      who: clip([sentence(c.who), c.said && sentence(c.said) !== sentence(c.who) ? `how they came to be with the player: ${sentence(c.said)}` : "", standingSaid(c.standing).replace("you", "the player"), c.catch ? `what came with them${c.owed ? ", which has not come due yet" : ""}: ${sentence(c.catch)}` : ""].filter(Boolean).join("; "), 420),
-    })),
-  ];
-  // Anyone the player has asked something of who is in no scene written about here is someone a chapter can be about too.
-  for (const p of stands.people) if (p.standing && !stands.with.some((c) => samePerson(c.name, p.name)) && !people.some((x) => samePerson(x.name, p.name))) person({ name: p.name, who: `${standingSaid(p.standing).replace("you", "the player")}`, met: "the player asked something of them" });
-  const changed = [
-    ...stands.changes.filter((c) => !(c.kind === "join" && stands.with.some((w) => samePerson(w.name, c.who)))).map((c) => (c.kind === "sour" ? `${c.who} is set against the player: ${sentence(c.said)}.` : `${c.form === "lesser" ? "Won only in part" : "Won"}, of ${c.who}: ${sentence(c.said)}.`)),
-    ...stands.gone.map((g) => `${g.name} went with the player for a while, and has ${g.how === "turned" ? "turned on them" : "left them"}.`),
-  ].map((l) => clip(l, 300));
-  const known = new Set(since?.deeds ?? []);
-  const deeds = t.deeds.filter((d) => !known.has(d)).map((d) => clip(d, 140));
-  const lost = (h?.lost ?? []).slice(since?.lost ?? 0).map((l) => clip(l, 200));
-  const boons = (h?.boons ?? []).map((b) => clip(b.name, 100));
-  const end = ending(t);
-  return {
-    at,
-    story: { title: clip(t.adv.title, 80), goal: clip(story?.goal ?? t.adv.goal, 300), ...(end ? { ending: clip(end, 300), over: t.over === "won" ? ("won" as const) : ("lost" as const) } : {}) },
-    hero: { name: clip(o.hero.name || "the traveller", 60), who: clip(o.hero.who || t.adv.who, 300) },
-    hour: t.sheet.hour,
-    happened,
-    people,
-    companions,
-    deeds,
-    lost,
-    boons,
-    changed,
-    told: (o.told ?? []).map((l) => clip(l, 600)).filter(Boolean),
-    established: (o.established ?? []).map((l) => clip(l, 200)).filter(Boolean),
-    more: (o.more ?? []).map((l) => clip(l, 300)).filter(Boolean),
-  };
-}
 
 /** Whether anything has happened since the last chapter to write about. The end of a story always has. */
 export const chapterWorth = (m: ChapterMaterial): boolean => m.at === "end" || m.happened.length > 0 || m.deeds.length > 0 || m.lost.length > 0 || m.changed.length > 0;

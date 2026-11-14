@@ -3,11 +3,8 @@
  * conversation that only grows at its end, each story keeps the preset it began with, and the minds write under it.
  */
 import { describe, expect, test } from "bun:test";
-import { COURIER, RESCUE } from "../src/content/adventures.js";
-import { startMoment } from "../src/engine/moment.js";
-import { modelMinds } from "../src/game/modelminds.js";
 import type { PresetSnapshot } from "../src/game/preset.js";
-import type { Ask, Message } from "../src/game/prompts.js";
+import type { Ask, Message } from "../src/game/ask.js";
 import { FRAME, grown, laid, LOG_KEPT, LOG_MAX, recordOf, voiceKeeper, type KeptVoices, type Turn } from "../src/game/voice.js";
 
 const snap = (name = "Mine"): PresetSnapshot => ({
@@ -24,7 +21,6 @@ const JOB: Message[] = [
   { role: "system", content: "This turn's rules." },
   { role: "user", content: "What must be true: the gate is shut." },
 ];
-const mill = () => startMoment(RESCUE.stops.find((s) => s.id === "mill")!, COURIER, "q");
 
 describe("a narration under a story's voice", () => {
   const log: Turn[] = [{ you: "At the mill.", narrator: "The wheel turns." }];
@@ -142,60 +138,5 @@ describe("each story keeps the preset it began with", () => {
     expect(stored!.voices).toEqual([]);
     const failing = voiceKeeper({ take: async () => Promise.reject(new Error("no permission")) });
     expect(await failing.now()).toBeNull();
-  });
-});
-
-describe("the minds write under the story's voice", () => {
-  const voiced = (reply = "The miller looks you over, slow as the wheel behind her, and the damp of the race is on everything.") => {
-    const calls: { messages: Message[]; role: string; parameters?: Record<string, unknown> }[] = [];
-    const ask: Ask = async (messages, role, opts) => {
-      calls.push({ messages, role, ...(opts?.parameters ? { parameters: opts.parameters } : {}) });
-      return reply;
-    };
-    const k = voiceKeeper({ take: async () => snap() });
-    k.story("a");
-    return { calls, k, minds: modelMinds(ask, { voice: k, context: () => ({ content: "Intimate scenes fade at the door." }) }) };
-  };
-
-  test("an answer goes out under the preset, with its settings, and the game's rules after everything of the preset's", async () => {
-    const { calls, minds } = voiced();
-    await minds.answer("What is she like?", mill());
-    const c = calls[0]!;
-    expect(c.role).toBe("teller");
-    expect(c.parameters).toEqual({ temperature: 0.9 });
-    expect(c.messages[0]!.content).toContain("STYLE of Mine");
-    expect(c.messages[1]!.content).toBe(FRAME);
-    const rules = c.messages.at(-2)!;
-    expect(rules.role).toBe("system");
-    // The preset sets the length; the game's own short plain voice is left out, its content settings are not.
-    expect(rules.content).toContain("at the length and in the style");
-    expect(rules.content).not.toContain("at most 60 words");
-    expect(rules.content).toContain("Intimate scenes fade at the door.");
-    expect(c.messages.at(-1)!.role).toBe("user");
-  });
-
-  test("what was said becomes the story so far for the next turn, and a long answer is not cut to the game's short one", async () => {
-    const long = `${"The mill groans and the water runs on under it. ".repeat(40)}She waits.`;
-    const { calls, minds } = voiced(long);
-    const said = await minds.answer("What is she like?", mill());
-    expect(said.length).toBeGreaterThan(1500);
-    await minds.answer("And the door?", mill());
-    const second = calls[1]!.messages;
-    expect(second.some((m) => m.role === "assistant" && m.content === said)).toBe(true);
-    expect(second.some((m) => m.role === "user" && m.content.includes('The player wrote: "What is she like?"'))).toBe(true);
-  });
-
-  test("a refusal is never read back into the story", async () => {
-    const { k, minds } = voiced("I'm sorry, but I can't continue with this.");
-    await minds.answer("What is she like?", mill());
-    expect((await k.now())!.log).toEqual([]);
-  });
-
-  test("without a voice the narrator is asked as before: its own rules, its own short answer", async () => {
-    const calls: Message[][] = [];
-    const minds = modelMinds(async (messages) => (calls.push(messages), "She is wary."));
-    await minds.answer("What is she like?", mill());
-    expect(calls[0]).toHaveLength(2);
-    expect(calls[0]![0]!.content).toContain("at most 60 words");
   });
 });

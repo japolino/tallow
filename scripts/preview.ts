@@ -1,7 +1,7 @@
 /**
- * Room preview server: bundles preview/main.ts and serves it with
- * preview/index.html at http://localhost:4184 (PORT overrides). The bundle is
- * rebuilt on each page load, so a refresh picks up edits. No Lumiverse needed.
+ * Preview server: serves the built extension in a pretend host (preview/host.ts) at http://localhost:4184/host
+ * (PORT overrides), and every card face at /cards. Run `bun run build` first; the host page itself is bundled on
+ * each load, so a refresh picks up edits to it. No Lumiverse needed.
  */
 import { join } from "node:path";
 
@@ -22,7 +22,6 @@ Bun.serve({
   port,
   async fetch(req) {
     const url = new URL(req.url);
-    if (url.pathname === "/main.js") return bundle("preview/main.ts");
     if (url.pathname === "/cards.js") return bundle("preview/cards.ts");
     // The built extension in a pretend host (preview/host.ts): run `bun run build` first.
     if (url.pathname === "/host.js") return bundle("preview/host.ts");
@@ -37,9 +36,7 @@ Bun.serve({
       const f = Bun.file(join(root, "assets", rel));
       return (await f.exists()) ? new Response(f, { headers: { "cache-control": "no-store" } }) : new Response("not found", { status: 404 });
     }
-    if (url.pathname === "/" || url.pathname === "/index.html") {
-      return new Response(Bun.file(join(root, "preview/index.html")), { headers: { "content-type": "text/html", "cache-control": "no-store" } });
-    }
+    if (url.pathname === "/" || url.pathname === "/index.html") return new Response(null, { status: 302, headers: { location: "/host?run=1" } });
     return new Response("not found", { status: 404 });
   },
 });

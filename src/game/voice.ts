@@ -14,7 +14,7 @@
  * Pure: the frontend gives the keeper a way to take a snapshot and a place to keep what it holds.
  */
 import { readSnapshot, type PresetSnapshot } from "./preset.js";
-import type { Message } from "./prompts.js";
+import type { Message } from "./ask.js";
 
 /** One turn of the story so far: what the game recorded of it, and what the narrator said. */
 export interface Turn {
