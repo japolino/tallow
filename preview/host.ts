@@ -6,12 +6,10 @@
  * ?run=1 gives a pretend model for a run (src/game/runsit.ts): a sheet, a judge that calls for the die unless a line
  * only looks or asks, a short story and a read-back; without it every ask fails, as with no model. ?card=hangul gives
  * a card whose name is in Hangul, ?card=modern one set in our own times, ?card=world one that is a world rather than a
- * person. ?decide=1 grants the extras and gives a pretend Decision model. ?drawer=1, ?book=1 and ?table=1 show Tallow's
- * drawer tabs.
+ * person. ?decide=1 grants the extras and gives a pretend Decision model. ?drawer=1 shows Tallow's drawer tab.
  */
 import type { CardInfo } from "../src/game/card.js";
-import { addCard, addWant, apply as applyRuling, arrive as arriveAt, newState } from "../src/engine/price.js";
-import type { ModelsState, TableView, ToBackend, ToFrontend } from "../src/shared/protocol.js";
+import type { ModelsState, ToBackend, ToFrontend } from "../src/shared/protocol.js";
 
 /** Made-up cards. */
 const CARDS: Record<string, CardInfo> = {
@@ -103,44 +101,6 @@ function pretendDecide(m: Extract<ToBackend, { type: "decide" }>): Record<string
   return { pick: { type: "choice", choice, confidence: 0.9, probabilities: { [choice]: 0.9 } } };
 }
 
-/** [chat book] The pretend chat, the pretend host's storage for books, and what its model writes when asked for a chapter. */
-const PRETEND_CHAT = [
-  "The inn is warm and nearly empty. The innkeeper looks up from the fire.",
-  "I shake the rain off my coat and ask about the road north.",
-  "She tells you the bridge is out, and pours you a cup without being asked.",
-  "I thank her, pay in silver, and go up to bed.",
-  "The stair creaks under you. Below, the fire is banked for the night.",
-].map((text, index) => ({ index, id: `m${index}`, you: index % 2 === 1, name: index % 2 === 1 ? "Ash" : "Marta", text }));
-const books = new Map<string, unknown>();
-const PRETEND_CHAPTER = [
-  "TITLE: What the Cook Heard",
-  "",
-  "Marta banked the kitchen fire and did not go to bed. The stranger had paid in silver and asked about the north road, and nobody asked about the north road who meant to come back by it.",
-  "",
-  "\"He'll be gone by morning,\" the stable boy said from the doorway. Marta said that was his business, and set a loaf aside in a cloth all the same.",
-  "",
-  "FACTS:",
-  "- Marta has set bread aside for the stranger's road.",
-  "PICTURE: An old cook sits by a banked kitchen fire at night, a wrapped loaf on the table beside her.",
-].join("\n");
-
-/** [chat table] A pretend table under the pretend chat (?table=1 shows its tab): dealt by the engine itself, with one message played. */
-let pretendTable: TableView | null = null;
-function dealPretendTable(premise: string): TableView {
-  const s = newState(7);
-  arriveAt(s, "The Ferryman's Rest", "A warm, nearly empty inn on the north road; rain on the shutters.");
-  addCard(s, "you", { name: "Courier's Satchel", kind: "thing", text: "Sealed letters for three towns, and the right to carry them.", catch: "Somebody always wants to know what is in it." });
-  addCard(s, "you", { name: "Road-Hard Legs", kind: "trait", text: "Can walk a day and a night without stopping." });
-  addCard(s, "you", { name: "A Purse of Silver", kind: "thing", text: "Enough for a week of inns, or one good bribe." });
-  addCard(s, "you", { name: "The Guild's Token", kind: "fact", text: "Guild houses must give its bearer a bed.", catch: "The Wardens stop anyone who shows one." });
-  addCard(s, "here", { name: "Marta", kind: "tie", text: "The innkeeper. Pours without being asked, and hears everything.", catch: "She tells the next traveller what she heard." }, null);
-  addCard(s, "here", { name: "The Banked Fire", kind: "thing", text: "Warmth, light, and a place nobody is hurried from." });
-  addWant(s, "you", { name: "The North Road, Open", text: "A way past the broken bridge before the letters go stale.", size: "middling", terms: ["Somebody who knows another crossing", "Leave to use it"] });
-  addWant(s, "them", { name: "A Warden at the Door", text: "Shaking rain from his cloak and looking at every satchel in the room.", size: "small", terms: ["To see what the courier carries"], bite: "he takes the satchel to the toll-house" });
-  const res = applyRuling(s, { plays: [{ card: "c3", on: "w7.1", fit: "part", give: true, why: "silver across the bar" }], declared: [{ term: "w7.2", cost: "a letter carried north for Marta, unread" }], time: 1 });
-  return { on: true, state: s, ledger: res.ledger, news: [], premise, canUndo: true };
-}
-
 const listeners: ((m: unknown) => void)[] = [];
 const reply = (m: ToFrontend): void => void setTimeout(() => listeners.forEach((f) => f(m)), 30);
 const actions: { label: string; click: () => void }[] = [];
@@ -160,22 +120,7 @@ const ctx = {
       reply({ type: "models", id: m.id, state: { ...settings, llm: PRETEND_LLM, decisions: DECIDE ? [{ id: "d1", name: "Quick reads", model: "jev-small", isDefault: true }] : null, embeddings: DECIDE ? [{ id: "e1", name: "Local embedder", model: "embed-small", isDefault: true }] : [] } });
     }
     else if (m.type === "decide") reply({ type: "decided", id: m.id, answers: DECIDE ? (pretendDecide(m) as never) : null });
-    // [chat book] A pretend chat to keep a book beside (?book=1 shows its tab): its messages, who it is between, the
-    // book's storage, and a chapter for the asking.
-    else if (m.type === "chat") reply({ type: "chat", id: m.id, lines: PRETEND_CHAT.filter((l) => l.index > m.after), earlier: PRETEND_CHAT.filter((l) => l.index <= m.after).slice(-3), last: PRETEND_CHAT.length - 1 });
-    else if (m.type === "who") reply({ type: "who", id: m.id, card: { name: CARD.name, about: "" }, hero: { name: "Ash", who: "a courier" } });
     else if (m.type === "preset") reply({ type: "preset", id: m.id, snapshot: null });
-    else if (m.type === "book") reply({ type: "book", id: m.id, book: books.get(m.file) ?? null });
-    else if (m.type === "book-keep") (books.set(m.file, m.book), reply({ type: "book-kept", id: m.id }));
-    else if (m.type === "table") {
-      if (m.do === "deal") setTimeout(() => ((pretendTable = dealPretendTable(m.premise ?? "")), reply({ type: "table", id: m.id, table: pretendTable })), 900);
-      else {
-        if (m.do === "drop") pretendTable = null;
-        else if (pretendTable && (m.do === "on" || m.do === "off")) pretendTable = { ...pretendTable, on: m.do === "on" };
-        else if (pretendTable && m.do === "undo") pretendTable = { ...pretendTable, ledger: [], canUndo: false };
-        reply({ type: "table", id: m.id, table: pretendTable });
-      }
-    } else if (m.type === "ask" && m.role === "teller" && m.messages.some((x) => x.content.includes("Stop the roleplay here"))) setTimeout(() => reply({ type: "answer", id: m.id, text: PRETEND_CHAPTER }), 1500);
     else if (RUN && m.type === "ask" && pretendRun(m) !== null) setTimeout(() => reply({ type: "answer", id: m.id, text: pretendRun(m)! }), m.role === "teller" ? 2500 : 700);
     else reply({ type: "error", id: m.id, error: "no model in the pretend host" });
   },
@@ -192,13 +137,11 @@ const ctx = {
     },
   },
   ui: {
-    /** A drawer tab, shown on the right of the page so it can be looked at: Tallow's with ?drawer=1, the chat's book with ?book=1, the chat's table with ?table=1. */
+    /** A drawer tab, shown on the right of the page with ?drawer=1 so it can be looked at. */
     registerDrawerTab(o: { id: string }) {
-      const book = o.id === "tallow-book";
-      const kind = book ? "book" : o.id === "tallow-table" ? "table" : "drawer";
       const root = document.createElement("div");
-      root.id = kind === "drawer" ? "drawer" : `${kind}drawer`;
-      const shown = new URLSearchParams(location.search).get(kind) === "1";
+      root.id = "drawer";
+      const shown = new URLSearchParams(location.search).get("drawer") === "1";
       Object.assign(root.style, { position: "fixed", top: "0", right: "0", width: "min(360px, 100%)", height: "100%", overflow: "auto", background: "#1d1a17", color: "#e8e0d4", zIndex: "2", display: shown ? "" : "none" });
       document.body.appendChild(root);
       return {

@@ -60,7 +60,6 @@ import { Candle, candleKit } from "./candles.js";
 import { candleBurn, daylight, WEATHERS, wrapHour, type Air, type LightState, type Weather } from "./daylight.js";
 import { Governor, QUALITY } from "./governor.js";
 import { Desk } from "./desk.js";
-import { RoomBook } from "./book.js";
 import { Die, DIE_REST } from "./die.js";
 import { PlayerHand } from "./hand.js";
 import { mountFlatRoom } from "./flat.js";
@@ -157,8 +156,6 @@ export interface RoomHandle {
   gesture?(name: Gesture): boolean;
   /** Your side of the table: the notebook, the pages, the counters, the balance and the narrator's voice. Absent on the flat room. */
   readonly desk?: Desk;
-  /** [book] The narrator's book on its shelf (room/book.ts): written in at a rest and an ending, taken down to be read. Absent on the flat room. */
-  readonly book?: RoomBook;
   stats(): RoomStats;
   /**
    * Draw some frames back to back, waiting for the graphics card after each, and return the milliseconds one
@@ -330,7 +327,6 @@ class Room implements RoomHandle {
 
   private hand: PlayerHand;
   readonly desk: Desk;
-  readonly book: RoomBook; // [book]
   private grab: { phase: "reach" | "hold" | "throw"; t0: number; value: number; done: () => void; from: Vector3 } | null = null;
   private boxK = 0;
   private handAt = new Vector3(0.2, -0.34, -HAND_D);
@@ -420,8 +416,6 @@ class Room implements RoomHandle {
     this.camera.add(this.hand.group);
     this.scene.add(this.camera);
     this.desk = new Desk({ scene: this.scene, camera: this.camera, host, narrator: this.narrator, reduced: this.reduced, box: BOX, sitBack: () => this.lean(false), stops: this.stops });
-    // [book] The narrator's book, on the shelf; the pen makes way whenever the game wants the narrator's hands.
-    this.book = new RoomBook({ scene: this.scene, camera: this.camera, host, narrator: this.narrator, reduced: this.reduced, shelves: this.anchor.get("shelves") ?? this.scene, busy: () => this.desk.tracks.busy || [...this.pieces.values()].some((p) => p.move?.arm !== undefined) || this.tending.length > 0 });
     this.diceBox();
     this.die.place(BOX.clone().add(V(-0.02, 0.012 + DIE_REST, 0.01)));
     for (const p of opts.pieces) this.addPiece(p);
@@ -1463,7 +1457,6 @@ class Room implements RoomHandle {
     this.narrator.dispose();
     this.hand.dispose();
     this.desk.dispose();
-    this.book.dispose(); // [book]
     this.die.dispose();
     this.env?.dispose();
     this.post.dispose();
@@ -1480,7 +1473,7 @@ class Room implements RoomHandle {
     this.shakeIn += Math.hypot(x - this.pointer.x, y - this.pointer.y);
     this.rock += (x - this.pointer.x) * 2.2;
     this.pointer.set(x, y);
-    this.canvas.style.cursor = !this.grab && (this.book.hot(e, this.bookFree) || this.desk.hot(e)) ? "pointer" : ""; // [book]
+    this.canvas.style.cursor = !this.grab && this.desk.hot(e) ? "pointer" : "";
   };
 
   /** Click the lower half of the view (the table) to lean in; click again to sit back. */
@@ -1490,24 +1483,17 @@ class Room implements RoomHandle {
       this.releaseDie();
       return;
     }
-    if (this.book.click(e, this.bookFree)) return; // [book] the book on the shelf, or open in your hands
     // The notebook, the pages and the dice box come before leaning in over the map.
     if (this.desk.click(e)) return;
     const r = this.canvas.getBoundingClientRect();
     if (this.leaning || (e.clientY - r.top) / r.height > 0.45) this.lean(!this.leaning);
   };
 
-  /** [book] Your hands are free to take the book down: nothing else is up, and you are not leaning over the map. */
-  private get bookFree(): boolean {
-    return this.desk.mode === "idle" && !this.leaning && !this.cardsBusy;
-  }
-
   private get cardsBusy(): boolean {
     return this.desk.cards.looking || !!this.desk.cards.choosing;
   }
 
   private onWheel = (e: WheelEvent): void => {
-    if (this.book.wheel(e.deltaY)) return; // [book]
     if (this.desk.mode === "reading") void this.desk.leaf(e.deltaY > 0 ? 1 : -1);
     else if (!this.grab && this.desk.mode === "idle" && Math.abs(e.deltaY) > 4) this.lean(e.deltaY < 0);
   };
@@ -1596,7 +1582,7 @@ class Room implements RoomHandle {
     if (struck && !this.reduced) this.jolt = 1;
     else if (this.jolt) this.jolt = this.jolt < 0.004 ? 0 : this.jolt * Math.exp(-dt / 0.2);
     // A page in your hands: the picture is drawn finer and plainer for as long as it is up, so it can be read.
-    const reading = this.desk.pageUp || this.book.held; // [book]
+    const reading = this.desk.pageUp;
     if (this.fine !== (reading && this.fineOk)) {
       this.fine = reading && this.fineOk;
       this.resize();
@@ -1938,7 +1924,6 @@ class Room implements RoomHandle {
     this.die.update(t);
     this.holdDie(t, dt, L);
     this.desk.update(t, dt, Math.min(1, 0.5 + L.ambientIntensity * 0.45 + this.candleLevel * 0.25));
-    this.book.update(t, dt); // [book]
     // A blow on the table: whatever stands on it jumps and rocks, and settles exactly where it stood.
     const j = this.jolt;
     const dieFree = !this.grab && !this.die.rolling && this.die.mesh.parent === this.scene;

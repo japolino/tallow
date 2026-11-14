@@ -16,7 +16,6 @@ import type { ConnOption, ModelsState } from "../shared/protocol.js";
 import { ALL_TRACKS, credit } from "../room/music.js";
 import { sound, type Levels } from "../room/sound.js";
 import { SOUND_CREDITS } from "./soundcredits.js";
-import { picturesOn, setPictures } from "./pictures.js";
 
 export interface DrawerActions {
   /** Sit down at the table for the open chat. */
@@ -96,16 +95,8 @@ export function createDrawer(ctx: SpindleFrontendContext, actions: DrawerActions
       <div class="vol"><span>Music</span><input type="range" min="0" max="100" data-vol="music"><output data-out="music"></output></div>
       <div class="vol"><span>The room</span><input type="range" min="0" max="100" data-vol="sounds"><output data-out="sounds"></output></div>
       <div class="hint">Music streams from incompetech.com; at 0 nothing is fetched.</div>
-      <details data-credits><summary>Credits</summary><ul data-creditlist></ul></details></section>
-    <section><h3>Pictures</h3>
-      <div class="seg" data-pictures><button data-on="1">Paint them</button><button data-on="0">No pictures</button></div>
-      <div class="hint">One picture for each chapter of the narrator's book, painted by Inlay Illustrator in your own art style when it is installed. Each is an image generation on your image connection, which may cost money. Off until you turn it on.</div></section>`;
+      <details data-credits><summary>Credits</summary><ul data-creditlist></ul></details></section>`;
   tab.root.appendChild(root);
-  // [book] Pictures for the narrator's book (frontend/pictures.ts): off until the user says yes.
-  const picturesEl = root.querySelector<HTMLElement>("[data-pictures]")!;
-  const showPictures = (): void => picturesEl.querySelectorAll<HTMLButtonElement>("button").forEach((b) => b.classList.toggle("on", (b.dataset.on === "1") === picturesOn()));
-  picturesEl.querySelectorAll<HTMLButtonElement>("button").forEach((b) => b.addEventListener("click", () => (setPictures(b.dataset.on === "1"), showPictures())));
-  showPictures();
   const modelsEl = root.querySelector<HTMLElement>("[data-models]")!;
   const savedEl = root.querySelector<HTMLElement>("[data-saved]")!;
   root.querySelector("[data-sit]")!.addEventListener("click", () => actions.sit());
