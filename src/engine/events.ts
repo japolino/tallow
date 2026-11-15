@@ -49,6 +49,8 @@ export interface EventsState {
   /** The quick choices, and the turn they were made for. */
   choices: string[];
   choicesTurn: number;
+  /** Which of the deck's pictures each of those choices is drawn with (engine/cards.ts), in their order; none in a run kept from before. */
+  faces?: string[];
 }
 
 const fresh = (): EventsState => ({ cooldown: 0, bag: [], last: [], quiet: 0, arrived: false, cutIn: -1, bad: 0, lastLine: "", choices: [], choicesTurn: -1 });

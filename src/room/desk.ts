@@ -27,6 +27,7 @@ import { LuckTray } from "./luck.js";
 import { Roster } from "./roster.js";
 import { DrawnHand, GRIP_LEAN, THUMB_REACH, THUMB_TURN } from "./drawnhands.js";
 import { Page, PAGE_FOOT, PAGE_H, PAGE_W, type PageWriting } from "./paper.js";
+import { isCardKind } from "../engine/cards.js";
 import { kindOfGroup, SIDE_MOST, TableCards } from "./tablecards.js";
 import { Reckoning } from "./tally.js";
 import { TableProps } from "./props/index.js";
@@ -476,7 +477,7 @@ export class Desk {
   show(shows: Show[]): void {
     const word = (g: string): string => (g ? g[0]!.toUpperCase() + g.slice(1) : "");
     const cards = shows.flatMap((s) => (s.kind === "card" ? [s] : []));
-    void this.cards.sync(cards.slice(0, SIDE_MOST).map((c) => ({ id: `${c.group}:${c.id}`, kind: kindOfGroup(c.group), name: c.title, title: word(c.group), text: c.text, ...(c.line ? { line: c.line } : {}) })));
+    void this.cards.sync(cards.slice(0, SIDE_MOST).map((c) => ({ id: `${c.group}:${c.id}`, kind: isCardKind(c.face) ? c.face : kindOfGroup(c.group), name: c.title, title: word(c.group), text: c.text, ...(c.line ? { line: c.line } : {}) })));
     const bars = shows.flatMap((s) => (s.kind === "bar" ? [s] : []));
     const groups = [...new Set(bars.map((b) => b.group))];
     this.tally.meters([...bars].sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group)));

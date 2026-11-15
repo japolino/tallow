@@ -68,7 +68,7 @@ const whole = (r: Run): string => [sheetText(r), sceneOf(deps, r), ...pagesOf(de
 function tableText(r: Run): string {
   const lines = showsOf(deps, r).map((s) => {
     if (s.kind === "map") return `map "${s.title}": ${s.places.map((p) => `${p.id === s.at ? "*" : ""}${p.name}${p.seen ? "" : " (unvisited)"}`).join(", ")}; ways ${s.ways.length}`;
-    if (s.kind === "card") return `card [${s.group}] ${s.title}: ${s.text}${s.line ? ` -> writes "${s.line}"` : ""}`;
+    if (s.kind === "card") return `card [${s.group}${s.face ? `, picture ${s.face}` : ""}] ${s.title}: ${s.text}${s.line ? ` -> writes "${s.line}"` : ""}`;
     if (s.kind === "bar") return `bar [${s.group}] ${s.name} ${s.value}/${s.max}${s.note ? ` (${s.note})` : ""}`;
     if (s.kind === "tokens") return `tokens ${s.name} ${s.count}${s.max !== undefined ? `/${s.max}` : ""}`;
     if (s.kind === "pack") return `satchel: ${s.items.map((i) => `${i.name}${i.qty > 1 ? ` x${i.qty}` : ""}${i.worn ? " (worn)" : ""}`).join(", ") || "nothing"}; ${s.money} ${s.coin}${s.making?.at ? `; making ${s.making.at}` : ""}${s.sellTo ? `; ${s.sellTo} buys` : ""}`;

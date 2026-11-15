@@ -12,6 +12,7 @@
  *
  * Nothing here shows in a sheet. The player is told nothing about it.
  */
+import { CARD_KINDS, isCardKind } from "../../engine/cards.js";
 import { clean, sceneText, type Run } from "../../engine/run.js";
 import { choicesOk, cutInChance, cutsIn, eventsOf, inFight, offer, passiveFact, seemsStuck, whoCutsIn, type Trigger } from "../../engine/events.js";
 import type { Message } from "../ask.js";
@@ -84,7 +85,12 @@ function readPlan(r: Run, j: Record<string, unknown>): Plan | null {
 
 export interface Read {
   choices: string[];
+  /** The deck's picture for each choice, in their order (engine/cards.ts): the reader's pick where it named one of the deck's, the crossroads otherwise. */
+  faces?: string[];
 }
+
+/** The picture a choice is drawn with when none was picked for it. */
+const PLAIN_FACE = "crossroads";
 
 function choiceMessages(r: Run, line: string, story: string, stuck: boolean): Message[] {
   const s = r.sheet;
@@ -108,18 +114,23 @@ ${head(line, 1200)}
 THE PASSAGE JUST TOLD:
 ${tail(story, 2400)}
 
+THE DECK'S PICTURES (each choice is laid on the table as a card with one of these on it):
+${CARD_KINDS.map((k) => `${k.id}: ${k.shows}`).join("\n")}
+
 Write this, with every <note> replaced:
 
 {
   "decision": <true if the passage ends with ${s.name} facing a choice or something that wants an answer>,
   "stuck": <true if what the player wrote shows they do not know what to do, or asks for ideas>,
-  "choices": ["<what to try, imperative, 10 words or fewer>", "<a different thing to try>", "<a third, different again>"]
+  "choices": ["<what to try, imperative, 10 words or fewer>", "<a different thing to try>", "<a third, different again>"],
+  "cards": ["<the id of the picture for the first choice>", "<for the second>", "<for the third>"]
 }
 
 Rules:
 - decision: true when the passage stops on an open question, a fork, an offer, a threat to answer, a door or a person waiting for ${s.name}. False when it ends in a settled moment, with nothing pressing, or in a place where ${s.name} would simply carry on.${stuck ? "\n- The player has seemed stuck for a while, so fill in the choices even if decision is false." : ""}
 - choices: three, or an empty list [] when decision and stuck are both false and nothing is asked of ${s.name}.
 - Each choice is a thing to try, in the imperative ("Ask who sent him", "Slip out the back"), ten words or fewer, and begins with a verb. It never says what comes of it ("Pick the lock and find the treasure" is wrong; "Pick the lock" is right), never speaks for ${s.name} in the first person, and uses only the people, things and places in the scene or carried.
+- cards: for each choice, in the same order, the id of the one picture from THE DECK'S PICTURES whose subject is nearest to what that choice is about: who it deals with, what stands in the way, what is used, or where it leads. Three different pictures; ${PLAIN_FACE} only for a choice that is simply which way to go. An empty list when choices is empty.
 - The three must be plainly different from each other: not the same deed three ways, and not all bold or all careful. They must start with different verbs.`,
     },
   ];
@@ -177,7 +188,10 @@ export const events: System<Plan, Read> = {
       if (!wanted) return { choices: [] };
       const items = list(j.choices).map((c) => said(c, 90));
       const ok = choicesOk(r, items);
-      return ok ? { choices: ok } : null;
+      if (!ok) return null;
+      // Each choice's picture: the reader's pick when it is one of the deck's, the crossroads otherwise.
+      const picked = list(j.cards).map((c) => said(c, 30).toLowerCase());
+      return { choices: ok, faces: ok.map((_, i) => (isCardKind(picked[i]) ? picked[i]! : PLAIN_FACE)) };
     }, "events, quick choices");
   },
 
@@ -190,14 +204,16 @@ export const events: System<Plan, Read> = {
     st.arrived = !!t.before.place.name && !!r.place.name && clean(t.before.place.name, 80).toLowerCase() !== clean(r.place.name, 80).toLowerCase();
     st.lastLine = clean(t.line, 200).toLowerCase();
     st.choices = read?.choices ?? [];
+    st.faces = read?.faces ?? [];
     st.choicesTurn = r.turn;
     return [];
   },
 
   /** Three things to try, when there are any for this turn. */
   shows(r: Run): Show[] {
-    const st = r.sys?.events as { choices?: unknown; choicesTurn?: unknown } | undefined;
+    const st = r.sys?.events as { choices?: unknown; choicesTurn?: unknown; faces?: unknown } | undefined;
     if (!st || st.choicesTurn !== r.turn || !Array.isArray(st.choices) || st.choices.length !== 3) return [];
-    return st.choices.map((c, i): Show => ({ kind: "card", id: `choice-${i + 1}`, group: "choices", title: String(c), text: "", line: String(c) }));
+    const faces = Array.isArray(st.faces) ? st.faces : [];
+    return st.choices.map((c, i): Show => ({ kind: "card", id: `choice-${i + 1}`, group: "choices", title: String(c), text: "", line: String(c), face: isCardKind(faces[i]) ? faces[i] : PLAIN_FACE }));
   },
 };

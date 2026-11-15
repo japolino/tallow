@@ -62,6 +62,9 @@ export function cardKind(id: string): CardKind {
   return k;
 }
 
+/** Whether this is the id of one of the deck's pictures. */
+export const isCardKind = (id: unknown): id is string => typeof id === "string" && BY_ID.has(id);
+
 /** The title on a stop's card: the one written for this world, else its kind's own. */
 export const faceOf = (s: { card: string; face?: string }): string => s.face ?? cardKind(s.card).title;
 

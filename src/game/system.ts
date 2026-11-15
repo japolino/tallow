@@ -354,7 +354,7 @@ export type Show =
   /** Known places and the ways between them, and where you are. */
   | { kind: "map"; title: string; places: { id: string; name: string; note?: string; danger?: number; seen: boolean }[]; ways: [string, string][]; at: string }
   /** A card laid on your side to pick up and read: a one-off choice, a contest's line, a perk on offer. `line` is what touching it writes for you. */
-  | { kind: "card"; id: string; group: string; title: string; text: string; line?: string }
+  | { kind: "card"; id: string; group: string; title: string; text: string; line?: string; /** Which of the deck's pictures it is drawn with (engine/cards.ts, a kind's id), where the game picked one; otherwise its group's own. */ face?: string }
   /** A meter with a name: an encounter's bar, a need. */
   | { kind: "bar"; id: string; group: string; name: string; value: number; max: number; good: "up" | "down" | "none"; note?: string }
   /** A few counters of one kind: days, favours. */

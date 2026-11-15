@@ -14,6 +14,7 @@
  * The page sets window.room (the room's own handle: room.desk.props is the props' manager), window.samples(fill) (the
  * sample Shows) and window.lay(keys, fill, rest) (lay them out again). scripts/prop-shots.ts takes its pictures here.
  */
+import { loadCardPictures } from "../src/room/cardart.js";
 import { mountRoom } from "../src/room/room.js";
 import type { Show } from "../src/game/system.js";
 import type { PropKey } from "../src/room/props/layout.js";
@@ -53,6 +54,8 @@ const lay = (which: string[] = keys, f: Fill = fill, rest = q.get("rest") === "1
 
 Object.assign(window, { room, samples: (f: Fill = fill) => samples(Object.keys(SAMPLES), f, false), lay });
 await room.ready;
+// The cards' painted pictures, as the game itself has them by the time a card is dealt.
+await loadCardPictures();
 room.theatre?.(true);
 // The notebook can be opened, as when the game waits for a line; nothing is ever sent anywhere from here.
 void room.desk?.write();

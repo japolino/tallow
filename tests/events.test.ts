@@ -233,11 +233,12 @@ describe("quick choices that are kept", () => {
 const JUDGE = { kind: "action", act: "creep past the guard", target: null, item: null, item_named: false, needs_item: null, ability: null, ability_named: false, verdict: "trivial", reason: "", attribute: "dexterity", skill: "Stealth", for: [], against: [], scores: { physical: 0, likelihood: 0, item: null, ability: null, other: null } };
 const PASSAGE = "You slip along the wall while the guard looks the other way, and reach a door that stands ajar, a thin light spilling out from the room beyond it onto the flagstones.";
 
-function deps(over: { plan?: unknown; choices?: unknown; planText?: string; story?: string } = {}): RunDeps & { told: Message[][]; seen: string[] } {
-  const told: Message[][] = [], seen: string[] = [];
+function deps(over: { plan?: unknown; choices?: unknown; planText?: string; story?: string } = {}): RunDeps & { told: Message[][]; seen: string[]; asked: string[] } {
+  const told: Message[][] = [], seen: string[] = [], asked: string[] = [];
   return {
     told,
     seen,
+    asked,
     systems: [events],
     ask: async (messages: Message[], role: Role) => {
       const sys = messages[0]!.content;
@@ -246,7 +247,7 @@ function deps(over: { plan?: unknown; choices?: unknown; planText?: string; stor
       if (sys.includes("referee")) return JSON.stringify(JUDGE);
       if (sys.includes("records")) return JSON.stringify({ minutes: 3 });
       if (sys.includes("for two small things")) return (seen.push("plan"), over.planText ?? JSON.stringify(over.plan ?? { idle: "none", interruption: null }));
-      if (sys.includes("who may want ideas")) return (seen.push("choices"), JSON.stringify(over.choices ?? { decision: false, stuck: false, choices: [] }));
+      if (sys.includes("who may want ideas")) return (seen.push("choices"), asked.push(messages.at(-1)!.content), JSON.stringify(over.choices ?? { decision: false, stuck: false, choices: [] }));
       return "A summary of what has happened so far, long enough to be kept as one.";
     },
   };
@@ -367,6 +368,16 @@ describe("the hooks", () => {
     const cards = showsOf(d1, t1.run);
     expect(cards).toHaveLength(3);
     expect(cards[0]).toMatchObject({ kind: "card", group: "choices", title: "Push the door open", line: "Push the door open" });
+    // With no picture named for a choice, it is the crossroads.
+    expect(cards.map((c) => (c.kind === "card" ? c.face : ""))).toEqual(["crossroads", "crossroads", "crossroads"]);
+    // Each choice is drawn with the picture the reader picked for it from the deck; a name that is not one of the deck's is the crossroads.
+    const d3 = deps({ choices: { ...decisive, cards: ["gate", "Sentries", "a dragon"] } });
+    const t3 = await turn(d3, start(), "I creep on.");
+    expect(showsOf(d3, t3.run).map((c) => (c.kind === "card" ? c.face : ""))).toEqual(["gate", "sentries", "crossroads"]);
+    expect(d3.asked.at(-1)).toContain("gate: a heavy gate with a beam across it");
+    // A run kept from before pictures were picked still shows its choices.
+    delete (t3.run.sys!.events as { faces?: string[] }).faces;
+    expect(showsOf(d3, t3.run).map((c) => (c.kind === "card" ? c.face : ""))).toEqual(["crossroads", "crossroads", "crossroads"]);
     const d2 = deps();
     const t2 = await turn(d2, start(), "I creep on.");
     expect(showsOf(d2, t2.run)).toEqual([]);
