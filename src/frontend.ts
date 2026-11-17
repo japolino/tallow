@@ -39,7 +39,7 @@ const WHY_EXTRAS = "Optional. Your Decision model gives a quick second look to w
 const ROOM_NEEDS = ["interceptor", "chat_mutation"];
 const WHY_ROOM = "To keep a table for several in a multiplayer room, Tallow reads each player's message in this chat, has the room's reply tell the story of the round, and writes the table's state onto the messages so every player sees it.";
 /** Said at an empty table, for a guest whose browser was never told of the room they joined (roomlink.ts, joined). */
-const NOT_JOINED = "If you came to sit at someone's table, join their room once more from the Party tab: I will seat you then.";
+const NOT_JOINED = "If you came to sit at someone's table, leave their room in the Party tab and join it again: I will seat you then.";
 /** Asked once; the key is new when a new extra is, so that one is asked for once too. */
 const ASKED = "tallow:asked-extras-3";
 /** How loud things are (the drawer's sound section), kept in the page: there is nothing secret in it. */

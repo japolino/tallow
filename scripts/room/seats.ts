@@ -134,17 +134,21 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     all = [host, guest];
     // A guest who joined before Tallow had loaded in their browser was never told of the room, and sits at an empty
     // table: they are told to join again, and joining again from the Party tab seats them without another word.
-    if (await until(guest, `${heard("A table is already set")} || ${heard("join their room once more")}`, 60_000) && !(await guest.page.run<boolean>(heard("A table is already set")))) {
+    if (await until(guest, `${heard("A table is already set")} || ${heard("join it again: I will seat you")}`, 60_000) && !(await guest.page.run<boolean>(heard("A table is already set")))) {
       say("the guest joined before Tallow had loaded, and was told to join again");
-      await press(guest, "Multiplayer");
-      await waitFor(guest, `document.querySelector('input[placeholder="paste invite code"]')`, 15_000);
-      await guest.page.run(`document.querySelector('input[placeholder="paste invite code"]').focus()`);
+      const box = `document.querySelector('input[placeholder="paste invite code"]')`;
+      for (let i = 0; i < 20 && !(await guest.page.run<boolean>(`!!${box}`)); i++) {
+        // The Party tab, and in it Leave: only then is there a box to join by.
+        if (!(await press(guest, "Leave"))) await press(guest, "Multiplayer");
+        await sleep(700);
+      }
+      await guest.page.run(`${box}.focus()`);
       await guest.page.type(roomId);
       await sleep(300);
       await press(guest, "Join");
       await sleep(1500);
       await closeDrawer(guest);
-      check(await until(guest, heard("A table is already set"), 60_000), "joining again seats the guest at the host's table by itself");
+      check(await until(guest, heard("A table is already set"), 60_000), "leaving the room and joining it again seats the guest at the host's table by itself");
     }
     check(await until(guest, heard("A table is already set"), 60_000), `the guest finds the host's table (${await last(guest, 2)})`);
     check(await until(guest, heard("You sit down as Brother Fenn"), 60_000), `the guest's seat line goes in by itself through the chat's own message box (${await last(guest, 2)})`);
