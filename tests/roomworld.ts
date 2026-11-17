@@ -55,9 +55,12 @@ export function world() {
   };
   /** The room's reply: what the host's Lumiverse does around a generation. */
   const reply = async (t: ReturnType<typeof createTables>, text: string, type = "normal"): Promise<Message[] | null> => {
-    const told = await t.before("c1", type);
+    // As Lumiverse does it: the reply's message is there, empty, before the prompt is asked for.
     const id = `m${++n}`;
-    messages.push({ id, role: "assistant", content: text, extra: null, metadata: {} });
+    const m: ChatMsg = { id, role: "assistant", content: "", extra: null, metadata: {} };
+    messages.push(m);
+    const told = await t.before("c1", type);
+    m.content = text;
     await t.after("c1", id, text);
     return told;
   };

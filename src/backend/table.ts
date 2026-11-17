@@ -252,9 +252,13 @@ export function createTables(host: TableHost) {
       return t.pending.teller;
     }
     // The round: every player's message since the narrator last spoke that has not been played.
-    let from = all.length;
+    // Lumiverse makes the reply's own message, still empty, before it asks for the prompt: that is not the narrator
+    // having spoken, and the round is what was written before it.
+    let end = all.length;
+    while (end > 0 && all[end - 1]!.role === "assistant" && !all[end - 1]!.content.trim()) end--;
+    let from = end;
     while (from > 0 && all[from - 1]!.role !== "assistant") from--;
-    const batch = all.slice(from).filter((m) => m.role === "user" && m.content.trim() && !t.played.includes(m.id));
+    const batch = all.slice(from, end).filter((m) => m.role === "user" && m.content.trim() && !t.played.includes(m.id));
     if (!batch.length) {
       // Nothing was written: the story goes on by itself, from the host's seat.
       const round = await judgeRound(depsOf(t), t.run, [{ seat: HOST, line: "(Nobody writes anything. Time passes, and the story goes on.)" }]);
