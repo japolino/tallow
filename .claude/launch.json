@@ -4,9 +4,27 @@
     {
       "name": "tallow-room",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "scripts/preview.ts"],
-      "env": { "PORT": "4188" },
+      "runtimeArgs": [
+        "run",
+        "scripts/preview.ts"
+      ],
+      "env": {
+        "PORT": "4188"
+      },
       "port": 4188
+    },
+    {
+      "name": "room-check",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "--no-env-file",
+        "run",
+        "scripts/room/start.ts"
+      ],
+      "env": {
+        "PORT": "7871"
+      },
+      "port": 7871
     }
   ]
 }
