@@ -1,14 +1,15 @@
 /**
- * The look of the picture: the room is drawn small into an off-screen
- * buffer, then one pass turns that into the frame on screen: a glow around
- * anything bright, filmic tone mapping, a heavy vignette, a little colour
- * fringing at the edges, grain, and a coarse ordered dither so dark gradients
- * break into texture instead of bands. Chunky pixels are part of the mood,
- * and drawing fewer of them is also what keeps the frame rate steady.
+ * The look of the picture: the room is drawn into an off-screen buffer, then
+ * one pass turns that into the frame on screen: a glow around anything
+ * bright, filmic tone mapping, a heavy vignette and the grade. The picture is
+ * clean: no chunky pixels, no grain, no colour fringing and no coarse dither
+ * (there was all of that once, as an old-screen look, and it was taken out).
+ * All that is left of the dither is noise finer than one step of colour, so
+ * the dark gradients of a candle-lit room do not show as bands.
  *
- * The one exception is a page held up to be read: small writing cannot be
- * read through all that, so the room then draws the buffer finer and this
- * pass leaves off the fringing and most of the grain (`clear`).
+ * A slow machine draws a smaller buffer (governor.ts), smoothed up to the
+ * screen. A page held up to be read is drawn finer, with less glow over its
+ * writing (`clear`).
  */
 import {
   HalfFloatType,
@@ -30,15 +31,12 @@ const FRAG = /* glsl */ `
 precision highp float;
 uniform sampler2D tScene;
 uniform vec2 uTexel;      // one buffer pixel, in uv
-uniform float uTime;
 uniform float uExposure;
-uniform float uGrain;
 uniform float uVignette;
-uniform float uDither;
 uniform float uCold;      // 0..1: cools the grade a little
 uniform vec3 uHaze;       // fog in the room: this colour is laid over the picture, by uHazeK
 uniform float uHazeK;
-uniform float uClear;     // 0..1: a page is up to be read: no fringing, little grain, fine steps of colour
+uniform float uClear;     // 0..1: a page is up to be read: less glow over its writing
 uniform float uLod;       // how many times finer than usual the buffer is, as a power of two: the glow stays as wide
 in vec2 vUv;
 out vec4 outColor;
@@ -52,23 +50,9 @@ float hash(vec2 p) {
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
 }
-float bayer4(vec2 p) {
-  ivec2 i = ivec2(mod(p, 4.0));
-  int idx = i.x + i.y * 4;
-  int m[16] = int[16](0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5);
-  return (float(m[idx]) + 0.5) / 16.0;
-}
-vec3 scene(vec2 uv) {
-  // Snap to the centre of a buffer pixel: the picture stays chunky when scaled up.
-  vec2 s = (floor(uv / uTexel) + 0.5) * uTexel;
-  return textureLod(tScene, s, 0.0).rgb;
-}
 void main() {
-  vec2 c = vUv - 0.5;
-  float r2 = dot(c, c);
-  // Colour fringing, growing toward the corners.
-  vec2 fr = c * r2 * 0.012 * (1.0 - uClear);
-  vec3 col = vec3(scene(vUv + fr).r, scene(vUv).g, scene(vUv - fr).b);
+  // A buffer smaller than the screen is smoothed up to it.
+  vec3 col = textureLod(tScene, vUv, 0.0).rgb;
   // Glow: the blurred levels of the buffer, kept only where they are bright.
   vec3 glow = vec3(0.0);
   glow += max(textureLod(tScene, vUv, 3.0 + uLod).rgb - 0.9, 0.0) * 0.5;
@@ -87,12 +71,8 @@ void main() {
   // The grade: lifted warm shadows by fire, a colder cast in the snow.
   col = mix(col, col * vec3(0.9, 0.98, 1.12), uCold * 0.55);
   col = pow(col, vec3(1.0 / 2.2));
-  vec2 px = floor(vUv / uTexel);
-  float g = hash(px + floor(uTime * 12.0) * 17.0) - 0.5;
-  col += g * uGrain * (1.0 - 0.8 * uClear) * (1.0 - 0.6 * dot(col, vec3(0.3, 0.59, 0.11)));
-  // Ordered dither down to a few levels per channel.
-  float levels = mix(40.0, 255.0, uClear);
-  col = floor(col * levels + bayer4(px) * uDither + (1.0 - uDither) * 0.5) / levels;
+  // Noise finer than one step of colour: too faint to see, and it keeps dark gradients from showing as bands.
+  col += (hash(gl_FragCoord.xy) + hash(gl_FragCoord.xy + 31.7) - 1.0) / 255.0;
   outColor = vec4(col, 1.0);
 }`;
 
@@ -118,11 +98,8 @@ export class Post {
       uniforms: {
         tScene: { value: this.target.texture },
         uTexel: { value: new Vector2(0.5, 0.5) },
-        uTime: { value: 0 },
         uExposure: { value: 1 },
-        uGrain: { value: 0.06 },
         uVignette: { value: 1 },
-        uDither: { value: 1 },
         uCold: { value: 0 },
         uHaze: { value: [0, 0, 0] },
         uHazeK: { value: 0 },
@@ -154,13 +131,12 @@ export class Post {
     return this.size;
   }
 
-  /** @param o.clear 0..1: how far a page is up to be read, when the picture is to be plain enough to read small writing in */
-  set(o: { time: number; exposure: number; cold: number; still: boolean; haze?: [number, number, number]; hazeK?: number; clear?: number }): void {
+  /** @param o.clear 0..1: how far a page is up to be read, when there is less glow over its writing */
+  set(o: { exposure: number; cold: number; haze?: [number, number, number]; hazeK?: number; clear?: number }): void {
     const u = this.mat.uniforms;
     u.uClear!.value = o.clear ?? 0;
     u.uHaze!.value = o.haze ?? [0, 0, 0];
     u.uHazeK!.value = o.hazeK ?? 0;
-    u.uTime!.value = o.still ? 0 : o.time;
     u.uExposure!.value = o.exposure;
     u.uCold!.value = o.cold;
   }

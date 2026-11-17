@@ -43,9 +43,9 @@ export interface QualityStep {
 }
 
 export const QUALITY: QualityStep[] = [
-  { lines: 600, candleShadows: true, sunShadow: 2048, motes: true },
-  { lines: 480, candleShadows: false, sunShadow: 2048, motes: true },
-  { lines: 400, candleShadows: false, sunShadow: 1024, motes: true },
-  { lines: 320, candleShadows: false, sunShadow: 1024, motes: false },
-  { lines: 240, candleShadows: false, sunShadow: 512, motes: false },
+  { lines: 1080, candleShadows: true, sunShadow: 2048, motes: true },
+  { lines: 800, candleShadows: false, sunShadow: 2048, motes: true },
+  { lines: 600, candleShadows: false, sunShadow: 1024, motes: true },
+  { lines: 440, candleShadows: false, sunShadow: 1024, motes: false },
+  { lines: 320, candleShadows: false, sunShadow: 512, motes: false },
 ];

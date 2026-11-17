@@ -187,10 +187,12 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     check(await until(guest, heard("to look at who sits beside you"), 30_000), "how to look at the others was said");
 
     // Round two: both write; each throws their own die and hears the other's.
+    // A line is only rolled when it could go wrong, and the first one may not have been: count the host's dice from here.
+    const before = await host.page.run<number>("window.heard.filter((t) => /^[0-9]+ on the die/.test(t)).length");
     check(await write(guest, "I hurry up, puffing, and bring my staff down hard on the nearest threat."), "the guest writes a line on the pad");
     check(await write(host, "I put my back to the cart and jab my spear at whatever comes at me."), "the host writes again");
     check(await until(guest, `window.heard.some((t) => /^[0-9]+ on the die/.test(t))`, 300_000), `the guest throws their own die (${(await last(guest, 6)).match(/(^| \/ )\d+ on the die[^/]*/)?.[0] ?? ""})`);
-    check(await until(host, `window.heard.filter((t) => /^[0-9]+ on the die/.test(t)).length >= 2`, 300_000), "the host throws theirs, a second time");
+    check(await until(host, `window.heard.filter((t) => /^[0-9]+ on the die/.test(t)).length > ${before}`, 300_000), "the host throws theirs");
     check(await until(guest, `window.heard.some((t) => /^Ysolde: .* on the die/.test(t))`, 300_000), "the guest hears the host's roll read out");
     check(await until(host, `window.heard.some((t) => /^Brother Fenn: .* on the die/.test(t))`, 300_000), "the host hears the guest's");
     check(await until(guest, "room.desk.lastTurn && room.desk.lastTurn.writing.mine && room.desk.lastTurn.writing.mine.includes('puffing')", 300_000), "the guest's round is written out beside their pad, with their own line");

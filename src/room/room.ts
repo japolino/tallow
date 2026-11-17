@@ -382,7 +382,7 @@ class Room implements RoomHandle {
   private shiverAt = 5;
   private governor = new Governor();
   private quality = 0;
-  /** A page is up to be read, and the room is drawn finer for it: small writing cannot be read in chunky pixels. */
+  /** A page is up to be read, and the room is drawn finer for it where it is drawn smaller than the screen. */
   private fine = false;
   /** False once this machine has shown it cannot draw that finely and keep its pace. */
   private fineOk = true;
@@ -1613,7 +1613,7 @@ class Room implements RoomHandle {
     const w = Math.max(2, this.host.clientWidth), h = Math.max(2, this.host.clientHeight);
     const dpr = Math.min(2, devicePixelRatio || 1);
     this.renderer.setSize(Math.round(w * dpr), Math.round(h * dpr), false);
-    // Whole screen pixels per drawn pixel, so the chunky picture stays even.
+    // Whole screen pixels per drawn pixel: one, unless the screen has more lines than this step of quality draws.
     const lines = QUALITY[this.quality]!.lines;
     const usual = Math.max(1, Math.round((h * dpr) / lines));
     // With a page up to be read, twice the lines (which on most screens is every pixel there is).
@@ -1696,7 +1696,7 @@ class Room implements RoomHandle {
     }
     this.clear = this.reduced ? +reading : Math.max(0, Math.min(1, this.clear + (reading ? dt : -dt) * 4));
     const haze = this.scene.fog!.color;
-    this.post.set({ time: t, exposure: L.exposure * 1.08, cold: L.cold, still: this.reduced, haze: [haze.r, haze.g, haze.b], hazeK: L.fog * 0.1, clear: this.clear });
+    this.post.set({ exposure: L.exposure * 1.08, cold: L.cold, haze: [haze.r, haze.g, haze.b], hazeK: L.fog * 0.1, clear: this.clear });
     this.post.render(this.scene, this.camera);
   }
 
