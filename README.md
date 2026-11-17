@@ -170,6 +170,22 @@ A chapter is not a recap. It is a few hundred words of what you did not see: wha
 
 The first time, Lumiverse asks for two more permissions: **chats** and **chat_mutation**. Lumiverse gives an extension a chat's messages only under the permission that would also let it change them; Tallow only reads them.
 
+### A table for several
+
+More than one person can sit at the same table, each with a character of their own, through a Lumiverse multiplayer room (the **Party** tab). It follows AI Roguelite's multiplayer: every player writes one line a round, each line is judged and rolled on its own character's sheet, and one passage is told for all of them. Only the host's character leads the party to another place.
+
+The host:
+
+1. Open a chat with the world's card, then in the **Party** tab host a room with **Freeform** turns (everyone writes, then one reply). Lumiverse makes the room on a copy of the chat.
+2. Press "Sit at the table" in that chat. Tallow asks for two more permissions the first time: **interceptor**, to tell the room's reply itself, and **chat_mutation**, to write the table onto the room's messages, which is how it reaches the others. The game runs on the host's Lumiverse, with the host's models.
+3. Share the room: the Room ID for someone with an account on the same Lumiverse, or an invite code from **Enable remote play** for someone on their own.
+
+A guest needs Tallow installed too (this same version), and a persona: its name and description are the character they sit down as. They join the room from their own **Party** tab, press "Sit at the table" in the room's chat, and their first line seats them: the host's model writes their sheet from the persona, and the next passage brings them into the scene.
+
+At the table, a line across the top says where the round stands. The round is told when everyone has written; the host has a "Go on without them" button for when someone is away. Everyone hears every roll, and throws only their own die. Rounds of turns (**Round robin**) work as well: each line is then answered as it comes. If the host reloads the page, open the **Party** tab once before sitting down again, so Lumiverse takes the room up again.
+
+Saves are off at a table for several (as in the game this follows), and each character has their own health, belongings, skills, perks and standing with the people they meet.
+
 ## Run the preview
 
 ```
@@ -257,6 +273,14 @@ bun run table
 ```
 
 plays a whole adventure in the room in a real browser, the way a player would, and takes pictures into `.artifacts/table/`. `bun scripts/sit.ts` (after `bun run build`) does the same for the built extension in the pretend Lumiverse, then reloads in the middle of the story and checks that the sitting is taken up again (`CARD=hangul`, `CARD=modern` or `CARD=world` for the other made-up cards, `DECIDE=1` with the pretend Decision model). `PHONE=1 bun run table` plays on a phone held upright. `bun scripts/ending.ts` (after `bun run build`) plays a whole story in the built extension and checks what comes after it: the reward, the cards gathered back, "Another story?", goodnight, and the hero kept for the next sitting (`STORY=mystery` for another kind; pictures in `.artifacts/ending/`).
+
+```
+bun --no-env-file scripts/room/start.ts
+bun --env-file=.env.local scripts/room/forward.ts
+bun --env-file=.env.local scripts/room/check.ts
+```
+
+(three terminals, in that order) play a table for two in a real Lumiverse room: a throwaway Lumiverse started from the source next to this folder, with its own data in `.artifacts/room-check/` and its own port, so your install is never touched. The check installs this branch as committed, makes a host and a guest account and a freeform room, and plays three rounds over each account's own socket, as two browsers would. It says what only a real room shows: that Lumiverse runs the backend, that each line is rolled for its own character, that a guest is seated, and that the table reaches them. `bun run scripts/run-party.ts` plays a table for several in a terminal with no Lumiverse at all.
 
 ```
 bun run live -- --card card.json --state run1 next
