@@ -182,7 +182,7 @@ The host:
 
 A guest needs Tallow installed too (this same version), and a persona: its name and description are the character they sit down as. They join the room from their own **Party** tab, press "Sit at the table" in the room's chat, and their first line seats them: the host's model writes their sheet from the persona, and the next passage brings them into the scene.
 
-At the table, a line across the top says where the round stands. The round is told when everyone has written; the host has a "Go on without them" button for when someone is away. Everyone hears every roll, and throws only their own die. Rounds of turns (**Round robin**) work as well: each line is then answered as it comes. If the host reloads the page, open the **Party** tab once before sitting down again, so Lumiverse takes the room up again.
+At the table, a line across the top says where the round stands. The round is told when everyone has written; the host has a "Go on without them" button for when someone is away. Everyone hears every roll, and throws only their own die. Rooms of turns (**Round robin**) are written for too, each line answered as it comes, but only Freeform has been played in a real room so far. If the host reloads the page, open the **Party** tab once before sitting down again, so Lumiverse takes the room up again.
 
 Saves are off at a table for several (as in the game this follows), and each character has their own health, belongings, skills, perks and standing with the people they meet.
 
