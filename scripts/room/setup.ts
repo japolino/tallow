@@ -4,7 +4,7 @@
  * on a new chat of it. Importing this does it; what was made is exported for the checks (check.ts, seats.ts).
  */
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export const repo = resolve(import.meta.dir, "../..");
@@ -70,10 +70,8 @@ if (!ext) {
   await api("host", "POST", `/api/v1/spindle/${ext.id}/permissions`, { grant: ext.permissions });
   await api("host", "POST", `/api/v1/spindle/${ext.id}/enable`);
 } else {
-  git(["fetch", "-q", "origin", branch], clone);
-  git(["reset", "-q", "--hard", `origin/${branch}`], clone);
-  rmSync(join(clone, "dist"), { recursive: true, force: true });
-  await api("host", "POST", `/api/v1/spindle/${ext.id}/restart`);
+  // Lumiverse's own update: the clone is reset to this repository's branch and built again.
+  await api("host", "POST", `/api/v1/spindle/${ext.id}/update`);
 }
 export const running = listOf(await api("host", "GET", "/api/v1/spindle")).find((e) => e.identifier === "tallow");
 check(running?.status === "running", `Lumiverse runs Tallow's backend (${git(["log", "--oneline", "-1"], clone)})`);

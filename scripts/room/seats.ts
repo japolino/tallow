@@ -34,6 +34,12 @@ async function waitFor(s: Seat, cond: string, ms: number): Promise<boolean> {
 const press = (s: Seat, label: string): Promise<boolean> =>
   s.page.run<boolean>(`(() => { const b = [...document.querySelectorAll('button,[role=menuitem],[role=tab]')].find((x) => [x.getAttribute('aria-label'), x.title, x.textContent].some((t) => (t || '').trim() === ${js(label)}) || (${js(label)} === 'Sit at the table' && /^Sit at the table/.test((x.textContent || '').trim()))); if (!b) return false; b.click(); return true; })()`);
 
+/** The drawer's own X (the buttons called Close with no words on them; the one with the word closes the room). */
+async function closeDrawer(s: Seat): Promise<void> {
+  await s.page.run(`(() => { for (const b of document.querySelectorAll('button')) if (b.getAttribute('aria-label') === 'Close' && !(b.textContent || '').trim() && b.getBoundingClientRect().left < innerWidth) b.click(); return 1; })()`);
+  await sleep(600);
+}
+
 async function signIn(s: Seat): Promise<void> {
   await s.page.cdp("Page.navigate", { url: `${base}/login` });
   await waitFor(s, "document.readyState === 'complete'", 20_000);
@@ -46,9 +52,17 @@ async function signIn(s: Seat): Promise<void> {
 async function sit(s: Seat): Promise<boolean> {
   await s.page.run(`(window.addEventListener("tallow:room", (e) => (window.room = e.detail)), 1)`);
   if (!(await waitFor(s, `[...document.querySelectorAll('button')].some((x) => (x.getAttribute('aria-label') || x.title) === 'Extras')`, 30_000))) return false;
-  await press(s, "Extras");
-  await sleep(600);
-  if (!(await press(s, "Sit at the table"))) return false;
+  // The Extras menu under the message box; it can take a moment to open, and a click that lands early closes it.
+  let sat = false;
+  for (let i = 0; i < 8 && !sat; i++) {
+    if (!(await s.page.run<boolean>(`[...document.querySelectorAll('button,[role=menuitem]')].some((x) => /^Sit at the table/.test((x.textContent || '').trim()))`))) await press(s, "Extras");
+    await sleep(700);
+    sat = await press(s, "Sit at the table");
+  }
+  if (!sat) {
+    await s.page.shot(`${OUT}/could-not-sit-${s.who}.jpg`);
+    return false;
+  }
   if (!(await waitFor(s, "window.room", 60_000))) return false;
   await s.page.run("window.room.ready");
   await s.page.run("(window.heard = [], ((say) => (room.desk.say = (lines) => (window.heard.push(...[].concat(lines)), say(lines))))(room.desk.say.bind(room.desk)), 1)");
@@ -98,8 +112,7 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     await press(host, "Multiplayer");
     check(await waitFor(host, "/Hosting/.test(document.body.innerText)", 20_000), "the host's Party tab shows the room being hosted");
     // The drawer is put away again, as a player would: it is drawn over the room.
-    await press(host, "Multiplayer");
-    await sleep(500);
+    await closeDrawer(host);
     check(await sit(host), "the host sits down and the room is drawn");
     all = [host];
     check(await until(host, heard("Write what you do"), 240_000), `the host's table is set and the opening said (${await last(host, 3)})`);
@@ -116,8 +129,7 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     await sleep(300);
     await press(guest, "Join");
     check(await waitFor(guest, `location.pathname.includes(${js(chatId)}) && /In room/.test(document.body.innerText)`, 20_000), "the guest joins the room by its id and is taken to its chat");
-    await press(guest, "Multiplayer");
-    await sleep(500);
+    await closeDrawer(guest);
     check(await sit(guest), "the guest sits down and the room is drawn");
     all = [host, guest];
     check(await until(guest, heard("A table is already set"), 60_000), `the guest finds the host's table (${await last(guest, 2)})`);
@@ -142,11 +154,15 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     // Round two: both write; each throws their own die and hears the other's.
     check(await write(guest, "I hurry up, puffing, and bring my staff down hard on the nearest threat."), "the guest writes a line on the pad");
     check(await write(host, "I put my back to the cart and jab my spear at whatever comes at me."), "the host writes again");
-    check(await until(guest, heard(" on the die"), 300_000), `the guest throws their own die (${await last(guest, 3)})`);
-    check(await until(host, `window.heard.filter((t) => t.includes(" on the die")).length >= 1`, 300_000), `the host throws theirs (${await last(host, 3)})`);
+    check(await until(guest, `window.heard.some((t) => /^[0-9]+ on the die/.test(t))`, 300_000), `the guest throws their own die (${(await last(guest, 6)).match(/(^| \/ )\d+ on the die[^/]*/)?.[0] ?? ""})`);
+    check(await until(host, `window.heard.filter((t) => /^[0-9]+ on the die/.test(t)).length >= 2`, 300_000), "the host throws theirs, a second time");
     check(await until(guest, `window.heard.some((t) => /^Ysolde: .* on the die/.test(t))`, 300_000), "the guest hears the host's roll read out");
     check(await until(host, `window.heard.some((t) => /^Brother Fenn: .* on the die/.test(t))`, 300_000), "the host hears the guest's");
     check(await until(guest, "room.desk.lastTurn && room.desk.lastTurn.writing.mine && room.desk.lastTurn.writing.mine.includes('puffing')", 300_000), "the guest's round is written out beside their pad, with their own line");
+    check(await until(host, "room.desk.lastTurn && room.desk.lastTurn.writing.mine && room.desk.lastTurn.writing.mine.includes('jab my spear')", 300_000), "and the host's second line went in from the pad: the keyboard stayed at the table after the first");
+    const boxes = await Promise.all(all.map((s) => s.page.run<string>("document.querySelector('textarea')?.value ?? ''")));
+    check(boxes.every((b) => !b.trim() && b.length < 3), `nothing was typed into the chat's own message box behind the room (${boxes.map((b) => b.length).join(", ")} characters)`);
+    say(`the line over the host's room: "${await strip(host)}"; over the guest's: "${await strip(guest)}"`);
     await shot(host, "05-round-two");
     await shot(guest, "05-round-two");
     for (const s of all) if (s.page.problems.length) say(`${s.who}'s console: ${[...new Set(s.page.problems)].filter((p) => /tallow|Tallow/.test(p)).slice(0, 6).join(" | ").slice(0, 600) || "nothing from Tallow"}`);
