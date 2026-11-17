@@ -36,8 +36,12 @@ import type { Message } from "../ask.js";
 import { here as spotHere, readPlaces } from "../../engine/places.js";
 import { asked, head, int, list, obj, recentStory, said, sentence, type Choice, type Lesson, type PackItem, type Page, type RunDeps, type Settling, type Show, type System } from "../system.js";
 
-/** Set GOODS_DEBUG when playing in a terminal to see what was planned and what the storyteller was told; never set in a browser. */
-const DEBUG = typeof process !== "undefined" && !!process.env?.GOODS_DEBUG;
+/**
+ * Set when playing in a terminal (the scripts set it from GOODS_DEBUG) to see what was planned and what the storyteller
+ * was told. Read from the global object, never from the process: this file is also part of the extension's backend,
+ * and Lumiverse refuses a backend that reads the process's environment.
+ */
+const debug = (): boolean => !!(globalThis as { GOODS_DEBUG?: unknown }).GOODS_DEBUG;
 
 /* ------------------------------------------------- state ------------------------------------------------- */
 
@@ -824,7 +828,7 @@ export const goods: System<Plan, null> = {
   async plan(d, r, line) {
     const st = peek(r);
     const plan = await asked(d, planMessages(r, st, line), "reader", (j) => readPlan(r, st, j), "goods: reading the line");
-    if (DEBUG) d.log?.(`GOODSDEBUG plan ${JSON.stringify(plan && { ...plan, make: plan.make && { ...plan.make, results: plan.make.results.map((x) => x.name) } })}`);
+    if (debug()) d.log?.(`GOODSDEBUG plan ${JSON.stringify(plan && { ...plan, make: plan.make && { ...plan.make, results: plan.make.results.map((x) => x.name) } })}`);
     if (!plan) return null;
     // A seller dealt with for the first time has their stock written now, so the deal can be held to it.
     if ((plan.deal === "buy" || plan.deal === "sell" || plan.deal === "browse") && plan.with && plan.seller && !merchantOf(r, st, plan.with)) {
@@ -850,7 +854,7 @@ export const goods: System<Plan, null> = {
     if (m) restock(m, r.minutes);
     if (plan.deal === "browse") {
       const shown = settleBrowse(r, st, plan);
-      if (DEBUG) st.last = { turn: r.turn, gained: [], lost: [], money: 0, refused: [], told: shown.map((f) => `GOODSDEBUG fact: ${f}`) };
+      if (debug()) st.last = { turn: r.turn, gained: [], lost: [], money: 0, refused: [], told: shown.map((f) => `GOODSDEBUG fact: ${f}`) };
       return shown;
     }
     // An attempt the judge found impossible, or lacking something it needs, changes no hands (a making still makes
@@ -868,7 +872,7 @@ export const goods: System<Plan, null> = {
       : plan.deal === "pay" ? settlePay(r, st, plan, done, rec)
       : settleMake(r, st, t, plan, done, rec);
     if (rec.money) rec.told.push(`${rec.money > 0 ? "+" : ""}${rec.money} ${coinName(r)} (${s.money} now).`);
-    if (DEBUG) rec.told.push(...facts.map((f) => `GOODSDEBUG fact: ${f}`));
+    if (debug()) rec.told.push(...facts.map((f) => `GOODSDEBUG fact: ${f}`));
     return facts;
   },
 

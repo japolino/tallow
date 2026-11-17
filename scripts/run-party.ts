@@ -23,6 +23,9 @@ import type { Message, Role } from "../src/game/ask.js";
 import { join, round, type SeatLine } from "../src/game/partyturn.js";
 import { begin, reportText, sceneOf, type Card } from "../src/game/runturn.js";
 
+// The goods system says what it planned when this is set (it cannot read the environment itself).
+(globalThis as { GOODS_DEBUG?: unknown }).GOODS_DEBUG = !!process.env.GOODS_DEBUG;
+
 const env = process.env;
 const args = (k: string): string[] => process.argv.flatMap((a, i) => (a === `--${k}` && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
 const arg = (k: string): string | undefined => args(k)[0];

@@ -18,6 +18,9 @@ import type { Message, Role } from "../src/game/ask.js";
 import { begin, pagesOf, reportText, sceneOf, showsOf, turn, type Card } from "../src/game/runturn.js";
 import { systemsNamed } from "../src/game/systems/index.js";
 
+// The goods system says what it planned when this is set (it cannot read the environment itself).
+(globalThis as { GOODS_DEBUG?: unknown }).GOODS_DEBUG = !!process.env.GOODS_DEBUG;
+
 const env = process.env;
 const arg = (k: string): string | undefined => {
   const i = process.argv.indexOf(`--${k}`);
