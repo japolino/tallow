@@ -18,7 +18,7 @@ function room() {
   const tables = createTables(w.host);
   const ROOM = "r1", CHAT = "c1";
   const people = [{ id: "p1", role: "host" as const, displayName: "Ana", persona: { name: "Mira" } }, { id: "p2", role: "peer" as const, displayName: "Ben", persona: { name: "Tom" } }];
-  const state = { deadline: null as number | null, submitted: new Set<string>() };
+  const state = { deadline: null as number | null, submitted: new Set<string>(), windowSec: 120 };
   const ears: Record<string, Map<string, ((p: unknown) => void)[]>> = { p1: new Map(), p2: new Map() };
   const emit = (name: string, payload: unknown): void => {
     for (const id of ["p1", "p2"]) for (const f of ears[id]!.get(name) ?? []) f(structuredClone(payload));
@@ -34,7 +34,7 @@ function room() {
   };
   const turn = (): void => emit("ROOM_TURN_CHANGED", { chatId: CHAT, roomId: ROOM, turnStrategy: "freeform", currentTurnParticipantId: null, freeformDeadline: state.deadline });
   const openWindow = (): void => {
-    state.deadline = Math.floor(Date.now() / 1000) + 120;
+    state.deadline = Math.floor(Date.now() / 1000) + state.windowSec;
     state.submitted.clear();
     turn();
   };
@@ -104,10 +104,15 @@ function room() {
     const json = (o: unknown): Response => new Response(JSON.stringify(o), { status: 200, headers: { "Content-Type": "application/json" } });
     if (String(url).endsWith(`/rooms/by-chat/${CHAT}`)) return json({ room: view("p1") });
     if (String(url).endsWith(`/rooms/${ROOM}/freeform/start`) && init?.method === "POST") return (openWindow(), json({ ok: true, deadline: state.deadline }));
+    if (String(url).endsWith(`/rooms/${ROOM}`) && init?.method === "PATCH") {
+      // As Lumiverse has it: the length of a round can only be changed while none is open.
+      if (state.deadline === null) state.windowSec = (JSON.parse(String((init as { body?: string }).body)) as { settings: { freeformWindowSec: number } }).settings.freeformWindowSec;
+      return json({ ...view("p1"), settings: { freeformWindowSec: state.windowSec } });
+    }
     return new Response("{}", { status: 404 });
   }) as never;
   const hydrate = (id: string): void => (ears[id]!.get("ROOM_STATUS") ?? []).forEach((f) => f({ chatId: CHAT, roomId: ROOM, room: view(id), messages: w.messages.map(sent) }));
-  return { w, tables, CHAT, player, hydrate, openWindow, replies, settle: async () => void (await going), restore: () => void (globalThis.fetch = realFetch) };
+  return { w, tables, CHAT, player, hydrate, openWindow, replies, windowSec: () => state.windowSec, settle: async () => void (await going), restore: () => void (globalThis.fetch = realFetch) };
 }
 
 const tick = (ms = 15): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -130,6 +135,9 @@ describe("a freeform room for two", () => {
     const set = await r.tables.open({ userId: "u1", chatId: r.CHAT, card: async () => ({ world: "w", who: "Mira, a thief.", name: "Mira", retell: true }), seed: 5, rules: {}, player: "Ana", hostId: host.watch.selfId(r.CHAT)! });
     host.watch.seed(r.CHAT, set!, set!.run!.opening);
     await host.watch.openRound(r.CHAT);
+    // A round waits for everyone: it is given all the time a room allows, not the room's two minutes.
+    expect(r.windowSec()).toBe(3600);
+    expect(host.watch.strip(r.CHAT).text).toBe("Everyone writes: Mira, Tom.");
     void host.sit();
 
     // The guest comes into the room (the last messages come with it) and sits down at the table.
@@ -160,6 +168,10 @@ describe("a freeform room for two", () => {
     expect(guest.sheets()).toContain("Longsword");
     expect(host.sheets()).toContain("Lockpicks");
     expect(guest.watch.link(r.CHAT).me()).toBe("p2");
+    // The line over the room names the characters, once they are seated.
+    await host.watch.openRound(r.CHAT);
+    expect(guest.watch.strip(r.CHAT)).toEqual({ text: "Everyone writes: Mira, Tom.", canGoOn: false });
+    expect(host.watch.strip(r.CHAT).canGoOn).toBe(true);
     expect(host.watch.link(r.CHAT).me()).toBe("host");
 
     // The next round: the host's table opens it again, and the guest's line is rolled on their own sheet.

@@ -47,15 +47,22 @@ export interface Page {
   readonly problems: string[];
 }
 
-export async function withPage<T>(o: { soft?: boolean; width?: number; height?: number; port?: number }, fn: (page: Page) => Promise<T>): Promise<T> {
+/**
+ * `serve: false` starts no preview server (the page is somewhere else); `tag` names this browser apart from another
+ * started by the same script, so two can run side by side, each with its own profile.
+ */
+export async function withPage<T>(o: { soft?: boolean; width?: number; height?: number; port?: number; serve?: boolean; tag?: string }, fn: (page: Page) => Promise<T>): Promise<T> {
   const exe = CANDIDATES.find((p) => existsSync(p));
   if (!exe) throw new Error("No Chromium-family browser found. Set TALLOW_BROWSER to one.");
   const port = o.port ?? 4185;
-  process.env.PORT = String(port);
-  await import("./preview.js");
+  if (o.serve !== false) {
+    process.env.PORT = String(port);
+    await import("./preview.js");
+  }
 
-  const profile = join(tmpdir(), `tallow-shots-${process.pid}`);
-  const debugPort = 9300 + (process.pid % 500);
+  const name = `tallow-shots-${process.pid}${o.tag ? `-${o.tag}` : ""}`;
+  const profile = join(tmpdir(), name);
+  const debugPort = 9300 + (process.pid % 500) + (o.tag ? 1 + (o.tag.charCodeAt(0) % 20) : 0);
   const args = [
     "--headless=new",
     `--remote-debugging-port=${debugPort}`,
@@ -174,7 +181,7 @@ export async function withPage<T>(o: { soft?: boolean; width?: number; height?: 
       // running for good, a dozen for every run. Stop the whole tree, and then anything still holding this profile.
       const quiet = { stdout: "ignore", stderr: "ignore" } as const;
       Bun.spawnSync(["taskkill", "/PID", String(proc.pid), "/T", "/F"], quiet);
-      const held = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*tallow-shots-${process.pid}*' -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+      const held = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -like '*${name}*' -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
       Bun.spawnSync(["powershell", "-NoProfile", "-NonInteractive", "-Command", held], quiet);
     }
     proc.kill();

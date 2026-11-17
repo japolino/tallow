@@ -33,6 +33,24 @@ interface RoomView {
   currentTurnParticipantId: string | null;
   participants: Participant[];
   selfParticipantId?: string;
+  settings?: { freeformWindowSec?: number };
+}
+
+/** How long a round stays open for writing: as long as a room allows. A round is told when everyone has written. */
+const ROUND_SECONDS = 3600;
+
+/**
+ * Lumiverse's message box takes the keyboard back after it sends, and it sits behind the room: the next keys would be
+ * typed into the chat, and Enter would send them from there. The keyboard is the table's while you sit at it.
+ */
+function keysBackToTheTable(): void {
+  if (typeof document === "undefined") return;
+  const letGo = (): void => {
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT" || el.isContentEditable)) el.blur();
+  };
+  letGo();
+  for (const ms of [50, 250, 800]) setTimeout(letGo, ms);
 }
 interface Msg {
   id: string;
@@ -246,10 +264,14 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
         try {
           composer.setText(line);
           await composer.send();
+          keysBackToTheTable();
         } catch (e) {
+          keysBackToTheTable();
           return { ok: false, why: /BUSY/.test(String((e as Error)?.message)) ? "I am still telling the last of it. Write it again in a moment." : "That did not go through. Write it again." };
         }
-        return (await back) ? { ok: true } : { ok: false, why: "That did not reach the table. Write it again." };
+        const reached = await back;
+        keysBackToTheTable();
+        return reached ? { ok: true } : { ok: false, why: "That did not reach the table. Write it again." };
       },
       next: () =>
         new Promise<SeatEvent>((done) => {
@@ -269,6 +291,13 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     if (!k || !room || standing(chatId) !== "host" || room.turnStrategy !== "freeform" || k.generating) return;
     if (room.freeformDeadline !== null && Date.now() / 1000 < room.freeformDeadline) return;
     try {
+      // A room's round closes by the clock, two minutes by default, and is told without whoever was still reading or
+      // writing. At this table a round waits for everyone (or for the host to go on), so it is given all the time a
+      // room allows; that can only be set while no round is open, which is now.
+      if ((room.settings?.freeformWindowSec ?? 0) < ROUND_SECONDS) {
+        const set = (await call(`/rooms/${room.roomId}`, "PATCH", { settings: { freeformWindowSec: ROUND_SECONDS } })) as { settings?: RoomView["settings"] } | null;
+        room.settings = set?.settings ?? { freeformWindowSec: ROUND_SECONDS };
+      }
       const got = (await call(`/rooms/${room.roomId}/freeform/start`, "POST")) as { deadline?: number | null } | null;
       if (got?.deadline) room.freeformDeadline = got.deadline;
     } catch {
@@ -293,7 +322,9 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     const k = chats.get(chatId);
     const room = k?.room;
     if (!k || !room) return { text: "", canGoOn: false };
-    const name = (p: Participant): string => p.persona?.name || p.displayName || "Guest";
+    // Someone seated goes by their character's name; someone not yet, by what the room calls them.
+    const seats = k.at?.round.run?.seats ?? [];
+    const name = (p: Participant): string => seats.find((s) => s.id === (p.role === "host" ? HOST : p.id))?.sheet.name || p.persona?.name || p.displayName || "A guest";
     const host = standing(chatId) === "host";
     if (k.generating) return { text: "The narrator is telling it.", canGoOn: false };
     if (room.turnStrategy === "freeform") {
