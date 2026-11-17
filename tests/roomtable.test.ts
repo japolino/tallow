@@ -64,6 +64,24 @@ describe("the host's table", () => {
     expect(on.n).toBe(1);
   });
 
+  test("in a freeform round the host's own line carries the host's participant id, and is still the host's", async () => {
+    const w = world();
+    const t = createTables(w.host);
+    await t.open({ userId: "u1", chatId: "c1", card: async () => ({ world: "w", who: "Mira, a thief.", name: "Mira", retell: true }), seed: 5, rules: {}, player: "Ana", hostId: "p1" });
+    const mine = w.say("I sneak past the goblin.", { id: "p1", name: "Ana" });
+    await w.reply(t, "She slips by.");
+    const on = w.own(w.messages.at(-1)!.id) as WireRound;
+    // One seat, the host's: nobody new sat down.
+    expect(on.run!.seats!.map((s) => s.id)).toEqual(["host"]);
+    expect((w.own(mine) as WireLine).part.seat).toBe("host");
+    expect((w.own(mine) as WireLine).part.how).toBe("played");
+    // And it is still known after the table is read again from what was saved.
+    const again = createTables(w.host);
+    w.say("I wait.", { id: "p1", name: "Ana" });
+    await w.reply(again, "She waits.");
+    expect((w.own(w.messages.at(-1)!.id) as WireRound).run!.seats).toHaveLength(1);
+  });
+
   test("a line is never played twice, and the table is found again after a restart", async () => {
     const w = world();
     const t = createTables(w.host);

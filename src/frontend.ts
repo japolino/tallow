@@ -221,7 +221,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       }
       if (!link.state()) await table.say([`${persona?.name ? `You sit down as ${persona.name}` : "You sit down"}, with room for the others. Give me a moment to set the table.`]);
       const rules = JSON.stringify(loadRules());
-      const set = await table.wait("deal", call({ type: "table", chatId, characterId: characterId ?? "", seed: parseInt(randomSeed().slice(0, 8), 16), rules: loadRules(), player: persona?.name ?? "" }).then((m) => (m.type === "table" ? m.round : null)).catch((e) => (console.warn("tallow:", e), null)));
+      const set = await table.wait("deal", call({ type: "table", chatId, characterId: characterId ?? "", seed: parseInt(randomSeed().slice(0, 8), 16), rules: loadRules(), player: persona?.name ?? "", hostId: watch.selfId(chatId) ?? undefined }).then((m) => (m.type === "table" ? m.round : null)).catch((e) => (console.warn("tallow:", e), null)));
       if (!alive()) return;
       if (!set?.run) {
         await table.say(["I could not set the table: this chat's card could not be read, or your model gave no answer. Sit down again to try once more."]);

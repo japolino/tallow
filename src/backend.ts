@@ -268,7 +268,7 @@ spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
     if (msg.type === "card") send({ type: "card", id: msg.id, card: await card(userId, msg.characterId) }, userId);
     else if (msg.type === "lore") send({ type: "lore", id: msg.id, entries: await loreNear(userId, msg.characterId, msg.text) }, userId);
     else if (msg.type === "ask") send({ type: "answer", id: msg.id, text: await models.quiet(userId, msg.role, msg.messages, cleanParameters(msg.parameters)) }, userId);
-    else if (msg.type === "table") send({ type: "table", id: msg.id, round: await tables.open({ userId, chatId: msg.chatId, card: () => tableCard(userId, msg.characterId), seed: msg.seed, rules: msg.rules, player: msg.player }) }, userId);
+    else if (msg.type === "table") send({ type: "table", id: msg.id, round: await tables.open({ userId, chatId: msg.chatId, card: () => tableCard(userId, msg.characterId), seed: msg.seed, rules: msg.rules, player: msg.player, ...(msg.hostId ? { hostId: msg.hostId } : {}) }) }, userId);
     else if (msg.type === "tablerules") {
       await tables.rules(userId, msg.chatId, msg.rules);
       send({ type: "done", id: msg.id }, userId);

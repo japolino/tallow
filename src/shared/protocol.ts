@@ -40,7 +40,7 @@ export type ToBackend =
    * A table for several (backend/table.ts), asked by the room's host: sit down at this chat's table, set up from the
    * card the first time. `rules` are how hard the host has the game set; `player` is the host's own name at the table.
    */
-  | { type: "table"; id: string; chatId: string; characterId: string; seed: number; rules: unknown; player: string }
+  | { type: "table"; id: string; chatId: string; characterId: string; seed: number; rules: unknown; player: string; hostId?: string }
   /** The host changed how hard the game is. */
   | { type: "tablerules"; id: string; chatId: string; rules: unknown }
   /** A guest's own persona, to sit down as: their character's name and page. */

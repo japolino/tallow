@@ -64,6 +64,8 @@ interface Saved {
   chatId: string;
   run: Run;
   rules: unknown;
+  /** The host's participant id in the room, once the host's browser has said it (see OpenAsk). */
+  hostId?: string;
   /** The narrator's message that carries the run now. */
   narratorId: string | null;
   played: string[];
@@ -118,6 +120,8 @@ export interface OpenAsk {
   rules: unknown;
   /** The host's own name at the table. */
   player: string;
+  /** The host's participant id in the room: a freeform round writes it on the host's own lines, as on a guest's. */
+  hostId?: string;
 }
 
 export function createTables(host: TableHost) {
@@ -128,7 +132,7 @@ export function createTables(host: TableHost) {
   const depsOf = (t: Table): RunDeps => ({ ...host.deps(t.userId), log: (m) => host.log(`table ${t.chatId.slice(0, 8)}: ${m}`), rules: () => t.rules });
 
   async function keep(t: Table): Promise<void> {
-    const saved: Saved = { v: 1, userId: t.userId, chatId: t.chatId, run: settled(t.run), rules: t.rules, narratorId: t.narratorId, played: t.played.slice(-PLAYED_MOST) };
+    const saved: Saved = { v: 1, userId: t.userId, chatId: t.chatId, run: settled(t.run), rules: t.rules, ...(t.hostId ? { hostId: t.hostId } : {}), narratorId: t.narratorId, played: t.played.slice(-PLAYED_MOST) };
     try {
       await host.save(t.userId, pathOf(t.chatId), JSON.stringify(saved));
     } catch (e) {
@@ -199,7 +203,7 @@ export function createTables(host: TableHost) {
       const deps: RunDeps = { ...host.deps(a.userId), log: (m) => host.log(`table ${a.chatId.slice(0, 8)}: ${m}`), rules: () => a.rules };
       const run = await begin(deps, card, a.seed);
       seatFirst(run, HOST, a.player);
-      t = { v: 1, userId: a.userId, chatId: a.chatId, run, rules: a.rules, narratorId: null, played: [], pending: null, last: null, busy: Promise.resolve() };
+      t = { v: 1, userId: a.userId, chatId: a.chatId, run, rules: a.rules, ...(a.hostId ? { hostId: a.hostId } : {}), narratorId: null, played: [], pending: null, last: null, busy: Promise.resolve() };
       tables.set(a.chatId, t);
       index ??= await host.loadIndex().catch(() => ({}));
       index[a.chatId] = a.userId;
@@ -210,6 +214,7 @@ export function createTables(host: TableHost) {
       await keep(t);
     } else {
       t.rules = a.rules;
+      if (a.hostId) t.hostId = a.hostId;
       const me = seatOf(t.run, HOST);
       if (me && a.player) me.player = a.player;
     }
@@ -222,9 +227,9 @@ export function createTables(host: TableHost) {
   }
 
   /** The seat a message was written from, and what to call its player. */
-  function writerOf(m: ChatMsg): { seat: string; player: string; persona: string } {
+  function writerOf(t: Table, m: ChatMsg): { seat: string; player: string; persona: string } {
     const mp = (m.extra?.mp ?? null) as { participantId?: unknown; displayName?: unknown; personaName?: unknown } | null;
-    if (!mp || typeof mp.participantId !== "string" || !mp.participantId) return { seat: HOST, player: "", persona: "" };
+    if (!mp || typeof mp.participantId !== "string" || !mp.participantId || mp.participantId === t.hostId) return { seat: HOST, player: "", persona: "" };
     const player = typeof mp.displayName === "string" ? mp.displayName : "";
     return { seat: mp.participantId, player, persona: typeof mp.personaName === "string" ? mp.personaName : player };
   }
@@ -265,12 +270,12 @@ export function createTables(host: TableHost) {
     const lines: SeatLine[] = [];
     const joined: string[] = [];
     for (const m of batch) {
-      const w = writerOf(m);
+      const w = writerOf(t, m);
       const sits = readSeatLine(m.content);
       if (!seatOf(run, w.seat)) {
         // A guest who came back into the room under a new id takes their old seat, by their character's name.
         const old = w.seat !== HOST ? seatNamed(run, sits?.name || w.persona) : undefined;
-        if (old && old.id !== HOST && !batch.some((b) => writerOf(b).seat === old.id)) reseat(run, old.id, w.seat);
+        if (old && old.id !== HOST && !batch.some((b) => writerOf(t, b).seat === old.id)) reseat(run, old.id, w.seat);
         else {
           await join(d, run, { id: w.seat, player: w.player, name: sits?.name || w.persona, page: sits?.page ?? "" });
           if (sits) joined.push(w.seat);
@@ -288,7 +293,7 @@ export function createTables(host: TableHost) {
     // What was made of each line is written onto it at once: a player sees their check and throws their die while
     // the passage is being told.
     await Promise.all(batch.map((m) => {
-      const part = round.parts.find((p) => p.seat === writerOf(m).seat);
+      const part = round.parts.find((p) => p.seat === writerOf(t, m).seat);
       const own: WireLine | null = part ? { v: 1, kind: "line", part: wirePart(part) } : null;
       return own ? host.setOwn(chatId, m.id, own).catch(() => undefined) : Promise.resolve();
     }));

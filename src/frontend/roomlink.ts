@@ -85,7 +85,8 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
   const mineIs = (k: Known, m: Msg): boolean => {
     const mp = (m.extra?.mp ?? null) as { participantId?: string } | null;
     const seat = seatOfMe(k);
-    return !!m.is_user && (seat === HOST ? !mp?.participantId : mp?.participantId === seat);
+    // The host's own line carries no name in a room of turns, and the host's participant id in a freeform round.
+    return !!m.is_user && (seat === HOST ? !mp?.participantId || mp.participantId === k.room?.selfParticipantId : mp?.participantId === seat);
   };
 
   /** A message as it now is: what is new on it is passed on, each thing once. */
@@ -304,7 +305,7 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     return { text: mine ? "Your turn." : `${whose ? name(whose) : "Someone"} is writing.`, canGoOn: host && !mine && !!whose };
   }
 
-  return { link, seed, standing, hostRoom, openRound, goOn, strip, strategy: (chatId: string) => chats.get(chatId)?.room?.turnStrategy ?? null, dispose: () => offs.splice(0).forEach((f) => f()) };
+  return { link, seed, standing, hostRoom, selfId: (chatId: string) => chats.get(chatId)?.room?.selfParticipantId ?? null, openRound, goOn, strip, strategy: (chatId: string) => chats.get(chatId)?.room?.turnStrategy ?? null, dispose: () => offs.splice(0).forEach((f) => f()) };
 }
 
 export type RoomWatch = ReturnType<typeof createRoomWatch>;
