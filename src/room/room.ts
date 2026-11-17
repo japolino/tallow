@@ -66,6 +66,7 @@ import { mountFlatRoom } from "./flat.js";
 import { drawMapSheet, layoutPlaces, MAP_PX, stopOnSheet, type MapSheet } from "./mapsheet.js";
 import type { Show } from "../game/system.js";
 import { Narrator, type Gesture } from "./narrator.js";
+import { Players, type PlayerSeat } from "./players.js";
 
 export type { Gesture };
 import { Post } from "./post.js";
@@ -161,6 +162,15 @@ export interface RoomHandle {
    * Absent on the flat room.
    */
   gesture?(name: Gesture): boolean;
+  /**
+   * The other players at a table for several (players.ts), the whole list every time: each sits at a side of the
+   * table, and you look their way by moving the pointer to that edge of the view (or `lookAside`). Absent on the flat room.
+   */
+  party?(seats: readonly PlayerSeat[]): void;
+  /** Turn to look at who sits on your left (-1) or right (1), or back to the table (0). Absent on the flat room. */
+  lookAside?(side: -1 | 0 | 1): void;
+  /** Which way you are turned: -1 left, 1 right, 0 the table. */
+  readonly aside?: -1 | 0 | 1;
   /** Your side of the table: the notebook, the pages, the counters, the balance and the narrator's voice. Absent on the flat room. */
   readonly desk?: Desk;
   stats(): RoomStats;
@@ -344,6 +354,12 @@ class Room implements RoomHandle {
   private leanTarget = 0;
   private leanK = 0;
   private pointer = new Vector2();
+  /** The other players, at the sides of the table. */
+  private players = new Players();
+  /** Turned to look at who sits beside you: the side wanted (-1 left, 1 right, 0 the table), and how far turned. */
+  private asideWant: -1 | 0 | 1 = 0;
+  private asideK = 0;
+  private asideLook = new Vector3();
   /** The pointer as the view follows it: eased, so the view never jerks. */
   private view = new Vector2();
   /** Reading the die: 1 while you lean toward it, 0 sat back. */
@@ -414,6 +430,7 @@ class Room implements RoomHandle {
     this.narrator = new Narrator(this.reduced, opts.assets ? `${opts.assets.replace(/\/$/, "")}/models` : undefined);
     this.narrator.group.position.set(0, 0, NARRATOR_Z);
     this.scene.add(this.narrator.group);
+    this.scene.add(this.players.group);
     this.feet = this.candles.map((c) => c.group.getWorldPosition(V(0, 0, 0)));
     const burnt = this.candleTarget(this.state);
     this.wax = this.candles.map(() => ({ burn: burnt, lit: burnt < 0.999 ? 1 : 0 }));
@@ -435,6 +452,7 @@ class Room implements RoomHandle {
     this.resizeObs.observe(host);
     this.applyQuality();
     this.canvas.addEventListener("pointermove", this.onPointer);
+    window.addEventListener("keydown", this.onAnyKey, true);
     this.canvas.addEventListener("click", this.onClick);
     this.canvas.addEventListener("wheel", this.onWheel, { passive: true });
     this.canvas.addEventListener("webglcontextlost", this.onLost);
@@ -1467,6 +1485,24 @@ class Room implements RoomHandle {
     }).then(() => this.settlePieces());
   }
 
+  party(seats: readonly PlayerSeat[]): void {
+    this.players.set(seats);
+    if (this.asideWant && !this.players.has(this.asideWant)) this.asideWant = 0;
+  }
+
+  get aside(): -1 | 0 | 1 {
+    return this.asideWant;
+  }
+
+  lookAside(side: -1 | 0 | 1): void {
+    this.asideWant = side && this.players.has(side) ? side : 0;
+  }
+
+  /** Any key is the table's business (writing, hurrying the narrator, a page): you turn back to it. */
+  private onAnyKey = (): void => {
+    this.asideWant = 0;
+  };
+
   gesture(name: Gesture): boolean {
     if (name === "slam") this.narrator.mood("narrow", 3.6, this.t);
     return !this.reduced && this.narrator.gesture(name);
@@ -1492,6 +1528,8 @@ class Room implements RoomHandle {
     cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
     this.canvas.removeEventListener("pointermove", this.onPointer);
+    window.removeEventListener("keydown", this.onAnyKey, true);
+    this.players.dispose();
     this.canvas.removeEventListener("click", this.onClick);
     this.canvas.removeEventListener("wheel", this.onWheel);
     this.canvas.removeEventListener("webglcontextlost", this.onLost);
@@ -1534,6 +1572,11 @@ class Room implements RoomHandle {
     this.shakeIn += Math.hypot(x - this.pointer.x, y - this.pointer.y);
     this.rock += (x - this.pointer.x) * 2.2;
     this.pointer.set(x, y);
+    // The pointer taken to an edge of the view turns you to whoever sits on that side; brought back in, to the table.
+    // Not with the die in your hand (the hand follows the pointer), nor leant in over the map.
+    const edge = x < -0.86 ? -1 : x > 0.86 ? 1 : 0;
+    if (edge && !this.grab && !this.leaning && this.players.has(edge)) this.asideWant = edge;
+    else if (this.asideWant && (Math.abs(x) < 0.7 || Math.sign(x) !== this.asideWant)) this.asideWant = 0;
     this.canvas.style.cursor = !this.grab && this.desk.hot(e) ? "pointer" : "";
   };
 
@@ -1637,6 +1680,7 @@ class Room implements RoomHandle {
     // The narrator's hands first, then the table: whatever is in a hand is put where the fingers are in this frame,
     // not where they were in the last one (a frame behind is a finger's width at the speed a hand deals).
     this.narrator.update(t, this.camera, dt);
+    this.players.update(t, this.reduced);
     this.animate(t, dt, L);
     this.aim(t, dt, L);
     // A fist on the table: felt for a moment, then gone.
@@ -2198,9 +2242,23 @@ class Room implements RoomHandle {
     const wk = ease(f.k) * (1 - rk);
     eye.lerp(f.eye, wk);
     look.lerp(f.look, wk);
+    // Turned to who sits beside you: your head turns, your seat stays. Not while a die is read or you are bent over
+    // the notebook or the map.
+    const to = this.asideWant ? this.players.look(this.asideWant) : null;
+    if (to) this.asideLook.copy(to);
+    else if (this.asideWant) this.asideWant = 0;
+    const want = this.asideWant && !this.grab ? 1 : 0;
+    this.asideK = this.reduced ? want : Math.max(0, Math.min(1, this.asideK + (want ? 2.4 : -2.8) * dt));
+    const ak = ease(this.asideK) * (1 - rk) * (1 - wk) * (1 - k);
+    if (ak > 0) {
+      look.lerp(this.asideLook, ak);
+      // Sat a little back and toward the other side, as when you turn in a chair to face someone.
+      eye.x -= Math.sign(this.asideLook.x) * 0.1 * ak;
+      eye.y += 0.02 * ak;
+    }
     if (!this.reduced) {
       // Leant over an open prop the view hardly follows the pointer: what you reach for should stay where it is.
-      const free = (1 - rk * 0.75) * (1 - wk * 0.85) * (1 - gk * (this.desk.propUp ? 0.96 : 0.7));
+      const free = (1 - rk * 0.75) * (1 - wk * 0.85) * (1 - gk * (this.desk.propUp ? 0.96 : 0.7)) * (1 - ak * 0.8);
       eye.x += Math.sin(t * 0.45) * 0.006 * (1 - k);
       eye.y += Math.sin(t * 0.8) * 0.004;
       look.x += this.view.x * 0.16 * (1 - k * 0.6) * free;

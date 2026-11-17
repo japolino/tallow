@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createTables } from "../src/backend/table.js";
-import { mine, seatSit, SEAT_THROW, type SeatEvent, type SeatLink } from "../src/game/seatsit.js";
+import { mine, seatSit, SEAT_LOOK, SEAT_THROW, type SeatEvent, type SeatLink } from "../src/game/seatsit.js";
 import type { Table } from "../src/game/table.js";
 import { readSeatLine, seatLine, type WireLine, type WireRound } from "../src/shared/tablewire.js";
 import { open, world } from "./roomworld.js";
@@ -9,6 +9,7 @@ import { open, world } from "./roomworld.js";
 function seat(me: string, state: { round: WireRound; text: string } | null, o: { persona?: { name: string; who: string }; may?: () => { ok: true } | { ok: false; why: string } } = {}) {
   const said: string[] = [], sent: string[] = [], dice: number[] = [], notes: { mine?: string; heading?: string; his: string[] }[] = [];
   let sheets: { heading: string; his: string[] }[] = [];
+  let beside: { id: string; name: string; picture: number; out?: boolean }[] = [];
   let alive = true;
   /** What happens, in order: an event from the room, or a line this player writes. */
   const script: (SeatEvent | { write: string })[] = [];
@@ -23,6 +24,7 @@ function seat(me: string, state: { round: WireRound; text: string } | null, o: {
     throwDie: async (face) => void dice.push(face),
     clock: () => undefined,
     sheets: (pages) => void (sheets = pages),
+    party: (p) => void (beside = p),
     notes: (w) => void notes.push(w),
   };
   const link: SeatLink = {
@@ -52,7 +54,7 @@ function seat(me: string, state: { round: WireRound; text: string } | null, o: {
     }),
   };
   const run = () => seatSit({ table, link, deps: { ask: async () => "" }, persona: o.persona ?? null, alive: () => alive });
-  return { said, sent, dice, notes, script, run, sheets: () => sheets };
+  return { said, sent, dice, notes, script, run, sheets: () => sheets, beside: () => beside };
 }
 
 describe("a seat at the table", () => {
@@ -77,6 +79,9 @@ describe("a seat at the table", () => {
     expect(s.notes.at(-1)!.mine).toBe("I sneak past the goblin.");
     expect(s.notes.at(-1)!.his).toContain("She slips by the goblin.");
     expect(s.sheets().length).toBeGreaterThan(0);
+    // Alone at the table, nobody sits beside you and nothing is said of looking.
+    expect(s.beside()).toEqual([]);
+    expect(s.said).not.toContain(SEAT_LOOK);
   });
 
   test("a guest sits down with their page, sees the other's die, and has their own character in the chair", async () => {
@@ -101,6 +106,9 @@ describe("a seat at the table", () => {
     const sheets = s.sheets().flatMap((p) => [p.heading, ...p.his]).join("\n");
     expect(sheets).toContain("Longsword");
     expect(sheets).toContain("At the table");
+    // The host sits beside them, wearing the picture of the first place at the table; how to look that way is said once.
+    expect(s.beside()).toEqual([{ id: "host", name: "Mira", picture: 0, out: false }]);
+    expect(s.said.filter((x) => x === SEAT_LOOK)).toHaveLength(1);
     expect(mine(round.run!, "p2").sheet.name).toBe("Tom");
     expect(mine(round.run!, "host").sheet.name).toBe("Mira");
   });

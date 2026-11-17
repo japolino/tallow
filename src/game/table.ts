@@ -53,6 +53,11 @@ export interface Table {
    * send or change; nothing in the game waits on these things.
    */
   show?(shows: Show[]): void;
+  /**
+   * The other players at a table for several, the whole list every time: each is shown sitting at a side of the
+   * table, to be looked at. `picture` says which stand-in picture they wear, the same number at every player's table.
+   */
+  party?(seats: { id: string; name: string; picture: number; out?: boolean }[]): void;
   /** The music for the scene as it now is: these pieces, the best first, until others are given. */
   music?(pieces: { title: string; file: string }[]): void;
 }

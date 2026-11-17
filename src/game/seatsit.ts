@@ -54,6 +54,8 @@ export interface SeatSitOptions {
 }
 
 export const SEAT_THROW = "Take the die and throw when you are ready.";
+/** Said once, when someone first sits beside you. */
+export const SEAT_LOOK = "Take the pointer to the left or the right edge of the view to look at who sits beside you; bring it back, or touch a key, to turn to the table again.";
 export const SEAT_WAIT = "The others have the table for a moment. I will bring you in as soon as there is room.";
 const paragraphs = (t: string): string[] => t.split(/\n{2,}/).map((p) => p.replace(/\s+/g, " ").trim()).filter(Boolean);
 
@@ -75,6 +77,15 @@ export async function seatSit(o: SeatSitOptions): Promise<void> {
     table.sheets?.([...allSheets(deps, r, shows), ...party]);
     table.show?.(shows);
     table.clock(hourOf(r));
+    // The others, beside you: each wears the picture of their place at the table, the same at every player's table.
+    table.party?.((r.seats ?? []).map((s, i) => ({ id: s.id, name: s.sheet.name, picture: i, out: !!s.out })).filter((s) => s.id !== link.me()));
+  };
+  /** How to look at the others is said once, the first time there is someone to look at. */
+  let shownHow = false;
+  const lookHow = (r: Run): string[] => {
+    if (shownHow || !table.party || !(r.seats ?? []).some((s) => s.id !== link.me())) return [];
+    shownHow = true;
+    return [SEAT_LOOK];
   };
   const seated = (): boolean => !!run && !!link.me() && !!seatOf(run, link.me()!);
 
@@ -87,7 +98,7 @@ export async function seatSit(o: SeatSitOptions): Promise<void> {
     table.notes?.(before ? { his: paragraphs(before.story) } : { heading: run.place.name || "How it begins", his: paragraphs(run.opening || at.text) });
     const others = (run.seats ?? []).filter((s) => s.id !== link.me()).map((s) => s.sheet.name);
     await table.say(seated()
-      ? [`We are ${before ? "in the middle of things" : "about to begin"}${run.place.name ? `, at ${run.place.name}` : ""}${others.length ? `, with ${others.join(" and ")}` : ""}.`, RUN_HOW, RUN_NOTES]
+      ? [`We are ${before ? "in the middle of things" : "about to begin"}${run.place.name ? `, at ${run.place.name}` : ""}${others.length ? `, with ${others.join(" and ")}` : ""}.`, RUN_HOW, RUN_NOTES, ...lookHow(run)]
       : [`A table is already set${run.place.name ? `, at ${run.place.name}` : ""}${others.length ? `: ${others.join(" and ")} ${others.length === 1 ? "is" : "are"} here` : ""}.`]);
   } else await table.say(["The table is not set yet. Its host sets it by sitting down first."]);
 
@@ -201,7 +212,8 @@ export async function seatSit(o: SeatSitOptions): Promise<void> {
     const rolls = e.round.parts.filter((x) => x.die).map((x) => `${x.seat === link.me() ? "" : `${x.name}: `}${x.die!.said}`);
     const lines = e.round.parts.filter((x) => x.seat !== link.me() && x.how === "played" && x.line).map((x) => `${x.name}: ${x.line}`);
     table.notes?.({ ...(myLine ? { mine: myLine } : {}), ...(part?.heading ? { heading: part.heading } : {}), his: [...lines, ...rolls, ...(part?.aside ? [part.aside] : []), ...paragraphs(e.text), ...changes] });
-    if (after || changes.length) await table.say([...paragraphs(after), ...changes]);
+    const how = lookHow(run);
+    if (after || changes.length || how.length) await table.say([...paragraphs(after), ...changes, ...how]);
     if (part?.die && part.heading) await table.page({ heading: part.heading, his: [part.die.said, ...paragraphs(e.text), ...changes] });
     else void table.aside();
     if (seatOf(run, link.me() ?? "")?.out) await table.say(["Your character's story has ended. You can stay and watch the others."]);

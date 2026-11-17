@@ -151,6 +151,23 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     await shot(host, "04-round-one");
     await shot(guest, "04-round-one");
 
+    // Each looks to the side at the other: the pointer taken to the left edge of the view, with a real mouse.
+    await until(host, "!room.desk.voice.speaking", 60_000);
+    await until(guest, "!room.desk.voice.speaking", 60_000);
+    for (const s of all) {
+      await s.page.mouse("move", W / 2, H / 2);
+      await s.page.mouse("move", 24, H / 2 - 20);
+    }
+    await sleep(1600);
+    check((await host.page.run<number>("room.aside")) === -1, "the host turns to the left and sees the guest sitting there");
+    check((await guest.page.run<number>("room.aside")) === -1, "the guest turns to the left and sees the host");
+    await shot(host, "06-looking-at-the-other");
+    await shot(guest, "06-looking-at-the-other");
+    for (const s of all) await s.page.mouse("move", W / 2, H / 2);
+    await sleep(700);
+    check((await host.page.run<number>("room.aside")) === 0 && (await guest.page.run<number>("room.aside")) === 0, "and both turn back to the table when the pointer comes back");
+    check(await until(guest, heard("to look at who sits beside you"), 30_000), "how to look at the others was said");
+
     // Round two: both write; each throws their own die and hears the other's.
     check(await write(guest, "I hurry up, puffing, and bring my staff down hard on the nearest threat."), "the guest writes a line on the pad");
     check(await write(host, "I put my back to the cart and jab my spear at whatever comes at me."), "the host writes again");

@@ -22,9 +22,13 @@ export function embedded(name: string, dir: string, files: readonly string[]): s
 /** The pictures painted for the cards, by name, in a fixed order. */
 export const cardFiles = (): string[] => readdirSync("assets/cards").filter((f) => f.endsWith(".webp")).sort();
 
+/** The stand-in pictures of the other players at a table for several, by name, in a fixed order. */
+export const seatFiles = (): string[] => readdirSync("assets/seats").filter((f) => f.endsWith(".webp")).sort();
+
 export const EMBEDDED = {
   "src/embedded/pictures.js": () => embedded("CARD_PICTURES", "assets/cards", cardFiles()),
   "src/embedded/models.js": () => embedded("MODELS", "assets/models", modelFiles()),
+  "src/embedded/seats.js": () => embedded("SEAT_PICTURES", "assets/seats", seatFiles()),
   "src/embedded/sounds.js": () => embedded("SOUNDS", "assets/sounds", SOUND_FILES),
 } as const;
 

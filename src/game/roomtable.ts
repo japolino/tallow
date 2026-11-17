@@ -84,6 +84,7 @@ export function roomTable(room: RoomHandle, opts: RoomTableOptions): Table {
     },
 
     theatre: (on) => room.theatre?.(on),
+    party: (seats) => room.party?.(seats),
     show: (shows) => room.show?.(shows),
     sheets: (pages) => desk.sheets(pages),
     notes: (w) => desk.notes(w),
