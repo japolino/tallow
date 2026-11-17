@@ -495,6 +495,11 @@ export interface System<P = unknown, R = unknown> {
   apply?(r: Run, read: R | null, t: Told, plan: P | null): string[];
   follow?(d: RunDeps, r: Run, t: Told, more: More, plan: P | null): Promise<string[]>;
   spare?(r: Run, t: Told): string[] | null;
+  /**
+   * A second player has sat down, and the run is a table for several from now on (engine/seats.ts): turn off what
+   * cannot be kept for more than one character. Called once.
+   */
+  party?(r: Run): void;
   pages?(r: Run): Page[];
   shows?(r: Run): Show[];
   /**

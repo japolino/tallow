@@ -137,7 +137,7 @@ export function rollSaid(roll: Roll): string {
  * gather my strength and shove the door") places none and is played as the line it is. Only with no answer from the
  * model do the line's own words stand in.
  */
-async function placePoints(d: RunDeps, r: Run, line: string): Promise<string[]> {
+export async function placePoints(d: RunDeps, r: Run, line: string): Promise<string[]> {
   const s = r.sheet;
   let want: Partial<Record<Attribute, number>> = {};
   let answered = false;

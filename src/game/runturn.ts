@@ -16,9 +16,9 @@
  */
 import type { DecisionQuestion } from "lumiverse-spindle-types";
 import {
-  ATTRIBUTES, attributesFrom, clean, draw, fall, feel, gainXp, hurt, isPlayer, itemOf, learn, lose, MAX_HP, meet, newRun, outcomeName, pass, person, practise,
-  QUALITIES, resolve, restOf, same, sceneText, sheetText, SKILL_CAP, skillOf, skillXpFor, standingWord, take,
-  type Attribute, type Judged, type Modifier, type Outcome, type Person, type Roll, type Run,
+  ATTRIBUTES, attributesFrom, clean, draw, fall, feel, gainXp, hurt, isPlayer, itemOf, learn, lose, MAX_HP, meet, newRun, othersOf, outcomeName, pass, person, practise,
+  QUALITIES, resolve, rest, restOf, same, sceneText, sheetText, SKILL_CAP, skillOf, skillXpFor, standingWord, take,
+  type Attribute, type Judged, type Modifier, type Outcome, type Person, type Roll, type Run, type Sheet,
 } from "../engine/run.js";
 import { sureChoice } from "./decide.js";
 import type { Message } from "./ask.js";
@@ -26,6 +26,7 @@ import { readRules } from "../engine/rules.js";
 import { rulesOf } from "../engine/run.js";
 import { asked, head, int, list, obj, said, sentence, tail, type Card, type Lesson, type More, type Page, type Readback, type RunDeps, type Settling, type Show, type System, type Told, type Verdict } from "./system.js";
 import { SYSTEMS } from "./systems/index.js";
+import { isParty, partyShare, playing, settled, sit } from "../engine/seats.js";
 
 export type { Card, RunDeps, Verdict } from "./system.js";
 
@@ -70,6 +71,9 @@ async function safelyAsync<T>(d: RunDeps, sys: System, what: string, otherwise: 
 /** The rules the player has set, written into the run, so that every part of the game reads the same ones. */
 export function ruled(d: RunDeps, r: Run): Run {
   if (d.rules) r.rules = readRules(d.rules());
+  // At a table for several nobody is saved from a killing blow: the game this follows turns that off there
+  // (MpScenarioSettings, "mp-compliance-plot-armor").
+  if (isParty(r) && r.seats!.length > 1 && rulesOf(r).saves) r.rules = { ...rulesOf(r), saves: false };
   return r;
 }
 
@@ -153,26 +157,11 @@ Rules:
   ];
 }
 
-/** A new run for a card. A sheet the builder could not write is a plain one, and the run still opens. */
-export async function begin(d: RunDeps, c: Card, seed: number): Promise<Run> {
-  const r = ruled(d, newRun(seed, c.world, c.who, c.name));
-  const built = await asked(d, beginMessages(c), "builder", (j) => {
-    const place = obj(j.place);
-    const skills = list(j.skills).map(obj).map((s) => ({ name: said(s.name, 30), level: int(s.level, 1, 4, 1) })).filter((s) => s.name && s.name.split(" ").length <= 3 && !ATTRIBUTES.includes(s.name.toLowerCase() as Attribute));
-    const opening = said(c.first?.trim() && !c.retell ? "x" : j.opening, 4000);
-    if (!said(place.name, 60) || skills.length < 4 || list(j.attributes).length < 3 || !opening) return null;
-    return { j, place, skills };
-  }, "setting up");
-  r.opening = c.retell ? "" : c.first?.trim() ?? "";
-  if (!built) {
-    r.place = { name: "Where the story opens", text: "" };
-    if (!r.opening) r.opening = c.first?.trim().slice(0, 900) || "The story begins.";
-    return r;
-  }
-  const { j, place, skills } = built;
-  const s = r.sheet;
-  r.place = { name: said(place.name, 60), text: said(place.text, 240) };
-  if (!c.name.trim()) s.name = said(j.name, 60) || s.name;
+type BuiltSkill = { name: string; level: number };
+const builtSkills = (j: Record<string, unknown>): BuiltSkill[] => list(j.skills).map(obj).map((s) => ({ name: said(s.name, 30), level: int(s.level, 1, 4, 1) })).filter((s) => s.name && s.name.split(" ").length <= 3 && !ATTRIBUTES.includes(s.name.toLowerCase() as Attribute));
+
+/** A builder's sheet written down: the ranking is the builder's, and how much of each a new character may have is the game's. */
+function writeSheet(s: Sheet, j: Record<string, unknown>, skills: BuiltSkill[]): void {
   s.calling = said(j.calling, 40);
   s.attributes = attributesFrom(list(j.attributes).map(String));
   // The levels are the builder's ranking; how many may stand high is the game's.
@@ -194,6 +183,29 @@ export async function begin(d: RunDeps, c: Card, seed: number): Promise<Run> {
     if (it && i.worn === true) it.worn = true;
   }
   s.money = int(j.money, 0, 100000);
+}
+
+/** A new run for a card. A sheet the builder could not write is a plain one, and the run still opens. */
+export async function begin(d: RunDeps, c: Card, seed: number): Promise<Run> {
+  const r = ruled(d, newRun(seed, c.world, c.who, c.name));
+  const built = await asked(d, beginMessages(c), "builder", (j) => {
+    const place = obj(j.place);
+    const skills = builtSkills(j);
+    const opening = said(c.first?.trim() && !c.retell ? "x" : j.opening, 4000);
+    if (!said(place.name, 60) || skills.length < 4 || list(j.attributes).length < 3 || !opening) return null;
+    return { j, place, skills };
+  }, "setting up");
+  r.opening = c.retell ? "" : c.first?.trim() ?? "";
+  if (!built) {
+    r.place = { name: "Where the story opens", text: "" };
+    if (!r.opening) r.opening = c.first?.trim().slice(0, 900) || "The story begins.";
+    return r;
+  }
+  const { j, place, skills } = built;
+  const s = r.sheet;
+  r.place = { name: said(place.name, 60), text: said(place.text, 240) };
+  if (!c.name.trim()) s.name = said(j.name, 60) || s.name;
+  writeSheet(s, j, skills);
   s.coin = said(j.coin, 20) || "coins";
   for (const p of list(j.people).map(obj).slice(0, 6)) meet(r, { name: said(p.name, 60), text: said(p.text, 240), power: int(p.power, 1, 7, 3), hostile: p.hostile === true });
   if (!r.opening) r.opening = clean(String(j.opening ?? ""), 4000);
@@ -218,8 +230,20 @@ const VERDICT_SAYS = {
   implausible: "implausible: it cannot work as written; it is impossible for this character in this world, or it claims far too much in one stroke (the very thing they need appearing from nowhere, a stronger foe beaten without a word of how). Never because the player wrote a person, a thing or an event into the scene that was not there before: that is theirs to write, and it is there. Nor because the character is not yet where it is done, or with the one it is done to, when the message has them go there or look for them first: they get there, and it is judged as done there",
 } as const;
 
+/**
+ * What was written for a beat, with who wrote it. At a table for several a beat already names each player's character
+ * before their line (game/partyturn.ts writes it so); for one player it is theirs.
+ */
+const wrote = (r: Run, you: string, most: number, cut: (t: string, n: number) => string = tail): string => (isParty(r) ? cut(you, most * Math.max(1, r.seats!.length)) : `${r.sheet.name}: ${cut(you, most)}`);
+
+/** The players' characters, named in a row: "Mira", "Mira and Tom", "Mira, Tom and Ash". */
+export function castNames(r: Run, join = "and"): string {
+  const names = isParty(r) ? r.seats!.map((s) => s.sheet.name) : [r.sheet.name];
+  return names.length < 2 ? names[0]! : `${names.slice(0, -1).join(", ")} ${join} ${names[names.length - 1]!}`;
+}
+
 function recent(r: Run, beats: number, each: number): string {
-  const last = r.beats.slice(-beats).map((b) => `${r.sheet.name}: ${tail(b.you, 700)}\n\nThe story: ${tail(b.story, each)}`);
+  const last = r.beats.slice(-beats).map((b) => `${wrote(r, b.you, 700)}\n\nThe story: ${tail(b.story, each)}`);
   return last.length ? last.join("\n\n") : `The story: ${tail(r.opening, each)}`;
 }
 
@@ -407,7 +431,59 @@ const RESULT_SAYS: Record<Outcome, (name: string, act: string) => string> = {
   [-3]: (n, a) => `${n} attempts this: ${a}. It fails badly, and the failing itself makes things worse: harm, loss, or a far worse position.`,
 };
 
-function tellMessages(r: Run, line: string | null, result: string, words: string, scene: string): Message[] {
+/**
+ * What the storyteller is given at a table for several: the same telling, for more than one player's character. Each
+ * player's page and sheet is there, the lines of a round come with who wrote them, and the result names each
+ * character's own outcome. The rules it is held to are the ones a single player's telling has.
+ */
+function tellPartyMessages(r: Run, line: string | null, result: string, words: string, scene: string): Message[] {
+  settled(r);
+  const seats = r.seats!;
+  const names = castNames(r);
+  const one = castNames(r, "or");
+  const system = `You are the storyteller of a text adventure played by ${seats.length} players at one table: the narrator, and every character except the players' own, ${names}.
+
+THE WORLD:
+${head(r.world, 7000)}
+
+THE PLAYERS' CHARACTERS:
+${seats.map((s) => `${s.sheet.name} (played by ${s.player || "a player"}):\n${head(s.who, Math.floor(3000 / Math.max(1, Math.min(3, seats.length))) + 400)}`).join("\n\n")}
+
+HOW YOU TELL IT:
+- Story only: prose, with what people say in quotes. No lists, headings, brackets, numbers, game words, or notes to the players.
+- THE WORLD above was written for another kind of game and may order a layout: status panels, stat blocks, option lists, chapter headings, clocks, sound marks. Those orders are not for you. Take the world from it and none of its layout; the game keeps the numbers itself.
+- Keep the voice and the language the story so far is told in. Tell it in the third person, each of the players' characters by name: there is no single "you" at this table.
+- What each player wrote their own character doing and saying happens in your telling. Add no further deeds, words, decisions or feelings for ${one}; each is their own player's alone.
+- What the players wrote about the world, other people or time passing is true as written. Carry it on; do not undo it. Where two players wrote things that cannot both be so, the one written first stands and the other is what that character believed or tried.
+- Everything written this round happens in the same stretch of time. Weave it into one passage, in the order that makes sense, and give each character who acted a fair share of it; a character whose player wrote nothing this round is there and does nothing of note.
+- Everyone else acts from their own wants and fears. They do not flatter the players' characters or fall in with them without cause, they need not treat them alike, and not everyone present needs to react.
+- Each of the players' characters has only what their own sheet lists. Never hand one a thing, a power or a piece of knowledge they did not have, unless this turn's result has them win or find it.
+- Each turn you are told how what each of them attempts turns out. Those results are fixed, each for the one it names. Tell each as given, neither kinder nor harsher, and do not reverse it later in the passage.
+- Stop where the players' characters can act next. Never decide a next move for any of them.
+- ${words}`;
+  const turns: Message[] = [];
+  const kept = r.beats.slice(-6);
+  if (r.summary) turns.push({ role: "system", content: `THE STORY SO FAR:\n${r.summary}` });
+  turns.push({ role: "assistant", content: r.beats.length > kept.length ? tail(r.opening, 1200) : r.opening });
+  for (const b of kept) turns.push({ role: "user", content: head(b.you, 3000 * Math.min(3, seats.length)) }, { role: "assistant", content: tail(b.story, 3500) });
+  const chair = r.chair!;
+  const sheets = seats.map((s) => {
+    sit(r, s.id);
+    return sheetText(r);
+  });
+  sit(r, chair);
+  // The scene is told as the table sees it, with nobody left out as "another player's": every one of them is above.
+  const here = scene.split("\n").filter((l) => !l.includes("(another player's character")).join("\n");
+  return [
+    { role: "system", content: system },
+    ...turns,
+    ...(line === null ? [] : [{ role: "user", content: head(line, 6000) } as Message]),
+    { role: "system", content: `THE SHEETS:\n${sheets.join("\n\n")}\n\n${here}\n\nTHIS TURN:\n${result}\n\nNow tell it.` },
+  ];
+}
+
+export function tellMessages(r: Run, line: string | null, result: string, words: string, scene: string): Message[] {
+  if (isParty(r) && r.seats!.length > 1) return tellPartyMessages(r, line, result, words, scene);
   const system = `You are the storyteller of a text adventure: the narrator, and every character except the player's own, ${r.sheet.name}.
 
 THE WORLD:
@@ -452,6 +528,7 @@ function readMessages(r: Run, line: string | null, story: string, bands: string,
   const s = r.sheet;
   const here = r.people.filter((p) => p.here && !p.dead);
   const away = r.people.filter((p) => !p.here && !p.dead).slice(-12);
+  const others = othersOf(r);
   return [
     { role: "system", content: "You keep the records of a text adventure. You are given the passage that was just told and you report only what it shows happening, as one JSON object and nothing else. You never invent and never look ahead. When in doubt, report nothing: an empty list, null or 0." },
     {
@@ -463,11 +540,13 @@ Already settled and written into these records before the passage was told (the 
 ${settled.map((l) => `- ${l}`).join("\n")}` : ""}
 Abilities: ${s.abilities.map((a) => a.name).join("; ") || "none"}.
 Place: ${r.place.name || "unknown"}.
-Here: ${here.map((p) => `${p.name}${p.hostile ? " (hostile)" : ""}${p.follows ? " (travelling with the player's character)" : ""}, health ${p.hp}`).join("; ") || "nobody else"}.
+Here: ${here.map((p) => `${p.name}${p.hostile ? " (hostile)" : ""}${p.follows ? " (travelling with the player's character)" : ""}, health ${p.hp}`).join("; ") || "nobody else"}.${others.length ? `
+Other players' characters, here too: ${others.map((o) => o.sheet.name).join("; ")}. Each has their own records, kept apart from these: they are never new, and what they are hurt by, find, lose, pay, learn or achieve is not reported here.` : ""}
 Elsewhere: ${away.map((p) => p.name).join("; ") || "nobody known"}.
 
 THE PASSAGE
-${line === null ? "(The player wrote nothing for this passage: the story went on by itself.)" : `${s.name} (the player wrote this): ${head(line, 3000)}`}
+${line === null ? "(The player wrote nothing for this passage: the story went on by itself.)" : others.length ? `What the players wrote, each for their own character:
+${head(line, 3000 * Math.min(3, others.length + 1))}` : `${s.name} (the player wrote this): ${head(line, 3000)}`}
 
 The story: ${head(story, 9000)}
 
@@ -505,7 +584,7 @@ Each field:
 - renamed: only when the passage reveals the name of the very same person the records know by a description or a false name ("the hooded woman" turns out to be Sela). A different person who appears, however alike, is new, never a renaming. Rare.
 - new: a person or creature who appears in the scene in this passage and is not in the records. Not someone only spoken of. Not a crowd. Not ${s.name}. power: ${POWER_SAYS}. hostile only if they attack ${s.name} in this passage.
 - hp: each one physically hurt or healed in this passage. Sizes: ${bands}. Not tiredness, strain, fear, hunger, heartache, or the ache of an old wound; not a blow that is threatened, dodged or blocked. Healing needs rest of hours, treatment, or a cure.
-- feelings: someone from Here whose feeling toward ${s.name} this passage changes. Score the change, not how they feel overall: 1 to 3 a small shift, 4 to 7 a clear one, 8 to 10 a deep one. Leave out anyone the passage gives no new cause.
+- feelings: someone from Here whose feeling toward ${s.name} this passage changes. Score the change, not how they feel overall: 1 to 3 a small shift, 4 to 7 a clear one, 8 to 10 a deep one. What ${s.name} does to them or for them in this passage is cause: helping, defending, giving, pleasing or keeping their word warms them; threatening, frightening, insulting, cheating, robbing or hurting them turns them against ${s.name}, even when it works. Leave out anyone the passage gives no new cause.
 - follows: someone who in this passage agrees to come along with ${s.name} and travel with them from now on. Standing beside them in the scene is not that.
 - hostile: someone who in this passage turns to open violence against ${s.name}. Not a quarrel, a threat, a cold look, a contest or sparring.
 - calmed: someone hostile who in this passage plainly gives up the fight: yields, flees, or is won over.
@@ -701,7 +780,8 @@ export function apply(r: Run, b: Readback, outcome: Outcome | null): string[] {
     told.push(`${p.name} is here.`);
   }
   r.minutes += b.minutes;
-  told.push(...gainXp(s, b.xp));
+  // A deed a party did together is worth less to each (engine/seats.ts, partyShare).
+  told.push(...gainXp(s, b.xp, isParty(r) ? partyShare(playing(r).length) : 1));
   return told;
 }
 
@@ -715,7 +795,7 @@ async function fold(d: RunDeps, r: Run): Promise<void> {
   const old = r.beats.slice(0, 2);
   const messages: Message[] = [
     { role: "system", content: "You keep the running summary of a story. Answer with the new summary only: plain prose, at most 260 words." },
-    { role: "user", content: `THE SUMMARY SO FAR:\n${r.summary || `(none yet) The story opened like this: ${tail(r.opening, 1500)}`}\n\nWHAT HAPPENED NEXT:\n${old.map((b) => `${r.sheet.name}: ${head(b.you, 1500)}\n\nThe story: ${head(b.story, 4000)}`).join("\n\n")}\n\nWrite the summary again so that it takes in what happened next. Keep names, what was promised or owed, who was hurt, what was gained and lost, how people now stand with ${r.sheet.name}, and where things stand. Drop what no longer matters.` },
+    { role: "user", content: `THE SUMMARY SO FAR:\n${r.summary || `(none yet) The story opened like this: ${tail(r.opening, 1500)}`}\n\nWHAT HAPPENED NEXT:\n${old.map((b) => `${wrote(r, b.you, 1500, head)}\n\nThe story: ${head(b.story, 4000)}`).join("\n\n")}\n\nWrite the summary again so that it takes in what happened next. Keep names, what was promised or owed, who was hurt, what was gained and lost, how people now stand with ${castNames(r)}, and where things stand. Drop what no longer matters.` },
   ];
   try {
     const text = clean(await d.ask(messages, "reader"), 2400);
@@ -741,6 +821,9 @@ export interface TurnOptions {
 
 const WORDS = "Two to four paragraphs, 150 to 300 words.";
 
+/** What the storyteller is told for a line that only writes what happens (game/partyturn.ts names whose line it is). */
+export const STORY_SAYS = "The player has written what happens. Take all of it as true, exactly as written, and tell what follows from it. Nothing is in doubt this turn.";
+
 /** A line judged and rolled but not yet told: the run as it stands after the roll, and what the storyteller will be told. */
 export interface Judging {
   run: Run;
@@ -765,7 +848,7 @@ export async function turn(d: RunDeps, before: Run, line: string, o: TurnOptions
 }
 
 /** The first half of a turn: the line is judged and, where anything is in doubt, rolled. The run given is not changed. */
-export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<Judging> {
+export async function judgeTurn(d: RunDeps, before: Run, line: string, o: { same?: boolean } = {}): Promise<Judging> {
   const r = ruled(d, structuredClone(before));
   const s = r.sheet;
   const report: Report = { kind: "action", act: "", verdict: null, reason: "", pro: [], con: [], second: "", roll: null, changes: [], ms: { judge: 0, tell: 0, read: 0 } };
@@ -805,10 +888,12 @@ export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<
     return { run: r, line, report, result: "", reply: reply || "(No answer came.)" };
   }
 
-  pass(r);
+  // At a table for several every player's line of a round is the same turn: it is counted once (`same` on the rest).
+  if (o.same) rest(r.sheet);
+  else pass(r);
   let result: string;
   if (j.kind === "story") {
-    result = `The player has written what happens. Take all of it as true, exactly as written, and tell what follows from it. Nothing is in doubt this turn.`;
+    result = STORY_SAYS;
   } else {
     // An item or an ability the player did not name is the judge's guess: it stands only if a second look agrees.
     const second = look ? sureChoice(look.verdict, SECOND_SURE) : null;
@@ -859,34 +944,44 @@ export async function judgeTurn(d: RunDeps, before: Run, line: string): Promise<
   return { run: r, line, report, result, before, settling, plans, settled: fixed };
 }
 
+/** What the storyteller is asked for a line judged: the whole of the telling's messages. */
+export const tellingOf = (d: RunDeps, p: Judging, words?: string): Message[] => tellMessages(p.run, p.line, p.result, words ?? WORDS, sceneOf(d, p.run));
+
 /** The second half: the story is told to the result, read back, and what changed is written down. */
 export async function tellTurn(d: RunDeps, p: Judging, o: TurnOptions = {}): Promise<{ run: Run; story: string; report: Report }> {
-  const r = structuredClone(p.run);
-  const s = r.sheet;
-  const report: Report = { ...p.report, changes: [...p.report.changes], ms: { ...p.report.ms } };
-  const { line, result } = p;
-  const systems = systemsOf(d);
-  const plans = p.plans ?? systems.map(() => null);
-  const told: Told = { ...(p.settling ?? { line, kind: report.kind === "story" ? "story" : "action", act: report.act, verdict: report.verdict, target: null, item: null, ability: null, attribute: "", skill: "", roll: report.roll, outcome: report.roll?.outcome ?? null }), before: p.before ?? p.run, story: "", core: null, minutes: 0 };
-
   // Tell it.
-  let at = Date.now();
+  const at = Date.now();
   let story = "";
   for (let i = 0; i < 2 && !story; i++) {
     try {
-      story = (await d.ask(tellMessages(r, line, result, o.words ?? WORDS, sceneOf(d, r)), "teller")).trim();
+      story = (await d.ask(tellingOf(d, p, o.words), "teller")).trim();
     } catch (e) {
       d.log?.(`telling: ${(e as Error).message}`);
     }
   }
   if (!story) throw new Error("the storyteller gave no answer");
-  report.ms.tell = Date.now() - at;
   try {
     o.onStory?.(story);
   } catch { /* a table that cannot take it early is given it at the end */ }
+  return afterTold(d, p, story, Date.now() - at);
+}
+
+/**
+ * What follows a telling, however the passage was told (a table for several has the room's own reply tell it,
+ * backend/table.ts): it is read back, what changed is written down, and each system does what follows.
+ */
+export async function afterTold(d: RunDeps, p: Judging, passage: string, toldMs = 0): Promise<{ run: Run; story: string; report: Report }> {
+  const r = structuredClone(p.run);
+  const s = r.sheet;
+  const report: Report = { ...p.report, changes: [...p.report.changes], ms: { ...p.report.ms, tell: toldMs } };
+  const { line } = p;
+  const systems = systemsOf(d);
+  const plans = p.plans ?? systems.map(() => null);
+  const told: Told = { ...(p.settling ?? { line, kind: report.kind === "story" ? "story" : "action", act: report.act, verdict: report.verdict, target: null, item: null, ability: null, attribute: "", skill: "", roll: report.roll, outcome: report.roll?.outcome ?? null }), before: p.before ?? p.run, story: "", core: null, minutes: 0 };
+  let story = passage;
 
   // Read it back, and fold old beats away meanwhile.
-  at = Date.now();
+  let at = Date.now();
   r.beats.push({ you: line, story });
   const bands = hpBands(r);
   told.story = story;
@@ -940,39 +1035,161 @@ export async function tellTurn(d: RunDeps, p: Judging, o: TurnOptions = {}): Pro
     report.changes.push(...(await safelyAsync(d, sys, "what follows", [] as string[], async () => (await sys.follow?.(d, r, told, more, plans[i])) ?? [])));
   }
 
-  // Brought down, unless a system spares them: they come round later, worse off.
-  if (s.hp <= 0) {
-    for (const sys of systems) {
-      const spared = safely(d, sys, "sparing", null as string[] | null, () => sys.spare?.(r, told) ?? null);
-      if (!spared) continue;
-      report.changes.push(...spared);
-      break;
-    }
-  }
-  if (s.hp <= 0) {
-    const lost = fall(r);
-    let ending: string;
-    if (r.over) {
-      report.changes.push("You are brought down, and this story ends here.");
-      ending = `${s.name} has been brought down and will not get up again: this is the end of their story. Tell, in one short paragraph, how it ends for them here, and what those who brought them down do next.`;
-    } else {
-      report.changes.push(`You are brought down. You come round with ${s.hp} health.`);
-      if (lost.length) report.changes.push(`Gone when you come round: ${lost.join(", ")}.`);
-      ending = `${s.name} has been brought down: they can take no more and lose their senses. Tell, in one short paragraph, how they come round some time later, alive but badly worse off, and where. Those who brought them down have done what they would with the chance.${lost.length ? ` When they come round, these are gone, taken or lost: ${lost.join(", ")}.` : ""}`;
-    }
-    try {
-      const after = (await d.ask(tellMessages(r, null, ending, "One paragraph, 60 to 120 words.", sceneOf(d, r)), "teller")).trim();
-      if (after) {
-        story = `${story}\n\n${after}`;
-        r.beats[r.beats.length - 1]!.story = story;
-      }
-    } catch (e) {
-      d.log?.(`coming round: ${(e as Error).message}`);
-    }
-  }
+  story = await broughtDown(d, r, told, report.changes, story);
   report.ms.read = Date.now() - at;
   return { run: r, story, report };
 }
+
+/**
+ * The character in the chair is brought down, unless a system spares them: they come round later, worse off, or their
+ * story ends there. What it changed is added to `changes`; returns the story with what was told of it.
+ */
+async function broughtDown(d: RunDeps, r: Run, told: Told, changes: string[], story: string): Promise<string> {
+  const s = r.sheet;
+  if (s.hp > 0) return story;
+  for (const sys of systemsOf(d)) {
+    const spared = safely(d, sys, "sparing", null as string[] | null, () => sys.spare?.(r, told) ?? null);
+    if (!spared) continue;
+    changes.push(...spared);
+    break;
+  }
+  if (s.hp > 0) return story;
+  const lost = fall(r);
+  let ending: string;
+  if (r.over) {
+    // At a table for several one character's end is theirs alone: the story goes on while anyone is still in it.
+    const seat = isParty(r) ? r.seats!.find((x) => x.id === r.chair) : undefined;
+    if (seat) {
+      seat.out = true;
+      r.over = playing(r).length === 0;
+    }
+    changes.push(seat && !r.over ? "You are brought down, and your character's story ends here. The others go on." : "You are brought down, and this story ends here.");
+    ending = `${s.name} has been brought down and will not get up again: this is the end of their story. Tell, in one short paragraph, how it ends for them here, and what those who brought them down do next.`;
+  } else {
+    changes.push(`You are brought down. You come round with ${s.hp} health.`);
+    if (lost.length) changes.push(`Gone when you come round: ${lost.join(", ")}.`);
+    ending = `${s.name} has been brought down: they can take no more and lose their senses. Tell, in one short paragraph, how they come round some time later, alive but badly worse off, and where. Those who brought them down have done what they would with the chance.${lost.length ? ` When they come round, these are gone, taken or lost: ${lost.join(", ")}.` : ""}`;
+  }
+  try {
+    const after = (await d.ask(tellMessages(r, null, ending, "One paragraph, 60 to 120 words.", sceneOf(d, r)), "teller")).trim();
+    if (after) {
+      story = `${story}\n\n${after}`;
+      r.beats[r.beats.length - 1]!.story = story;
+    }
+  } catch (e) {
+    d.log?.(`coming round: ${(e as Error).message}`);
+  }
+  return story;
+}
+
+/* ------------------------------------------------- a table for several ------------------------------------------------- */
+
+/** What a passage is asked about for one more player's character: only what is their own. */
+export interface RiderAsk {
+  seat: string;
+  messages: Message[];
+}
+
+/**
+ * The read-back for another player's character, asked beside the turn's own (game/partyturn.ts): the same question,
+ * with them in the chair. Call it on the run as it stood before the passage was read back.
+ */
+export function riderAsk(r: Run, seat: string, line: string | null, story: string, settledNow: readonly string[] = []): RiderAsk | null {
+  if (!sit(r, seat)) return null;
+  return { seat, messages: readMessages(r, line, story, hpBands(r), settledNow) };
+}
+
+/**
+ * What a passage changed for another player's character, written down: their own health, belongings, coin, what they
+ * learned and earned, and how people now feel about them. Everything that is the whole table's (who is here, who
+ * died, where they are, the hour) was written down once already by the turn's own read-back and is left out here.
+ * Returns what to tell that player, and the story with anything more that was told (their coming round after a fall).
+ */
+export async function afterRider(d: RunDeps, r: Run, seat: string, asking: Promise<Readback | null>, o: { outcome: Outcome | null; story: string; told?: Told }): Promise<{ changes: string[]; story: string }> {
+  const back = await asking;
+  if (!sit(r, seat)) return { changes: [], story: o.story };
+  if (!back) return { changes: ["(The passage could not be read back for your character, so nothing of theirs was written down this turn.)"], story: o.story };
+  const mine: Readback = {
+    renamed: [], fresh: [], follows: [], hostile: [], calmed: [], gone: [], back: [], beaten: [], dead: [], place: null, minutes: 0,
+    hp: back.hp.filter((h) => isPlayer(r, h.who)),
+    feelings: back.feelings,
+    found: back.found,
+    lost: back.lost,
+    wear: back.wear ?? [],
+    money: back.money,
+    ability: back.ability,
+    xp: back.xp,
+  };
+  if (mine.ability || mine.hp.some((h) => h.delta <= -25)) {
+    const ask = d.decide ? confirmQuestions(r, mine) : {};
+    const sure = Object.keys(ask).length ? await d.decide!("confirm", { passage: head(o.story, 6000) }, ask, SECOND_MS).catch(() => null) : null;
+    if (sure && sureChoice(sure.hurt, SECOND_SURE) === "no") for (const h of mine.hp) if (h.delta <= -25) h.delta = -9;
+    if (mine.ability && (!sure || sureChoice(sure.ability, SECOND_SURE) !== "yes")) mine.ability = null;
+  }
+  const changes = apply(r, mine, o.outcome);
+  const blank: Told = o.told ?? { line: "", kind: "story", act: "", verdict: null, target: null, item: null, ability: null, attribute: "", skill: "", roll: null, outcome: null, before: r, story: o.story, core: mine, minutes: 0 };
+  const story = await broughtDown(d, r, blank, changes, o.story);
+  return { changes, story };
+}
+
+/** Ask a read-back's question and read the answer (for riderAsk's messages). */
+export const askReadback = (d: RunDeps, messages: Message[]): Promise<Readback | null> => asked(d, messages, "reader", (x) => readReadback(x), "reading back");
+
+function seatMessages(r: Run, c: { who: string; name: string }): Message[] {
+  return [
+    { role: "system", content: "A new player sits down at a text adventure that is already being played, with a character of their own. You read the world, the story so far and their character's page closely, and write the character down as a game sheet. Answer with one JSON object and nothing else." },
+    {
+      role: "user",
+      content: `THE WORLD:
+${head(r.world, 5000)}
+${r.summary ? `\nTHE STORY SO FAR:\n${r.summary}\n` : ""}
+WHERE THE STORY IS NOW: ${r.place.name || "unknown"}${r.place.text ? `. ${r.place.text}` : ""}
+
+THE LAST OF THE STORY:
+${tail(r.beats.at(-1)?.story ?? r.opening, 1500)}
+
+THE NEW PLAYER'S CHARACTER${c.name ? ` (${c.name})` : ""}:
+${head(c.who, 3000) || "Nothing is written about them: someone this world would plainly have, who could fall in with the others here."}
+
+Write this, with every <note> replaced by what it asks for:
+
+{
+  "name": "<the character's name, as their page gives it>",
+  "calling": "<what the character is, 2 to 4 words, from their page>",
+  "attributes": ["<the five words strength, dexterity, intelligence, charisma, cunning, in order from this character's strongest to their weakest>"],
+  "skills": [{ "name": "<1 to 3 words>", "level": <1 to 4> }],
+  "abilities": [{ "name": "<2 to 4 words>", "text": "<one sentence: what it does and what it costs or needs>", "tier": <0 or 1> }],
+  "items": [{ "name": "<the thing>", "text": "<one short sentence>", "quality": "<trash, mundane, common, uncommon or rare>", "qty": <how many>, "worn": <true if worn or held ready> }],
+  "money": <how much money they have on them, in ${r.sheet.coin}, a whole number, 0 if none>
+}
+
+Rules:
+- skills: 8 to 12 things this character is plainly practised at, each named for a kind of task ("Stealth", "Swordplay", "Haggling", "First aid"), never for a single deed or a person. One at level 4, two at level 3, the rest at 1 or 2. Not the name of an attribute.
+- abilities: 1 to 3 special things this character can do that ordinary people cannot, taken from their page. Tier 1 is a strong one, tier 0 a modest one; at most one may be tier 1. If the page gives them nothing special, one modest knack that fits who they are.
+- items: only what the page has them carrying. Their everyday clothes are one item. Not a purse, pouch or wallet for their money, and not the money: money is counted apart. At most 8.
+- Take nothing from outside the world and the page. Where the page was written for another world, keep who they are and give them what this world would have in its place. Write in the language the story is told in.`,
+    },
+  ];
+}
+
+/**
+ * The sheet of a character who joins a run already begun: written by the builder from the world, the story so far and
+ * the player's page, to the same measure as the one a run opens with. A sheet that could not be written is a plain one.
+ */
+export async function sheetFor(d: RunDeps, r: Run, c: { who: string; name: string }): Promise<Sheet> {
+  const s: Sheet = { ...newRun(0, "", "", c.name).sheet, coin: r.sheet.coin };
+  const built = await asked(d, seatMessages(r, c), "builder", (j) => {
+    const skills = builtSkills(j);
+    return skills.length < 4 || list(j.attributes).length < 3 ? null : { j, skills };
+  }, "seating a player");
+  if (!built) return s;
+  if (!c.name.trim()) s.name = said(built.j.name, 60) || s.name;
+  writeSheet(s, built.j, built.skills);
+  return s;
+}
+
+/** The systems a run is played with, for what a table for several asks of them (game/partyturn.ts). */
+export const systemsFor = systemsOf;
 
 /** A report as the player is shown it under the story. */
 export function reportText(x: Report): string {

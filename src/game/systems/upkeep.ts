@@ -207,6 +207,15 @@ export const upkeep: System<null, Seen> = {
     for (const x of got.dated) setDate(st.dated, nowOf(st, r), { name: x.name, due: dueOf(nowOf(st, r), x.days, x.at), lasts: x.hours * 60, place: x.place });
   },
 
+  /**
+   * At a table for several there are no needs: one set of meters cannot be several characters' hunger, and the game
+   * this follows turns its status bars off there (MpScenarioSettings, "mp-compliance-player-status-bars"). The clock
+   * and the calendar are the whole table's, and stay.
+   */
+  party(r) {
+    state(r).needs = [];
+  },
+
   scene(r) {
     const st = state(r);
     const c = clockOf(nowOf(st, r));

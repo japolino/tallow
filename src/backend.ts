@@ -15,6 +15,9 @@ import { cleanParameters, filled, judged, judgeMessages, parseJudge, snapshotOf,
 import { loreQuery, loreText, pickLore, LORE_MAX, type LoreEntry } from "./game/lore.js";
 import { cosine } from "./meaning/models.js";
 import type { ToBackend, ToFrontend } from "./shared/protocol.js";
+import { createTables, type ChatMsg, type TableHost } from "./backend/table.js";
+import { cardText, unmacro } from "./game/card.js";
+import type { Card } from "./game/runturn.js";
 
 declare const spindle: SpindleAPI;
 
@@ -202,6 +205,62 @@ async function presetOf(userId: string, chatId: string): Promise<PresetSnapshot 
   }
 }
 
+/* ------------------------------------------------- a table for several ------------------------------------------------- */
+
+const TABLES_INDEX = "tables.json";
+const chat = (spindle as unknown as { chat: { getMessages(chatId: string, o?: unknown): Promise<unknown[]>; appendMessage(chatId: string, m: unknown): Promise<{ id: string }>; updateMessage(chatId: string, id: string, patch: unknown): Promise<void> } }).chat;
+
+const tableHost: TableHost = {
+  async messages(chatId, tail) {
+    const all = (await chat.getMessages(chatId, { tail })) as { id: string; role?: string; is_user?: boolean; content?: string; extra?: Record<string, unknown>; metadata?: Record<string, unknown> }[];
+    return all.slice(-tail).map((m): ChatMsg => ({ id: m.id, role: m.role === "user" || m.role === "assistant" || m.role === "system" ? m.role : m.is_user ? "user" : "assistant", content: m.content ?? "", extra: m.extra ?? null, metadata: m.metadata ?? null }));
+  },
+  append: async (chatId, content) => (await chat.appendMessage(chatId, { role: "assistant", content })).id,
+  setOwn: (chatId, id, own) => chat.updateMessage(chatId, id, { ownMetadata: own }),
+  setContent: (chatId, id, content) => chat.updateMessage(chatId, id, { content }),
+  load: async (userId, path) => ((await spindle.userStorage.exists(path, userId)) ? spindle.userStorage.read(path, userId) : null),
+  save: (userId, path, data) => spindle.userStorage.write(path, data, userId),
+  loadIndex: async () => ((await spindle.storage.exists(TABLES_INDEX)) ? (JSON.parse(await spindle.storage.read(TABLES_INDEX)) as Record<string, string>) : {}),
+  saveIndex: (index) => spindle.storage.write(TABLES_INDEX, JSON.stringify(index)),
+  deps: (userId) => ({
+    ask: (messages, role) => models.quiet(userId, role, messages),
+    decide: (what, state, questions, ms) => models.decide(userId, state, questions, Math.min(20_000, Math.max(1000, ms)), what),
+  }),
+  log: (m) => spindle.log.info(`tallow: ${m}`),
+};
+const tables = createTables(tableHost);
+
+/** What a table is set up from: the chat's card, and the host's persona as their character, as a sitting for one has it (frontend.ts). */
+async function tableCard(userId: string, characterId: string): Promise<Card | null> {
+  const info = await card(userId, characterId);
+  if (!info) return null;
+  const persona = info.personas?.[0];
+  const first = info.firstMessage?.trim();
+  return { world: cardText(info, 7000), who: persona ? `${persona.name}. ${persona.who}` : "Nothing is written about them: someone newly arrived in this world, as the card would have a newcomer be.", name: persona?.name ?? "", ...(first ? { first: unmacro(first, info.name) } : {}), retell: true };
+}
+
+// The room's reply in a chat that has a table is the round's passage: its prompt is the storyteller's (backend/table.ts).
+// Without the "interceptor" permission there is no table for several, and a sitting for one plays as it always did.
+try {
+  spindle.registerInterceptor(async (messages, context) => {
+    const c = context as { chatId?: string; generationType?: string };
+    if (!c?.chatId) return messages;
+    try {
+      const told = await tables.before(c.chatId, c.generationType ?? "normal");
+      return told ? told.map((m) => ({ role: m.role, content: m.content })) : messages;
+    } catch (err) {
+      spindle.log.warn(`tallow: the round could not be judged, so the chat answered by itself: ${text(err)}`);
+      return messages;
+    }
+  }, 1000);
+  spindle.on("GENERATION_ENDED", (p: unknown) => {
+    const e = p as { chatId?: string; messageId?: string; content?: string; error?: string };
+    if (e?.chatId && !e.error) void tables.after(e.chatId, e.messageId, e.content).catch((err) => spindle.log.warn(`tallow: the passage could not be written down: ${text(err)}`));
+  });
+} catch (err) {
+  spindle.log.info(`tallow: no table for several here (${text(err).slice(0, 160)})`);
+}
+
 spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
   const msg = raw as ToBackend;
   if (!msg || typeof msg !== "object" || typeof (msg as { id?: unknown }).id !== "string") return;
@@ -209,7 +268,14 @@ spindle.onFrontendMessage(async (raw: unknown, userId: string) => {
     if (msg.type === "card") send({ type: "card", id: msg.id, card: await card(userId, msg.characterId) }, userId);
     else if (msg.type === "lore") send({ type: "lore", id: msg.id, entries: await loreNear(userId, msg.characterId, msg.text) }, userId);
     else if (msg.type === "ask") send({ type: "answer", id: msg.id, text: await models.quiet(userId, msg.role, msg.messages, cleanParameters(msg.parameters)) }, userId);
-    else if (msg.type === "preset") send({ type: "preset", id: msg.id, snapshot: await presetOf(userId, msg.chatId) }, userId);
+    else if (msg.type === "table") send({ type: "table", id: msg.id, round: await tables.open({ userId, chatId: msg.chatId, card: () => tableCard(userId, msg.characterId), seed: msg.seed, rules: msg.rules, player: msg.player }) }, userId);
+    else if (msg.type === "tablerules") {
+      await tables.rules(userId, msg.chatId, msg.rules);
+      send({ type: "done", id: msg.id }, userId);
+    } else if (msg.type === "persona") {
+      const mine = (await personasOf(userId, ""))[0];
+      send({ type: "persona", id: msg.id, persona: mine ? { name: mine.name, who: mine.who } : null }, userId);
+    } else if (msg.type === "preset") send({ type: "preset", id: msg.id, snapshot: await presetOf(userId, msg.chatId) }, userId);
     else if (msg.type === "models") {
       if (!msg.patch) models.fresh(userId);
       send({ type: "models", id: msg.id, state: msg.patch ? await models.update(userId, msg.patch) : await models.state(userId) }, userId);

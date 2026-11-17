@@ -56,8 +56,10 @@ export interface Person {
   /** 1 a weakling, 3 an ordinary capable adult, 5 far above that, 7 among the strongest there are. */
   power: number;
   hp: number;
-  /** How they feel about the player's character, -100 to 100. */
+  /** How they feel about the player's character, -100 to 100. At a table for several, about the character in the chair. */
   feeling: number;
+  /** At a table for several: how they feel about each other player's character, by seat (engine/seats.ts keeps it). */
+  feels?: Record<string, number>;
   hostile: boolean;
   follows: boolean;
   here: boolean;
@@ -89,6 +91,27 @@ export interface Beat {
   story: string;
 }
 
+/**
+ * One player's place at a table for several (engine/seats.ts): their own character, kept here while another player's
+ * is in the chair. A run with no seats is one player's, and nothing in it changes.
+ */
+export interface Seat {
+  /** "host" for the one whose table it is; a guest's is their id in the room. */
+  id: string;
+  /** The player's own name at the table, as the room shows it. */
+  player: string;
+  /** The character's page. */
+  who: string;
+  sheet: Sheet;
+  downs: number;
+  /** What each system keeps for this character alone (their perks), under the system's name. */
+  own: Record<string, unknown>;
+  /** The turn they sat down on. */
+  since: number;
+  /** Brought down where a fall ends it: their story is over, and they only watch. */
+  out?: boolean;
+}
+
 export interface Run {
   v: 1;
   seed: number;
@@ -114,7 +137,17 @@ export interface Run {
   over?: boolean;
   /** What the narrator has already explained, by each lesson's key (game/system.ts, Lesson): each is said once in a run. */
   taught?: string[];
+  /**
+   * A table for several (engine/seats.ts): every player's seat, and whose character is in the chair now. `who`,
+   * `sheet`, `downs`, each person's `feeling` and the systems' per-character state are always the chair's; every rule
+   * of the game reads those, so each plays for whoever is in the chair.
+   */
+  seats?: Seat[];
+  chair?: string;
 }
+
+/** The other players' characters at a table for several: everyone seated but the one in the chair. */
+export const othersOf = (r: Run): Seat[] => (r.seats ?? []).filter((s) => s.id !== r.chair);
 
 /** The rules a run is played by. */
 export const rulesOf = (r: Run): Rules => (r.rules ? readRules(r.rules) : USUAL);
@@ -328,6 +361,8 @@ export function nameOk(r: Run, name: string): boolean {
   const k = key(name);
   if (!k || k.length < 2 || NOT_NAMES.has(k) || /[<>{}]/.test(name)) return false;
   if (same(name, r.sheet.name) || key(r.sheet.name).split(" ").includes(k)) return false;
+  // Another player's character is nobody the story brought in.
+  if (othersOf(r).some((o) => same(name, o.sheet.name) || key(o.sheet.name).split(" ").includes(k))) return false;
   return !person(r, name);
 }
 
@@ -382,10 +417,11 @@ export function xpBase(level: number): number {
 const XP_SIZE = [0, 0, 0, 0.75, 1.4, 2.0];
 
 /** Experience for a deed of a size. Returns what to tell; a level gained brings three attribute points. */
-export function gainXp(s: Sheet, size: number): string[] {
+export function gainXp(s: Sheet, size: number, share = 1): string[] {
   const n = Math.max(0, Math.min(5, Math.round(size)));
   if (s.level >= LEVEL_CAP || !XP_SIZE[n]) return [];
-  const got = Math.ceil(xpBase(s.level) * XP_SIZE[n]!);
+  // `share` is what a deed is worth to each when a party did it together (engine/seats.ts, partyShare): 1 for one.
+  const got = Math.max(1, Math.floor(Math.ceil(xpBase(s.level) * XP_SIZE[n]!) * share));
   s.xp += got;
   const said = [`${got} experience.`];
   while (s.level < LEVEL_CAP && s.xp >= xpToNext(s.level)) {
@@ -479,10 +515,15 @@ export function learn(s: Sheet, name: string, text: string): Ability | null {
 /** How long an ability rests after use, in turns. */
 export const restOf = (a: Ability): number => (a.kind === "learned" ? 4 : a.tier === 2 ? 8 : a.tier === 1 ? 4 : 2);
 
+/** A character's abilities come a turn nearer to ready. */
+export function rest(s: Sheet): void {
+  for (const a of s.abilities) if (a.wait > 0) a.wait--;
+}
+
 /** A turn passes: abilities come nearer to ready. */
 export function pass(r: Run): void {
   r.turn++;
-  for (const a of r.sheet.abilities) if (a.wait > 0) a.wait--;
+  rest(r.sheet);
 }
 
 /**
@@ -559,7 +600,9 @@ export function sceneText(r: Run): string {
   const here = r.people.filter((p) => p.here && !p.dead);
   const who = here.map((p) => `- ${p.name}${p.hostile ? " (hostile)" : ""}${p.follows ? " (with you)" : ""}: ${p.text || "no more is known"} Power ${p.power} of 7, ${p.hp > 0 ? `health ${p.hp}` : "beaten: they can do no more"}. ${cap(standingWord(p.feeling))} (${p.feeling}).`);
   const away = r.people.filter((p) => !p.here && !p.dead).slice(-6).map((p) => p.name);
-  return [`PLACE: ${r.place.name || "unknown"}${r.place.text ? `. ${r.place.text}` : ""}`, `HERE:\n${who.join("\n") || "- nobody else"}`, away.length ? `ELSEWHERE: ${away.join(", ")}` : ""].filter(Boolean).join("\n");
+  // The other players' characters are here too: theirs to play, and nobody's to decide for.
+  const party = othersOf(r).map((o) => `- ${o.sheet.name} (another player's character${o.out ? ", brought down for good" : ""}): ${o.sheet.calling || "one of the party"}. Level ${o.sheet.level}, health ${o.sheet.hp}.`);
+  return [`PLACE: ${r.place.name || "unknown"}${r.place.text ? `. ${r.place.text}` : ""}`, `HERE:\n${[...party, ...who].join("\n") || "- nobody else"}`, away.length ? `ELSEWHERE: ${away.join(", ")}` : ""].filter(Boolean).join("\n");
 }
 
 /** A roll as the player is shown it. */

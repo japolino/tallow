@@ -16,6 +16,9 @@ import type { Decide } from "./game/decide.js";
 import type { Ask } from "./game/ask.js";
 import { PLAYER, roomTable } from "./game/roomtable.js";
 import { runSit } from "./game/runsit.js";
+import { seatSit } from "./game/seatsit.js";
+import type { Table } from "./game/table.js";
+import { createRoomWatch } from "./frontend/roomlink.js";
 import { createDrawer } from "./frontend/drawer.js";
 import { createOverlay, type Overlay } from "./frontend/overlay.js";
 import { music } from "./room/music.js";
@@ -32,6 +35,9 @@ const WHY = "Tallow reads the chat's character card to set a game in its world, 
 /** What makes it better, asked for once: the game is whole without them, and the user may say no. */
 const EXTRAS = ["decisions", "embeddings", "world_books", "personas"];
 const WHY_EXTRAS = "Optional. Your Decision model gives a quick second look to what the game decides; the card's lorebook gives the game more of its world, and your embedding model picks the entries that matter. With your persona, you sit down at the table as yourself (it is only read, never changed).";
+/** What the host of a table for several needs besides: asked for when they sit down in a multiplayer room. */
+const ROOM_NEEDS = ["interceptor", "chat_mutation"];
+const WHY_ROOM = "To keep a table for several in a multiplayer room, Tallow reads each player's message in this chat, has the room's reply tell the story of the round, and writes the table's state onto the messages so every player sees it.";
 /** Asked once; the key is new when a new extra is, so that one is asked for once too. */
 const ASKED = "tallow:asked-extras-3";
 /** How loud things are (the drawer's sound section), kept in the page: there is nothing secret in it. */
@@ -86,6 +92,9 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     return m.type === "decided" ? m.answers : null;
   };
 
+  // The room is watched from the moment the extension loads: a guest's messages come in before they sit down.
+  const watch = createRoomWatch(ctx);
+
   let overlay: Overlay | null = null;
   let room: RoomHandle | null = null;
   let sitting = 0;
@@ -131,7 +140,12 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       granted = await ctx.permissions.request(EXTRAS.filter((p) => !granted.includes(p)), { reason: WHY_EXTRAS } as never).catch(() => granted);
     }
     const { chatId, characterId } = ctx.getActiveChat();
-    const card = characterId && granted.includes("characters") ? await call({ type: "card", characterId }).then((m) => (m.type === "card" ? m.card : null)).catch(() => null) : null;
+    // In a Lumiverse multiplayer room the table is for several (backend/table.ts): the room's host keeps it, and
+    // everyone in the room takes a seat at it. Anywhere else it is a sitting for one, as it always was.
+    if (chatId) await watch.hostRoom(chatId);
+    const where = chatId ? watch.standing(chatId) : "none";
+    if (where === "host" && !ROOM_NEEDS.every((p) => granted.includes(p))) granted = await ctx.permissions.request(ROOM_NEEDS.filter((p) => !granted.includes(p)), { reason: WHY_ROOM } as never).catch(() => granted);
+    const card = where === "none" && characterId && granted.includes("characters") ? await call({ type: "card", characterId }).then((m) => (m.type === "card" ? m.card : null)).catch(() => null) : null;
 
     if (!overlay) {
       overlay = createOverlay(ctx, granted.includes("app_manipulation"));
@@ -154,6 +168,11 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     await r.ready;
     if (mine !== sitting || !r.desk) return;
     const table = roomTable(r, { reduced, setHour: (h) => r.setClock(((h % 24) + 24) % 24) });
+    if (where !== "none" && chatId) {
+      table.clock(16.5);
+      await sitInRoom(chatId, characterId, where, table, host, granted, () => mine === sitting);
+      return;
+    }
     if (!card) {
       await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
       return;
@@ -185,6 +204,64 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       },
       mute: !granted.includes("generation"),
     }).catch((e) => console.error("tallow:", e));
+  }
+
+  /**
+   * A seat at a table for several (game/seatsit.ts). The room's host has their backend set the table (or take it up
+   * again) and keeps the round open for everyone to write in; a guest sits down as their own persona. Across the top
+   * of the room a line says where the round stands, and the host may go on without whoever has not written.
+   */
+  async function sitInRoom(chatId: string, characterId: string | null, where: "host" | "guest", table: Table, into: HTMLElement, granted: string[], alive: () => boolean): Promise<void> {
+    const link = watch.link(chatId);
+    const persona = await call({ type: "persona" }).then((m) => (m.type === "persona" ? m.persona : null)).catch(() => null);
+    if (where === "host") {
+      if (!ROOM_NEEDS.every((p) => granted.includes(p)) || !granted.includes("generation") || !granted.includes("characters")) {
+        await table.say(["I cannot keep a table for several here: Tallow may not read this chat's messages or answer in it. Allow it, and sit down again."]);
+        return;
+      }
+      if (!link.state()) await table.say([`${persona?.name ? `You sit down as ${persona.name}` : "You sit down"}, with room for the others. Give me a moment to set the table.`]);
+      const rules = JSON.stringify(loadRules());
+      const set = await table.wait("deal", call({ type: "table", chatId, characterId: characterId ?? "", seed: parseInt(randomSeed().slice(0, 8), 16), rules: loadRules(), player: persona?.name ?? "" }).then((m) => (m.type === "table" ? m.round : null)).catch((e) => (console.warn("tallow:", e), null)));
+      if (!alive()) return;
+      if (!set?.run) {
+        await table.say(["I could not set the table: this chat's card could not be read, or your model gave no answer. Sit down again to try once more."]);
+        return;
+      }
+      const last = set.run.beats[set.run.beats.length - 1];
+      watch.seed(chatId, set, last?.story ?? set.run.opening);
+      // The host's rules are the table's: a change in the drawer reaches it at the next look.
+      let sent = rules;
+      const tick = setInterval(() => {
+        if (!alive()) return void clearInterval(tick);
+        void watch.openRound(chatId);
+        const now = JSON.stringify(loadRules());
+        if (now !== sent) {
+          sent = now;
+          void call({ type: "tablerules", chatId, rules: loadRules() }).catch(() => undefined);
+        }
+      }, 1500);
+      void watch.openRound(chatId);
+    }
+    // Where the round stands, in one quiet line over the room; the host's has a way to go on without the rest.
+    const bar = document.createElement("div");
+    Object.assign(bar.style, { position: "absolute", top: "12px", left: "14px", zIndex: "4", font: "13px/1.4 Georgia, serif", color: "rgba(233,226,212,.72)", display: "flex", gap: "10px", alignItems: "center", pointerEvents: "none", textShadow: "0 1px 2px #000" });
+    const says = document.createElement("span");
+    const go = document.createElement("button");
+    go.textContent = "Go on without them";
+    Object.assign(go.style, { pointerEvents: "auto", font: "inherit", color: "inherit", background: "rgba(6,5,4,.45)", border: "1px solid rgba(233,226,212,.25)", borderRadius: "3px", padding: "2px 8px", cursor: "pointer", display: "none" });
+    go.addEventListener("click", () => {
+      go.blur();
+      void watch.goOn(chatId);
+    });
+    bar.append(says, go);
+    into.appendChild(bar);
+    const show = setInterval(() => {
+      if (!alive()) return void clearInterval(show);
+      const s = watch.strip(chatId);
+      if (says.textContent !== s.text) says.textContent = s.text;
+      go.style.display = s.canGoOn ? "" : "none";
+    }, 700);
+    void seatSit({ table, link, deps: { ask: async () => Promise.reject(new Error("a seat asks no model")), log: (m) => console.warn(`tallow: ${m}`) }, persona, alive }).catch((e) => console.error("tallow:", e));
   }
 
   // Sound: the levels as they were left, and the recordings that are in this bundle. Nothing plays before the first
@@ -222,6 +299,7 @@ export function setup(ctx: SpindleFrontendContext): () => void {
     action.destroy();
     offDrawer();
     offMsg();
+    watch.dispose();
     leave();
     offLevels();
     sound.dispose();

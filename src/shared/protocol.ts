@@ -4,6 +4,7 @@ import type { CardInfo } from "../game/card.js";
 import type { PresetSnapshot } from "../game/preset.js";
 import type { Message, Role } from "../game/ask.js";
 import type { ModelsPatch, ReasoningPick } from "../meaning/models.js";
+import type { WireRound } from "./tablewire.js";
 
 export interface ConnOption {
   id: string;
@@ -34,7 +35,16 @@ export type ToBackend =
   /** The drawer: read the model choices, or change one. */
   | { type: "models"; id: string; patch?: ModelsPatch }
   /** The card's lore nearest a scene, by meaning when there is an embedding model (backend.ts, loreNear). */
-  | { type: "lore"; id: string; characterId: string; text: string };
+  | { type: "lore"; id: string; characterId: string; text: string }
+  /**
+   * A table for several (backend/table.ts), asked by the room's host: sit down at this chat's table, set up from the
+   * card the first time. `rules` are how hard the host has the game set; `player` is the host's own name at the table.
+   */
+  | { type: "table"; id: string; chatId: string; characterId: string; seed: number; rules: unknown; player: string }
+  /** The host changed how hard the game is. */
+  | { type: "tablerules"; id: string; chatId: string; rules: unknown }
+  /** A guest's own persona, to sit down as: their character's name and page. */
+  | { type: "persona"; id: string };
 
 export type ToFrontend =
   | { type: "card"; id: string; card: CardInfo | null }
@@ -43,4 +53,8 @@ export type ToFrontend =
   | { type: "decided"; id: string; answers: Record<string, DecisionAnswer | undefined> | null }
   | { type: "models"; id: string; state: ModelsState }
   | { type: "lore"; id: string; entries: string[] }
+  /** The table as every player's Tallow reads it from the narrator's message; null when none could be set up. */
+  | { type: "table"; id: string; round: WireRound | null }
+  | { type: "persona"; id: string; persona: { name: string; who: string } | null }
+  | { type: "done"; id: string }
   | { type: "error"; id: string; error: string };
