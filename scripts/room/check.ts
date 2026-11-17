@@ -55,6 +55,9 @@ async function api(user: string, method: string, path: string, body?: unknown): 
   return parsed;
 }
 
+/** A list, however the API wraps it. */
+const listOf = (x: any): any[] => (Array.isArray(x) ? x : (x?.data ?? x?.extensions ?? x?.items ?? x?.users ?? []));
+
 /* ------------------------------------------------- setting it up ------------------------------------------------- */
 
 const git = (args: string[], cwd: string): string => {
@@ -67,7 +70,7 @@ const git = (args: string[], cwd: string): string => {
 const clone = join(root, "data/extensions/tallow/repo");
 const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], repo);
 if (git(["status", "--porcelain", "--", "src", "spindle.json"], repo)) say("note: src/ has changes that are not committed; the throwaway installs what is committed");
-let ext = ((await api("host", "GET", "/api/v1/spindle")) as any[]).find((e) => e.identifier === "tallow");
+let ext = listOf(await api("host", "GET", "/api/v1/spindle")).find((e) => e.identifier === "tallow");
 if (!ext) {
   mkdirSync(join(root, "data/extensions/tallow"), { recursive: true });
   if (!existsSync(clone)) git(["clone", "-q", "--branch", branch, repo, clone], root);
@@ -82,13 +85,13 @@ if (!ext) {
   rmSync(join(clone, "dist"), { recursive: true, force: true });
   await api("host", "POST", `/api/v1/spindle/${ext.id}/restart`);
 }
-const running = ((await api("host", "GET", "/api/v1/spindle")) as any[]).find((e) => e.identifier === "tallow");
+const running = listOf(await api("host", "GET", "/api/v1/spindle")).find((e) => e.identifier === "tallow");
 check(running?.status === "running", `Lumiverse runs Tallow's backend (${git(["log", "--oneline", "-1"], clone)})`);
 if (running?.status !== "running") process.exit(1);
 
 // The host's models: a strong one for everything, a fast one for reading.
-let conns = ((await api("host", "GET", "/api/v1/connections")) as any).data ?? (await api("host", "GET", "/api/v1/connections"));
-if (!Array.isArray(conns) || !conns.length) {
+let conns = listOf(await api("host", "GET", "/api/v1/connections"));
+if (!conns.length) {
   const strong = await api("host", "POST", "/api/v1/connections", { name: "Strong", provider: "custom", api_url: forward, model: process.env.CHAT_MODEL_STRONG, is_default: true, api_key: "local" });
   const fast = await api("host", "POST", "/api/v1/connections", { name: "Fast", provider: "custom", api_url: forward, model: process.env.CHAT_MODEL_FAST, api_key: "local" });
   const dir = join(root, "data/users", strong.user_id, "extensions/tallow");
@@ -101,11 +104,11 @@ check(tried.success === true, "the model endpoint answers (scripts/room/forward.
 if (!tried.success) process.exit(1);
 
 // A guest account, a persona each, a small world, and a freeform room on a new chat of it.
-const users = (await api("host", "GET", "/api/v1/users")) as any[];
+const users = listOf(await api("host", "GET", "/api/v1/users"));
 if (!users.some((u) => u.username === "guest")) await api("host", "POST", "/api/v1/users", { username: "guest", password: readFileSync(join(root, "guest.txt"), "utf8").trim(), role: "user" });
 const personas = async (user: string, name: string, description: string): Promise<void> => {
   const have = await api(user, "GET", "/api/v1/personas");
-  if (!((have.data ?? have) as any[]).some((p) => p.name === name)) await api(user, "POST", "/api/v1/personas", { name, description, is_default: true });
+  if (!listOf(have).some((p) => p.name === name)) await api(user, "POST", "/api/v1/personas", { name, description, is_default: true });
 };
 await personas("host", "Ysolde", "Ysolde, a wiry former caravan guard in her thirties, quick with a short spear and quicker to haggle. Blunt, loyal, afraid of deep water. Carries a short spear, a waxed cloak and eleven copper pennies.");
 await personas("guest", "Brother Fenn", "Brother Fenn, a plump wandering friar with a gift for talking people round and a weakness for good ale. Knows herbs and wounds. Carries a walking staff, a satchel of herbs and a tin cup.");
