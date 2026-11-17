@@ -140,8 +140,11 @@ describe("a freeform room for two", () => {
     expect(host.watch.strip(r.CHAT).text).toBe("Everyone writes: Mira, Tom.");
     void host.sit();
 
-    // The guest comes into the room (the last messages come with it) and sits down at the table.
+    // The guest comes into the room (the last messages come with it) and sits down at the table. Whoever was waiting
+    // to hear of it (a guest sat at an empty table, having joined before the extension loaded) is told which chat.
+    const told = guest.watch.joined();
     r.hydrate("p2");
+    expect(await told).toBe(r.CHAT);
     expect(guest.watch.standing(r.CHAT)).toBe("guest");
     void guest.sit();
     await tick();

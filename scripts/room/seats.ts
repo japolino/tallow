@@ -50,7 +50,8 @@ async function signIn(s: Seat): Promise<void> {
 
 /** Sit down at the table from the chat's Extras menu, and listen to everything the narrator says from then on. */
 async function sit(s: Seat): Promise<boolean> {
-  await s.page.run(`(window.addEventListener("tallow:room", (e) => (window.room = e.detail)), 1)`);
+  // Every room that is drawn is listened to (a guest seated late gets a second one): what the narrator says is kept.
+  await s.page.run(`(window.heard = [], window.addEventListener("tallow:room", (e) => { const r = (window.room = e.detail); r.ready.then(() => { if (r.desk) ((say) => (r.desk.say = (lines) => (window.heard.push(...[].concat(lines)), say(lines))))(r.desk.say.bind(r.desk)); }); }), 1)`);
   if (!(await waitFor(s, `[...document.querySelectorAll('button')].some((x) => (x.getAttribute('aria-label') || x.title) === 'Extras')`, 30_000))) return false;
   // The Extras menu under the message box; it can take a moment to open, and a click that lands early closes it.
   let sat = false;
@@ -65,7 +66,6 @@ async function sit(s: Seat): Promise<boolean> {
   }
   if (!(await waitFor(s, "window.room", 60_000))) return false;
   await s.page.run("window.room.ready");
-  await s.page.run("(window.heard = [], ((say) => (room.desk.say = (lines) => (window.heard.push(...[].concat(lines)), say(lines))))(room.desk.say.bind(room.desk)), 1)");
   return true;
 }
 
@@ -132,6 +132,20 @@ await withPage({ serve: false, tag: "a", width: W, height: H }, async (hostPage)
     await closeDrawer(guest);
     check(await sit(guest), "the guest sits down and the room is drawn");
     all = [host, guest];
+    // A guest who joined before Tallow had loaded in their browser was never told of the room, and sits at an empty
+    // table: they are told to join again, and joining again from the Party tab seats them without another word.
+    if (await until(guest, `${heard("A table is already set")} || ${heard("join their room once more")}`, 60_000) && !(await guest.page.run<boolean>(heard("A table is already set")))) {
+      say("the guest joined before Tallow had loaded, and was told to join again");
+      await press(guest, "Multiplayer");
+      await waitFor(guest, `document.querySelector('input[placeholder="paste invite code"]')`, 15_000);
+      await guest.page.run(`document.querySelector('input[placeholder="paste invite code"]').focus()`);
+      await guest.page.type(roomId);
+      await sleep(300);
+      await press(guest, "Join");
+      await sleep(1500);
+      await closeDrawer(guest);
+      check(await until(guest, heard("A table is already set"), 60_000), "joining again seats the guest at the host's table by itself");
+    }
     check(await until(guest, heard("A table is already set"), 60_000), `the guest finds the host's table (${await last(guest, 2)})`);
     check(await until(guest, heard("You sit down as Brother Fenn"), 60_000), `the guest's seat line goes in by itself through the chat's own message box (${await last(guest, 2)})`);
     say(`the line over the host's room: "${await strip(host)}"; over the guest's: "${await strip(guest)}"`);

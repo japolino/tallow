@@ -38,6 +38,8 @@ const WHY_EXTRAS = "Optional. Your Decision model gives a quick second look to w
 /** What the host of a table for several needs besides: asked for when they sit down in a multiplayer room. */
 const ROOM_NEEDS = ["interceptor", "chat_mutation"];
 const WHY_ROOM = "To keep a table for several in a multiplayer room, Tallow reads each player's message in this chat, has the room's reply tell the story of the round, and writes the table's state onto the messages so every player sees it.";
+/** Said at an empty table, for a guest whose browser was never told of the room they joined (roomlink.ts, joined). */
+const NOT_JOINED = "If you came to sit at someone's table, join their room once more from the Party tab: I will seat you then.";
 /** Asked once; the key is new when a new extra is, so that one is asked for once too. */
 const ASKED = "tallow:asked-extras-3";
 /** How loud things are (the drawer's sound section), kept in the page: there is nothing secret in it. */
@@ -174,7 +176,16 @@ export function setup(ctx: SpindleFrontendContext): () => void {
       return;
     }
     if (!card) {
-      await table.say([characterId ? "I cannot read this character's card. Let me read it, and sit down again." : "There is nobody here tonight. Open a chat with a character, and sit down again."]);
+      // A guest who joined a room before this extension had loaded was never told of it (roomlink.ts, joined): the
+      // moment Lumiverse says they are in a room, they are seated at its table, without sitting down again.
+      void watch.joined().then(async () => {
+        // Lumiverse takes them to the room's chat on the same message; let it.
+        await new Promise((r) => setTimeout(r, 400));
+        if (mine !== sitting) return;
+        leave();
+        await open();
+      });
+      await table.say(characterId ? ["I cannot read this character's card. Let me read it, and sit down again."] : ["There is nobody here tonight. Open a chat with a character, and sit down again.", NOT_JOINED]);
       return;
     }
     // A run (engine/run.ts): who you are is your persona in Lumiverse; the run is kept for this chat as it goes.

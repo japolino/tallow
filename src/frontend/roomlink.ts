@@ -130,6 +130,8 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     k.seen.set(m.id, was);
   }
 
+  /** Whoever waits to hear that I am in a room (joined()). */
+  const joiners: ((chatId: string) => void)[] = [];
   const offs: (() => void)[] = [];
   const on = (name: string, f: (p: any) => void): void => void offs.push(ctx.events.on(name, f as (p: unknown) => void));
   on("ROOM_STATUS", (p: { chatId?: string; room?: RoomView; messages?: Msg[] }) => {
@@ -138,6 +140,7 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     k.room = { ...p.room, selfParticipantId: p.room.selfParticipantId ?? k.room?.selfParticipantId };
     for (const m of p.messages ?? []) take(k, m, false);
     push(k, { type: "turn" });
+    for (const f of joiners.splice(0)) f(p.room.chatId);
   });
   on("ROOM_TURN_CHANGED", (p: { chatId?: string; currentTurnParticipantId?: string | null; freeformDeadline?: number | null; turnStrategy?: RoomView["turnStrategy"] }) => {
     const k = p?.chatId ? chats.get(p.chatId) : undefined;
@@ -214,6 +217,13 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
       /* No room, or none that is mine: a table for one. */
     }
   }
+
+  /**
+   * The next time Lumiverse says I am in a room: the chat it is on. Lumiverse says it once, on joining, and a guest
+   * has no other way to learn their room, so one who joined before this extension had loaded sits at an empty table
+   * until they join again; this is how the table hears of it and seats them.
+   */
+  const joined = (): Promise<string> => new Promise((done) => void joiners.push(done));
 
   /** The table as the host's own backend gave it, for a host who sat down after the messages went by. */
   function seed(chatId: string, round: WireRound, text: string): void {
@@ -336,7 +346,7 @@ export function createRoomWatch(ctx: SpindleFrontendContext) {
     return { text: mine ? "Your turn." : `${whose ? name(whose) : "Someone"} is writing.`, canGoOn: host && !mine && !!whose };
   }
 
-  return { link, seed, standing, hostRoom, selfId: (chatId: string) => chats.get(chatId)?.room?.selfParticipantId ?? null, openRound, goOn, strip, strategy: (chatId: string) => chats.get(chatId)?.room?.turnStrategy ?? null, dispose: () => offs.splice(0).forEach((f) => f()) };
+  return { link, seed, standing, hostRoom, joined, selfId: (chatId: string) => chats.get(chatId)?.room?.selfParticipantId ?? null, openRound, goOn, strip, strategy: (chatId: string) => chats.get(chatId)?.room?.turnStrategy ?? null, dispose: () => offs.splice(0).forEach((f) => f()) };
 }
 
 export type RoomWatch = ReturnType<typeof createRoomWatch>;
